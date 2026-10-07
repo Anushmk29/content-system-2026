@@ -1,0 +1,26 @@
+{
+  "name": "content-system-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Next.js host that serves the Content Pipeline dashboard at /content. The real engine lives in content-pipeline/.",
+  "scripts": {
+    "predev": "npm --prefix content-pipeline run build",
+    "dev": "next dev --turbopack -p 3001",
+    "prebuild": "npm --prefix content-pipeline run build",
+    "build": "next build",
+    "start": "next start",
+    "engine:test": "npm --prefix content-pipeline test"
+  },
+  "dependencies": {
+    "@pratapai/content-pipeline": "file:./content-pipeline",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

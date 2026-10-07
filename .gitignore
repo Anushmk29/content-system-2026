@@ -1,0 +1,29 @@
+# secrets / env
+.env
+*.env
+.env*.local
+.env.content
+!*.env.example
+infra/**/.env
+
+# next
+next-env.d.ts
+
+# node / next
+node_modules/
+.next/
+dist/
+build/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# logs / tmp
+*.log
+tmp/
+
+.claude
+.impeccable

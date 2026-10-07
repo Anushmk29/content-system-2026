@@ -1,0 +1,43 @@
+{
+  "name": "@pratapai/content-pipeline",
+  "version": "0.1.0",
+  "description": "Isolated, fully-coded content-to-pipeline engine (Bible). Modular + fault-isolated: each module reports health and failures are never silent. Drops into a Next.js app under a `content` DB schema and CONTENT_* env namespace.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/src/index.d.ts",
+      "default": "./dist/core/src/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=2",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "pipeline": "node --env-file=../.env.content scripts/run.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "pg": "^8.13.0",
+    "satori": "^0.35.0",
+    "satori-html": "^0.3.2",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.0"
+  }
+}
