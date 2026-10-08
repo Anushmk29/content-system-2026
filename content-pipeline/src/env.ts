@@ -46,6 +46,9 @@ export interface ContentEnv {
   postHourUtc: number;
   // Auto-select up to N high-band topics per run for drafting. 0 = off (you pick in the dashboard).
   autoSelectTopics: number;
+  // CONTENT_PLATFORM_FIT=1: Jev picks which platforms each scored idea suits; drafting follows
+  // its picks unless the operator chose platforms on the idea card. Off = the default five.
+  platformFit: boolean;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
 }
@@ -86,6 +89,7 @@ export function loadEnv(): ContentEnv {
     transcribeCap: clampInt(read('CONTENT_TRANSCRIBE_CAP'), 15, 0, 200),
     postHourUtc: clampInt(read('CONTENT_POST_HOUR_UTC'), 4, 0, 23),
     autoSelectTopics: clampInt(read('CONTENT_AUTO_SELECT_TOPICS'), 0, 0, 10),
+    platformFit: /^(1|true|on|yes)$/i.test(read('CONTENT_PLATFORM_FIT') ?? ''),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
   };
 }

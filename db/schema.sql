@@ -637,6 +637,11 @@ alter table content.topics add column if not exists angles jsonb;
 alter table content.topics add column if not exists angle_idx smallint;
 -- The Brand Kit's audience beliefs (myths the audience holds) — angles flip these first.
 alter table content.brand_kit add column if not exists audience_beliefs jsonb not null default '[]';
+-- Which platforms an idea suits: Jev probabilities per platform, the operator's own pick (null =
+-- follow Jev), and a writing framework per platform (prompts/platform-playbooks.ts).
+alter table content.topics add column if not exists platform_fit jsonb;
+alter table content.topics add column if not exists platforms jsonb;
+alter table content.topics add column if not exists frameworks jsonb;
 -- What the brand stands for; read by every prompt (prompts/brand-context.ts).
 alter table content.brand_kit add column if not exists brand_values jsonb not null default '[]';
 

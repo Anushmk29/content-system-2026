@@ -18,7 +18,7 @@ export {
   type TrainingExample, type TrainingOverview,
 } from './services/dataset-service.ts';
 export {
-  getOperatorConsole, addSignal, decideTopic,
+  getOperatorConsole, addSignal, decideTopic, setTopicPlan,
   type OperatorConsole, type TopicDecision,
 } from './services/console-service.ts';
 
@@ -49,6 +49,7 @@ export {
   type BrandPatch, type FontRow,
 } from './services/brand-service.ts';
 export { brand, pillarSlugs, type Brand } from './brand.ts';
+export { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, PLATFORM_FRAMEWORKS, type DraftPlatform, type Framework } from './prompts/platform-playbooks.ts';
 export { CURATED_FONTS } from './fonts.ts';
 export { DECODE_PLATFORMS, type DecodePlatform } from './adapters/apify.ts';
 

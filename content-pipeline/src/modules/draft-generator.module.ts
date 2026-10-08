@@ -6,6 +6,7 @@
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
 import { createRepo, type TopicRow, type NewContentItem, type Angle } from '../db/repo.ts';
+import { suggestedPlatforms } from './decision-tasks.ts';
 import { createContentItems } from '../db/content-items.ts';
 import { brandSystem } from '../prompts/brand-context.ts';
 import { buildDraftPrompt, buildAnglePrompt } from '../prompts/draft.ts';
@@ -46,7 +47,7 @@ export const draftGeneratorModule: Module = {
 
     for (const topic of topics) {
       try {
-        itemsCreated += (await draftTopic(ctx, topic)).length;
+        itemsCreated += (await draftTopic(ctx, topic, { platforms: platformsFor(topic, ctx.env.platformFit), frameworks: topic.frameworks ?? undefined })).length;
         drafted++;
       } catch (e) {
         // Per-topic isolation: one bad topic never blocks the rest of the batch.
@@ -65,6 +66,15 @@ export const draftGeneratorModule: Module = {
     };
   },
 };
+
+/** Where a topic is drafted: the operator's pick on the idea card, else Jev's (when platform fit is on),
+ *  else undefined = the default set. Unknown names are dropped. */
+export function platformsFor(topic: Pick<TopicRow, 'platforms' | 'platform_fit'>, useFit: boolean): DraftPlatform[] | undefined {
+  const own = (topic.platforms ?? []).filter((p): p is DraftPlatform => (DRAFT_PLATFORMS as readonly string[]).includes(p));
+  if (own.length) return own;
+  const jev = useFit ? suggestedPlatforms(topic.platform_fit) : [];
+  return jev.length ? jev : undefined;
+}
 
 /** Parse the angle reply: up to 5 valid angles, strongest first. */
 export function parseAngles(raw: string): Angle[] {

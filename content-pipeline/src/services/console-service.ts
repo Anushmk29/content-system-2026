@@ -10,6 +10,7 @@ import {
   type TopicRow,
   type ResearchInputRow,
 } from '../db/repo.ts';
+import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS } from '../prompts/platform-playbooks.ts';
 
 /** A draft awaiting approval, bundled with the claims a reviewer must check (§10.3). */
 interface ApprovalQueueItem {
@@ -77,4 +78,24 @@ export async function decideTopic(
     return { ok: false, message: 'Topic already drafted (or not found).' };
   }
   return { ok: true, message: decision === 'selected' ? 'Queued for drafting' : 'Dropped' };
+}
+
+/** The idea card's platform + framework pick. `platforms: null` = follow Jev again. */
+export async function setTopicPlan(
+  ctx: ModuleContext, topicId: string, input: { platforms?: unknown; frameworks?: unknown },
+): Promise<{ ok: boolean; message: string }> {
+  const plan: { platforms?: string[] | null; frameworks?: Record<string, string> | null } = {};
+  if (input.platforms !== undefined) {
+    if (input.platforms !== null && !Array.isArray(input.platforms)) return { ok: false, message: 'platforms must be a list' };
+    const list = input.platforms === null ? null : DRAFT_PLATFORMS.filter((p) => (input.platforms as unknown[]).includes(p));
+    if (list && !list.length) return { ok: false, message: 'Pick at least one platform.' };
+    plan.platforms = list;
+  }
+  if (input.frameworks !== undefined) {
+    const f = (input.frameworks && typeof input.frameworks === 'object' ? input.frameworks : {}) as Record<string, unknown>;
+    plan.frameworks = Object.fromEntries(DRAFT_PLATFORMS.flatMap((p) =>
+      PLATFORM_FRAMEWORKS[p].some((x) => x.id === f[p]) ? [[p, f[p] as string]] : []));
+  }
+  if (!(await createRepo(ctx.db).setTopicPlan(topicId, plan))) return { ok: false, message: 'Topic already drafted (or not found).' };
+  return { ok: true, message: plan.platforms ? `Drafting for ${plan.platforms.length} platform${plan.platforms.length === 1 ? '' : 's'}` : 'Saved' };
 }

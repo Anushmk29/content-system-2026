@@ -10,10 +10,12 @@ import { isFunnelStage, clamp1to5, type FunnelStage } from '../../core/src/index
 import { brand, pillarSlugs } from '../brand.ts';
 import { parseTopicScore, type ParsedTopicScore } from './score-parse.ts';
 import { QC_SIGNAL_KEYS, parseQcSignals, type QcSignals } from './qc-parse.ts';
-import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt } from '../prompts/decisions.ts';
+import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt, platformFitSystem, buildPlatformFitPrompt } from '../prompts/decisions.ts';
+import { DRAFT_PLATFORMS, PIECE_NAME, type DraftPlatform } from '../prompts/platform-playbooks.ts';
+import { parseJsonObject } from './llm-json.ts';
 import { VALUE_STRUCTURES, CTA_TYPES } from '../prompts/decode.ts';
 
-export type DecisionTask = 'topic_score' | 'qc_signals';
+export type DecisionTask = 'topic_score' | 'qc_signals' | 'platform_fit';
 
 export interface DecisionTaskDef<S, T> {
   task: DecisionTask;
@@ -142,6 +144,7 @@ export const QC_SIGNALS: DecisionTaskDef<Parameters<typeof qcState>[0], QcSignal
 
 export const DECISION_TASKS: Record<DecisionTask, DecisionTaskDef<never, unknown>> = {
   topic_score: TOPIC_SCORE, qc_signals: QC_SIGNALS,
+  get platform_fit() { return PLATFORM_FIT as DecisionTaskDef<never, unknown>; },
 };
 
 // ---- competitor posts (Decode → hunt score) ----------------------------------------
@@ -225,3 +228,31 @@ export function skeletonFromJev(a: Record<string, JevAnswer>, minConf: number): 
     ...(sure('cta_type') ? { ctaType: sure('cta_type') } : {}),
   };
 }
+
+// ---- Platform fit: which platforms an idea suits (scoring module, behind CONTENT_PLATFORM_FIT) ----
+
+export type PlatformFit = Partial<Record<DraftPlatform, number>>;
+
+const platformQuestions = (): Record<string, JevQuestion> => Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, {
+  type: 'noul',
+  instructions: `${audience()} Would this idea work natively as a ${PIECE_NAME[p]}? Consider the format it needs, how this audience uses ${p}, and the tone there.`,
+  criteria: { true: `A natural ${PIECE_NAME[p]} this audience would engage with`, false: `Forced or off-format as a ${PIECE_NAME[p]}` },
+} satisfies JevQuestion]));
+
+const clamp01 = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0; };
+
+export const PLATFORM_FIT: DecisionTaskDef<TopicSubject, PlatformFit> = {
+  task: 'platform_fit', state: topicState,
+  get questions() { return platformQuestions(); },
+  fromJev: (a) => Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, Math.round(clamp01(a[p]?.noul) * 100) / 100])),
+  get system() { return platformFitSystem(); },
+  prompt: (state) => buildPlatformFitPrompt(state, PIECE_NAME),
+  parse: (raw) => {
+    const o = parseJsonObject(raw);
+    return Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, Math.round(clamp01(o[p]) * 100) / 100]));
+  },
+};
+
+/** Jev's picks: platforms at or above 0.5, in DRAFT_PLATFORMS order; empty when none. */
+export const suggestedPlatforms = (fit: PlatformFit | null | undefined): DraftPlatform[] =>
+  fit ? DRAFT_PLATFORMS.filter((p) => (fit[p] ?? 0) >= 0.5) : [];

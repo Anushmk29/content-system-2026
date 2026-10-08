@@ -7,7 +7,7 @@ import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { createRepo } from '../db/repo.ts';
 import { decide, canDecide } from './decide.ts';
-import { TOPIC_SCORE } from './decision-tasks.ts';
+import { TOPIC_SCORE, PLATFORM_FIT } from './decision-tasks.ts';
 
 export const scoringModule: Module = {
   id: 'scoring',
@@ -30,6 +30,11 @@ export const scoringModule: Module = {
             proof: s.proof, repurpose: s.repurpose,
             pillar: s.pillar ?? t.pillar, funnelStage: s.funnelStage ?? t.funnel_stage,
           });
+          // Which platforms the idea suits. Never blocks the score (column may not be migrated yet).
+          if (ctx.env.platformFit) {
+            await decide(ctx, PLATFORM_FIT, t.id, t).then((fit) => repo.setTopicFit(t.id, fit))
+              .catch((e: Error) => ctx.logger.warn(`platform fit ${t.id}: ${e.message}`));
+          }
           scored++;
         } catch (e) {
           failures.push(`${t.id}: ${(e as Error).message}`);

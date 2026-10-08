@@ -182,3 +182,35 @@ test('decode skeleton: confident Jev picks override, unsure ones leave the LLM p
     { format: 2, ctaType: 'dm' });
   assert.deepEqual(skeletonFromJev({ format: ch('none', 0.9) }, 0.8), { format: null });
 });
+
+test('platform fit: Jev probabilities per platform, picks at >= 0.5; drafting follows the operator, then Jev, then the default', async () => {
+  const { PLATFORM_FIT, suggestedPlatforms } = await import('./decision-tasks.ts');
+  const { platformsFor } = await import('./draft-generator.module.ts');
+  const yes = (p: number): JevAnswer => ({ type: 'noul', noul: p });
+  const { ctx } = ctxWith({ llm: false, jev: { linkedin: yes(0.92), x: yes(0.61), instagram: yes(0.2), reddit: yes(0.55) } });
+  const fit = await decide(ctx, PLATFORM_FIT, randomUUID(), { title: 'Why cafés lose money on oat milk' });
+  assert.equal(fit.linkedin, 0.92);
+  assert.equal(fit.facebook, 0);
+  assert.deepEqual(suggestedPlatforms(fit), ['linkedin', 'x', 'reddit']);
+  assert.deepEqual(PLATFORM_FIT.parse('{"linkedin": 1.4, "x": "0.5", "blog": -1}').linkedin, 1);
+
+  assert.deepEqual(platformsFor({ platforms: ['instagram', 'nope'], platform_fit: fit }, true), ['instagram']);
+  assert.deepEqual(platformsFor({ platforms: null, platform_fit: fit }, true), ['linkedin', 'x', 'reddit']);
+  assert.equal(platformsFor({ platforms: null, platform_fit: fit }, false), undefined);   // flag off → default set
+  assert.equal(platformsFor({ platforms: null, platform_fit: null }, true), undefined);
+});
+
+test('setTopicPlan: known platforms and frameworks only; null goes back to following Jev', async () => {
+  const { setTopicPlan } = await import('../services/console-service.ts');
+  const id = (await db.query<{ id: string }>(`insert into content.topics (title, status) values ('t', 'new') returning id`)).rows[0]!.id;
+  const ctx = { db } as unknown as ModuleContext;
+  assert.equal((await setTopicPlan(ctx, id, { platforms: ['facebook', 'linkedin', 'tiktok'], frameworks: { linkedin: 'pas', x: 'bogus' } })).ok, true);
+  let row = (await db.query<{ platforms: string[]; frameworks: Record<string, string> }>(`select platforms, frameworks from content.topics where id = $1`, [id])).rows[0]!;
+  assert.deepEqual(row.platforms, ['linkedin', 'facebook']);
+  assert.deepEqual(row.frameworks, { linkedin: 'pas' });
+  assert.equal((await setTopicPlan(ctx, id, { platforms: [] })).ok, false);
+  await setTopicPlan(ctx, id, { platforms: null });
+  row = (await db.query<{ platforms: string[]; frameworks: Record<string, string> }>(`select platforms, frameworks from content.topics where id = $1`, [id])).rows[0]!;
+  assert.equal(row.platforms, null);
+  assert.deepEqual(row.frameworks, { linkedin: 'pas' });                 // untouched
+});

@@ -137,3 +137,18 @@ isCaseStudy = walks through a real engagement; isCompetitorComparison = compares
 competitor or tool; isNewPositioning = a new offer, price, audience or self-description;
 mentionsFaceOrVoice = relies on the founder's face, voice or appearance.`;
 }
+
+// === Platform fit (which platforms an idea suits) ============================
+// The Jev questions in modules/decision-tasks.ts (platformQuestions) mirror this wording.
+export const platformFitSystem = (b: Brand = brand()) => `You decide which platforms a content idea suits for ${who(b)}.
+Judge native fit on each platform: the format it needs, how this audience uses the platform, and
+the tone there. Be selective: most ideas suit 2-4 platforms, not all of them.
+${brandBrief(b)}`;
+
+export function buildPlatformFitPrompt(state: string, platforms: Record<string, string>): string {
+  return `For each platform, give the probability (0 to 1) that this idea would work natively there.
+${Object.entries(platforms).map(([p, piece]) => `- ${p}: as a ${piece}`).join('\n')}
+Respond with ONLY JSON: { ${Object.keys(platforms).map((p) => `"${p}": number`).join(', ')} }
+
+${state}`;
+}

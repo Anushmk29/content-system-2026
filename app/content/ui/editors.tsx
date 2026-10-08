@@ -154,10 +154,18 @@ export function MetricsForm({ itemId }: { itemId: string }) {
 }
 
 // ---- capture a signal ---------------------------------------------------------
-export function AddSignal() {
+/** Sentence starters: pick one, finish the line. Most signals are one of these shapes. */
+const STARTERS = [
+  'A customer asked: ', 'A mistake I keep seeing: ', 'Something we learned this week: ',
+  'People believe … but actually ', 'A result we got: ', 'Trend worth a take: ',
+];
+const CHANNELS = ['client', 'reddit', 'linkedin', 'x', 'own idea'];
+
+export function AddSignal({ pillars = [] }: { pillars?: { slug: string; label: string }[] }) {
   const a = useAction();
   const [text, setText] = useState('');
   const [channel, setChannel] = useState('');
+  const start = (s: string) => setText(text.trim() ? `${text.trim()} ${s}` : s);
   return (
     <form id="capture" onSubmit={async (e) => {
       e.preventDefault();
@@ -165,8 +173,14 @@ export function AddSignal() {
     }}>
       <textarea className="input" placeholder="A question a customer asked, a trend, a result… e.g. “A clinic owner asked how to cut no-shows without hiring staff”"
         value={text} onChange={(e) => setText(e.target.value)} aria-label="Signal" style={{ minHeight: 80 }} />
+      <div className="chips" style={{ marginTop: 8 }} role="group" aria-label="Start from">
+        {STARTERS.map((s) => <button key={s} type="button" className="chip" onClick={() => start(s)}>{s.replace(/: $|s$/, '')}</button>)}
+        {pillars.map((p) => <button key={p.slug} type="button" className="chip" onClick={() => start(`${p.label}: `)}>{p.label}</button>)}
+      </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="input" style={{ width: 220 }} placeholder="channel (e.g. client, reddit)" value={channel} onChange={(e) => setChannel(e.target.value)} aria-label="Channel" />
+        <span className="chips" role="group" aria-label="Where it came from">
+          {CHANNELS.map((c) => <button key={c} type="button" className="chip" aria-pressed={channel === c} onClick={() => setChannel(channel === c ? '' : c)}>{c}</button>)}
+        </span>
         <button type="submit" className="btn btn-brand" disabled={!text.trim() || a.pending}>{a.busy ? '…' : '+ Capture signal'}</button>
         {a.feedback}
       </div>

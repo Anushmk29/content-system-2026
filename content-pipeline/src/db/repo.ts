@@ -82,6 +82,12 @@ export interface TopicRow {
   score_proof?: number | null;
   score_repurpose?: number | null;
   created_at?: string;
+  /** Jev's probability per platform that the idea works there natively (platform_fit decision). */
+  platform_fit?: Record<string, number> | null;
+  /** The operator's platform pick; null = follow Jev's, else the default set. */
+  platforms?: string[] | null;
+  /** Writing framework id per platform (prompts/platform-playbooks.ts). */
+  frameworks?: Record<string, string> | null;
 }
 
 /** One piece of a draft set (see content-items.ts createDraftSet). */
@@ -199,13 +205,27 @@ export function createRepo(db: Db) {
         [id, s.leadIntent, s.reach, s.brandFit, s.proof, s.repurpose, s.pillar ?? null, s.funnelStage ?? null],
       ),
 
+    setTopicFit: (id: string, fit: Record<string, number>) =>
+      db.query(`update content.topics set platform_fit = $2 where id = $1`, [id, JSON.stringify(fit)]),
+
+    setTopicPlan: (id: string, plan: { platforms?: string[] | null; frameworks?: Record<string, string> | null }) =>
+      db.query(
+        `update content.topics set
+           platforms  = case when $2 then $3::jsonb else platforms end,
+           frameworks = case when $4 then $5::jsonb else frameworks end
+         where id = $1 and status <> 'used'`,
+        [id, plan.platforms !== undefined, JSON.stringify(plan.platforms ?? null), plan.frameworks !== undefined, JSON.stringify(plan.frameworks ?? null)],
+      ).then((r) => r.rowCount > 0),
+
     /** Scored topics awaiting the operator's select/drop decision (status still 'new'). */
     reviewableTopics: () =>
       db.query<TopicRow>(
         `select id, title, pillar, funnel_stage, source, source_detail, customer_language, market_context,
                 priority_band, score_total, status, created_at,
-                score_lead_intent, score_reach, score_brand_fit, score_proof, score_repurpose
-           from content.topics
+                score_lead_intent, score_reach, score_brand_fit, score_proof, score_repurpose,
+                to_jsonb(t) -> 'platform_fit' as platform_fit, to_jsonb(t) -> 'platforms' as platforms,
+                to_jsonb(t) -> 'frameworks' as frameworks, -- to_jsonb: still loads before the migration adds them
+           from content.topics t
           where status = 'new' and score_lead_intent is not null
           order by score_total desc, created_at`,
       ).then((r) => r.rows),
@@ -214,8 +234,10 @@ export function createRepo(db: Db) {
     selectedTopics: () =>
       db.query<TopicRow>(
         `select id, title, pillar, funnel_stage, source, source_detail, customer_language, market_context,
-                priority_band, score_total, status
-           from content.topics where status = 'selected'
+                priority_band, score_total, status,
+                to_jsonb(t) -> 'platform_fit' as platform_fit, to_jsonb(t) -> 'platforms' as platforms,
+                to_jsonb(t) -> 'frameworks' as frameworks, -- to_jsonb: still loads before the migration adds them
+           from content.topics t where status = 'selected'
           order by score_total desc, created_at`,
       ).then((r) => r.rows),
 

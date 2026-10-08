@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getContext, decideTopic, topicAngles, pickAngle, type TopicDecision } from '@pratapai/content-pipeline';
+import { getContext, decideTopic, topicAngles, pickAngle, setTopicPlan, type TopicDecision } from '@pratapai/content-pipeline';
 import { handle } from '../../guard';
 
 // PATCH /content/api/topics/:id → operator's draft/drop decision on a scored topic,
 // or the angle the draft will argue.
 // Body: { decision: 'selected' | 'dropped' }  |  { angle: 0-4 | null }
+//     | { platforms?: string[] | null, frameworks?: { [platform]: frameworkId } }  (the idea card's plan)
 export const PATCH = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
-  const body = (await req.json()) as { decision?: string; angle?: unknown };
-  const result = 'angle' in body
-    ? await pickAngle(getContext(), id, body.angle)
+  const body = (await req.json()) as { decision?: string; angle?: unknown; platforms?: unknown; frameworks?: unknown };
+  const result = 'angle' in body ? await pickAngle(getContext(), id, body.angle)
+    : 'platforms' in body || 'frameworks' in body ? await setTopicPlan(getContext(), id, body)
     : await decideTopic(getContext(), id, body.decision as TopicDecision);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 });

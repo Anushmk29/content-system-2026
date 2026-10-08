@@ -1,10 +1,24 @@
 // Ideas & signals — the top of the funnel. Capture raw signals, then decide which scored
 // topics get drafted. Scores are shown per dimension so the call is an informed one.
-import { getContext, getOperatorConsole, loadBrand, pillarSlugs, type OperatorConsole, type TopicRow } from '@pratapai/content-pipeline';
+import {
+  getContext, getOperatorConsole, loadBrand, pillarSlugs, DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS,
+  type OperatorConsole, type TopicRow,
+} from '@pratapai/content-pipeline';
+import { PlatformPicker, type PlatformOption } from '../ui/PlatformPicker';
 import { PageHead, KpiStrip, Tile, Chip, NeedsDb, Ring, ScoreBars } from '../ui/viz';
 import { AddSignal } from '../ui/editors';
 import { ApiButton, RunModuleButton } from '../ui/actions';
-import { ago, prettyPillar, PILLAR_COLOR, TONE } from '../ui/format';
+import { ago, prettyPillar, PILLAR_COLOR, TONE, PLATFORM } from '../ui/format';
+
+const OPTIONS: PlatformOption[] = DRAFT_PLATFORMS.map((p) => ({
+  id: p, label: p === 'youtube' ? 'YouTube Short' : PLATFORM[p]?.label ?? p,
+  frameworks: PLATFORM_FRAMEWORKS[p].map(({ id, name }) => ({ id, name })),
+}));
+
+function Picker({ t }: { t: TopicRow }) {
+  return <PlatformPicker topicId={t.id} options={OPTIONS} fit={t.platform_fit ?? null} chosen={t.platforms ?? null}
+    defaults={[...DEFAULT_DRAFT_PLATFORMS]} frameworks={t.frameworks ?? null} />;
+}
 
 const BAND: Record<string, { color: string; label: string }> = {
   high: { color: TONE.ok, label: 'High — draft now' },
@@ -21,7 +35,8 @@ export default async function IdeasPage() {
   let data: OperatorConsole | null = null;
   let error: string | null = null;
   try { data = await getOperatorConsole(getContext()); } catch (e) { error = (e as Error).message; }
-  const pillars = pillarSlugs(await loadBrand(getContext()));
+  const kit = await loadBrand(getContext());
+  const pillars = pillarSlugs(kit);
   if (!data) return (<><PageHead crumb="ideas" title="Where the next posts come from." /><NeedsDb error={error} /></>);
 
   return (
@@ -36,7 +51,7 @@ export default async function IdeasPage() {
       ]} />
       <div className="bento">
         <Tile title="Capture a signal" span={2}>
-          <AddSignal />
+          <AddSignal pillars={kit.pillars.map(({ slug, label }) => ({ slug, label }))} />
         </Tile>
         <Tile title="Signals waiting" hint={`${data.signals.length}`} span={2}>
           {data.signals.length === 0 ? <p className="empty">Inbox zero. New signals show up here until Research turns them into topics.</p> : (
@@ -75,6 +90,7 @@ export default async function IdeasPage() {
                       <ApiButton path={`/content/api/topics/${t.id}`} method="POST" label={t.angles?.length ? 'New angles' : 'Find angles'} busyLabel="thinking…" className="btn btn-sm" />
                       <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn btn-sm" />
                     </div>
+                    <div style={{ padding: '0 10px' }}><Picker t={t} /></div>
                     {t.angles?.length ? <Angles t={t} /> : null}
                   </li>
                 ))}
@@ -137,6 +153,7 @@ function TopicCard({ t, pillars }: { t: TopicRow; pillars: string[] }) {
         })}
       </div>
       {t.customer_language && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 10px', fontStyle: 'italic' }}>“{t.customer_language}”</p>}
+      <Picker t={t} />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'selected' }} label="Select to draft" className="btn btn-ink" />
         <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn" />
