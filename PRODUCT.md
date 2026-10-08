@@ -33,7 +33,7 @@ A "content-to-pipeline" engine, not a "post everywhere" machine. Each post trace
   - Thursday: QC, approval and scheduling
   - Friday: engagement and analytics review
 - **Platforms:** LinkedIn, X, blog, Instagram, Facebook, Reddit and email, with per-platform output targets. The weekly post target constant is 5.
-- **Brand brain:** lives in `prompts/` (ICP, brand voice, pillars, platform rules, QC checklist, scoring rubric).
+- **Brand brain:** the Brand Kit (`/content/brand`, table `content.brand_kit`: voice, audience, pillars, offers, look). Prompts that use it live in `content-pipeline/src/prompts/`.
 - **Governing reference:** `Content_Pipeline_Bible_Final.docx` (v3).
 
 ## Capabilities and Constraints
@@ -51,7 +51,7 @@ A "content-to-pipeline" engine, not a "post everywhere" machine. Each post trace
 ## Brand Commitments
 
 - **Brand:** PRATAP AI INNOVATIONS.
-- **Voice:** practical, for founder-led SMEs. It is never enterprise ("governance", "ROI and risk" are research inputs, not our publishing voice). See `prompts/icp.md` and `prompts/brand-voice.md`.
+- **Voice:** practical, for founder-led SMEs. It is never enterprise ("governance", "ROI and risk" are research inputs, not our publishing voice). Set it in the Brand Kit (Voice and Audience).
 - **Dashboard look (binding, user-confirmed):** the light "Editorial Decode" look defined in `docs/DESIGN-GUIDE.md`.
 
 ## Evidence on Hand

@@ -1,8 +1,8 @@
 # Strategy & Operator Playbook
 *Audience: founder + content operator. The non-technical half of the Bible (§38 split).*
 
-For ICP, voice, pillars, scoring, QC and platform rules see the living `prompts/`
-folder — this playbook is the weekly operating view.
+For voice, audience and pillars see the Brand Kit (`/content/brand`); scoring, QC and
+platform rules live in `content-pipeline/src/prompts/` — this playbook is the weekly operating view.
 
 ## The pipeline in one line (Bible Table 0)
 Research → Topic Scoring → Weekly Calendar → Anchor Content → Platform Repurposing →

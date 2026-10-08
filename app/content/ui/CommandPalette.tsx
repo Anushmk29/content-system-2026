@@ -3,15 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAction, summarizeRun } from './actions';
+import { GROUPS } from './Nav';
 
 interface Cmd { id: string; label: string; group: string; run: () => void }
 
-const PAGES: [string, string][] = [
-  ['/content', 'Today'], ['/content/board', 'Board'], ['/content/calendar', 'Calendar'],
-  ['/content/approvals', 'Approvals'], ['/content/ideas', 'Ideas & signals'], ['/content/decode', 'Decode'],
-  ['/content/videos', 'Videos'], ['/content/scripts', 'Scripts'], ['/content/hooks', 'Hooks'], ['/content/styles', 'Styles'], ['/content/brand', 'Brand kit'], ['/content/analytics', 'Analytics'],
-];
-const ADMIN_PAGES: [string, string][] = [['/content/training', 'Training'], ['/content/costs', 'Costs'], ['/content/system', 'System']];
 
 export function CommandPalette({ modules, admin }: { modules: { id: string; title: string }[]; admin: boolean }) {
   const router = useRouter();
@@ -42,7 +37,7 @@ export function CommandPalette({ modules, admin }: { modules: { id: string; titl
 
   const go = (href: string) => () => { setOpen(false); router.push(href); };
   const cmds: Cmd[] = [
-    ...[...PAGES, ...(admin ? ADMIN_PAGES : [])].map(([href, label]) => ({ id: href, label, group: 'Go to', run: go(href) })),
+    ...GROUPS.filter((g) => admin || !g.admin).flatMap((g) => g.links).map(({ href, label }) => ({ id: href, label, group: 'Go to', run: go(href) })),
     { id: 'new-signal', label: 'Capture a new signal', group: 'Create', run: go('/content/ideas#capture') },
     { id: 'run-all', label: 'Run full pipeline', group: 'Run', run: () => a.call('all', 'POST', '/content/api/run', undefined, summarizeRun) },
     ...modules.map((m) => ({ id: `run-${m.id}`, label: `Run ${m.title}`, group: 'Run', run: () => a.call(m.id, 'POST', `/content/api/modules/${m.id}/run`, undefined, summarizeRun) })),

@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 
 export interface NavBadges { approvals: number; ideas: number; training: number; systemBroken: number; scripts: number }
 
-const GROUPS: { label: string; admin?: boolean; links: { href: string; label: string; ico: string; badge?: keyof NavBadges; danger?: boolean }[] }[] = [
+/** The one page list: the sidebar and the ⌘K palette both read it. */
+export const GROUPS: { label: string; admin?: boolean; links: { href: string; label: string; ico: string; badge?: keyof NavBadges; danger?: boolean }[] }[] = [
   { label: 'Workspace', links: [
     { href: '/content', label: 'Today', ico: '01' },
     { href: '/content/board', label: 'Board', ico: '02' },

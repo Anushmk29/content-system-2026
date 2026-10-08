@@ -24,26 +24,31 @@ others keep running and the dashboard shows it. Nothing fails silently.
 | Safety-critical logic (scoring, lanes, claims, approvals, leads, UTM) | **`content-pipeline/core/`** — pure, **29 unit tests** |
 | Pipeline stages | **`content-pipeline/src/modules/`** — each a fault-isolated `Module` |
 | Orchestration | **`content-pipeline/src/modules/orchestrator.ts`** — `Promise.allSettled`, records every run |
-| Drafting / QC / scoring / research / triage / review intelligence | **LLM** adapter (`adapters/claude.ts`) — OpenRouter (default) or Anthropic |
+| Writing (drafts, angles, research, review) | **LLM** adapter (`adapters/claude.ts`) — Claude via OpenRouter (default) or Anthropic |
+| Decisions (scores, QC signals, competitor judging) | **Jev** (`adapters/jev.ts`) routed by `modules/decide.ts`, LLM fallback |
 | Publishing rail (Bible §12) | **Postiz**, self-hosted — `infra/postiz/` + `adapters/postiz.ts` |
-| Approval queue (Bible §10) | **Telegram** adapter |
-| Dashboard + Todo tracker | **Next.js** under `app/content/` |
-| Brand brain (ICP, voice, pillars, scoring) | **`prompts/`** — versioned markdown |
+| Approval queue (Bible §10) | Dashboard **Approvals** page |
+| Dashboard | **Next.js** under `app/content/` |
+| Brand brain (voice, audience, pillars, offers) | **Brand Kit** in `content.brand_kit`, edited at `/content/brand`; prompts in `content-pipeline/src/prompts/` |
 
 ## Repo layout
 ```
 content-pipeline/      The isolated engine (own package + deps)
-  core/                Pure safety-critical logic + tests (29)
+  core/                Pure safety-critical logic + tests
   src/
-    adapters/          claude · postiz · telegram (graceful when unconfigured)
+    adapters/          one file per external API: claude (LLM + images) · jev · postiz · apify ·
+                       youtube · tinyfish · transcriber. All HTTP goes through these.
+    prompts/           every prompt: brand-context (shared brand block) · platform-playbooks ·
+                       draft · decisions · decode · review
+    modules/           one fault-isolated Module per pipeline stage + orchestrator;
+                       decide.ts + decision-tasks.ts = the single road for typed decisions
+    services/          what the dashboard calls (brand, decode, styles, today, approvals, …)
     db/                pg client (scoped to `content` schema) + typed repo
-    modules/           one fault-isolated Module per pipeline stage + orchestrator
-    services/          health · pipeline board · todos
-app/content/           Next.js dashboard + /content/api/* routes
+app/content/           Next.js dashboard pages, ui/ components, api/ routes
+  api/guard.ts         role check for every write route; middleware.ts = login, rate limits, CSRF
 db/                    schema.sql (content schema) + seed.sql
-prompts/               The brand brain
 infra/postiz/          Self-hosted Postiz (Docker)
-docs/                  Strategy Playbook + Build Spec
+docs/                  GO-LIVE, AUDIT, platform guide, strategy playbook, build spec
 INTEGRATION.md         How to drop into an existing Next.js app non-destructively
 ```
 
@@ -77,7 +82,7 @@ npm run pipeline                                  # runs all 9 modules against y
 ## What the dashboard does (`/content`)
 The dashboard is the **control room** — you can run the whole loop here without a terminal:
 - **Modules** — every stage with last run, duration, items processed, and health.
-- **Integrations** — DB / Claude / Postiz / Telegram readiness at a glance.
+- **Integrations** — DB / LLM / Jev / Postiz / Apify readiness at a glance (admin).
 - **Pipeline** — counts per lifecycle status + recent items.
 - **Run controls** — run the whole pipeline or a single module and watch it update.
 - **Operator console** — the human-in-the-loop steps, all in-page:
@@ -97,7 +102,7 @@ The dashboard is the **control room** — you can run the whole loop here withou
 POST /content/api/run                  # run the whole pipeline
 POST /content/api/modules/:id/run      # run one module
 ```
-Point Vercel Cron / a GitHub Action / any scheduler at these (add an auth secret first).
+Point a scheduler at these with the `x-content-secret: $CONTENT_CRON_SECRET` header.
 
 See **`docs/GO-LIVE.md`** (setup + testing), **`docs/BUILD-SPEC.md`** (technical),
 and **`docs/STRATEGY-PLAYBOOK.md`** (operator).

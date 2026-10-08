@@ -58,14 +58,14 @@ gracefully when unset):
 CONTENT_DATABASE_URL=postgresql://...
 # LLM (drafting/scoring/research/triage/review): OpenRouter preferred, Anthropic fallback
 # CONTENT_OPENROUTER_API_KEY=...   CONTENT_LLM_MODEL=anthropic/claude-sonnet-4.5
-# optional: CONTENT_POSTIZ_*, CONTENT_TELEGRAM_*, CONTENT_RUN_SECRET, CONTENT_ALLOW_SAFE_AUTO
+# optional: CONTENT_POSTIZ_*, CONTENT_RUN_SECRET, CONTENT_CRON_SECRET, CONTENT_ALLOW_SAFE_AUTO
 ```
 See `.env.content.example` for the full, annotated list.
 
 ## Step 4 — Run
 Start your app and open **`/content`**. You'll see:
 - **Modules** — every pipeline stage with its last run + health (green/amber/red).
-- **Integrations** — DB / Claude / Postiz / Telegram readiness.
+- **Integrations** — DB / LLM / Jev / Postiz readiness.
 - **Pipeline** — counts per lifecycle status + recent items.
 - **Todo Tracker** — add/cycle/delete tasks.
 - **▶ Run all** / per-module buttons to execute and watch status update.
@@ -77,9 +77,8 @@ POST /content/api/run                 # whole pipeline
 POST /content/api/modules/qc_gate/run # one module
 ```
 Use Vercel Cron, a GitHub Action, or any cron hitting these routes. Set
-`CONTENT_RUN_SECRET` and send it as the `x-content-secret` header before exposing
-them publicly. For the approval gate, register the Telegram webhook once (see
-`docs/BUILD-SPEC.md`). Feed leads to `POST /content/api/leads` and performance
+`CONTENT_CRON_SECRET` and send it as the `x-content-secret` header; it opens only the run
+routes. Approvals happen on the dashboard Approvals page. Feed leads to `POST /content/api/leads` and performance
 snapshots to `POST /content/api/metrics`.
 
 ---

@@ -1,4 +1,6 @@
 # Technical Build Spec
+
+> **Historical spec.** The Telegram approval adapter and lead triage described below were removed; approvals happen on the dashboard. Current layout: README.md. Current state of the system: docs/AUDIT-2026-10.md.
 *Audience: dev. The technical half of the Bible (§38 split). Full-code, no workflow engine.*
 
 ## Stack

@@ -1,5 +1,8 @@
 # Go-Live & Test Guide
 
+> **2026-10 note:** Telegram approvals and lead triage were removed. Approvals happen on the
+> dashboard **Approvals** page; ignore the Telegram steps further down this guide.
+
 Everything in the Bible is **built and tested**. What's left is **wiring** — giving the
 engine real accounts (database, LLM, publishing, approvals) and pointing a scheduler at
 it. This guide is the operator's checklist: what you provide, how to test each layer, and
@@ -12,7 +15,7 @@ exactly what to expect.
 > 4. Drop the package into your Next app (INTEGRATION.md) and open **`/content`** — run the
 >    pipeline and do every human step (capture signals, select topics, approve drafts,
 >    record results, see leads) from the dashboard. No command line needed.
-> 5. Add Postiz + Telegram keys when you want real publishing + an extra approval channel.
+> 5. Add Postiz keys when you want real publishing.
 >
 > **You can run the entire loop from the `/content` dashboard** — the CLI (`npm run pipeline`)
 > and curl commands below are just alternatives for headless testing before the UI is wired in.
@@ -27,8 +30,6 @@ exactly what to expect.
 | 2 | **OpenRouter API key** | ✅ for AI stages | `CONTENT_OPENROUTER_API_KEY` | Powers research, scoring, drafting, triage, weekly review. Get it at openrouter.ai/keys. |
 | 3 | LLM model slug | optional | `CONTENT_LLM_MODEL` | Default `anthropic/claude-sonnet-4.5`. Any OpenRouter model works. |
 | 4 | **Postiz** (self-hosted) | optional | `CONTENT_POSTIZ_API_URL` + `_API_KEY` | The publishing rail. Without it, publishing degrades (doesn't crash). |
-| 5 | **Telegram bot + chat** | optional | `CONTENT_TELEGRAM_BOT_TOKEN` + `_CHAT_ID` | The approval queue. Without it, approval degrades. |
-| 6 | Telegram webhook secret | optional | `CONTENT_TELEGRAM_WEBHOOK_SECRET` | Protects the approve/reject webhook. |
 | 7 | **Client password** | **required in production** | `CONTENT_RUN_SECRET` | The client's login for the whole dashboard; also the `x-content-secret` header for cron. Production refuses to serve without it. Blank in dev = open. |
 | 7a | Cron secret | recommended | `CONTENT_CRON_SECRET` | Send as `x-content-secret` from cron. Opens only `/content/api/run` and `/content/api/modules/*/run`, so the client's login password no longer has to live in the cron config. |
 | 7c | Database CA cert | recommended | `CONTENT_DATABASE_CA` | Path to Supabase's SSL certificate (Database settings → SSL). Turns on full TLS verification; without it the connection is encrypted but the server cert isn't verified. |
