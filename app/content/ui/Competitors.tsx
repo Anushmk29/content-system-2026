@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { CompetitorRow } from '@pratapai/content-pipeline';
 import { useAction } from './actions';
 
-const NETS = [['x', 'X handle'], ['instagram', 'Instagram handle'], ['linkedin', 'LinkedIn company page URL'], ['facebook', 'Facebook page URL']] as const;
+const NETS = [['x', 'X handle'], ['instagram', 'Instagram handle'], ['linkedin', 'LinkedIn company page URL'], ['facebook', 'Facebook page URL'], ['youtube', 'YouTube @handle or channel URL']] as const;
 
 export function Competitors({ list }: { list: CompetitorRow[] }) {
   return (

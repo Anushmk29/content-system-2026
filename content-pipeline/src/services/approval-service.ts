@@ -6,14 +6,14 @@ import { createRepo } from '../db/repo.ts';
 import { createContentItems, IllegalTransition } from '../db/content-items.ts';
 import { effectOfDecision, type ApprovalAction } from '../../core/src/index.ts';
 
-export interface ApplyDecisionInput {
+interface ApplyDecisionInput {
   itemId: string;
   action: ApprovalAction;
   decidedBy?: string | null;
   note?: string | null;
 }
 
-export interface ApplyDecisionResult {
+interface ApplyDecisionResult {
   ok: boolean;
   /** A short human line shown back to the operator. */
   message: string;

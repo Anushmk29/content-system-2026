@@ -3,7 +3,7 @@
 // operator todos so the learning loop produces action, not just a report.
 import { parseJsonObject } from './llm-json.ts';
 
-export interface ParsedReview {
+interface ParsedReview {
   summary: string;
   recommendations: string[];
 }

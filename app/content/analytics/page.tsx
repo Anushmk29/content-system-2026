@@ -6,10 +6,7 @@ import { performanceSignal } from '@pratapai/content-pipeline/core';
 import { params, type SearchParams } from '../data';
 import { PageHead, KpiStrip, Tile, Area, BarList, Plat, Chip, NeedsDb } from '../ui/viz';
 import { ItemDrawer } from '../ui/ItemDrawer';
-import { compact, prettyPillar, withParams, ago, when, PLATFORM, TONE } from '../ui/format';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { compact, prettyPillar, withParams, ago, when, times, PLATFORM, TONE } from '../ui/format';
 
 const SIGNAL: Record<string, { label: string; color: string; tip: string }> = {
   repurpose: { label: 'Repurpose', color: TONE.ok, tip: 'Many people saw it and engaged → turn it into a carousel, blog or email' },
@@ -37,7 +34,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   const itemHref = (id: string) => withParams('/content/analytics', sp, { item: id });
   const hasNumbers = (p: Analytics['posts'][number]) => p.impressions != null || p.reach != null || p.engagement != null;
   const noMetrics = a.posts.filter((p) => !hasNumbers(p));
-  const x = (v: number | null | undefined) => (v == null ? '—' : `${Number(v).toFixed(1)}x`);
   const label = (at: string) => new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const span: [string, string] | undefined = a.series.length ? [label(a.series[0]!.at), label(a.series[a.series.length - 1]!.at)] : undefined;
 
@@ -48,7 +44,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         { label: 'Published', value: t.published, sub: `in the last ${range} days` },
         { label: 'Reach', value: compact(t.reach), sub: `${compact(t.clicks)} clicks` },
         { label: 'Engagement', value: compact(t.engagement), sub: `likes, comments & shares · ${t.engagementPerPost ?? '—'} per post` },
-        { label: 'Vs your usual', value: x(t.vsUsual), sub: t.vsUsual != null ? 'the median post, against your own median'
+        { label: 'Vs your usual', value: times(t.vsUsual), sub: t.vsUsual != null ? 'the median post, against your own median'
           : a.own.baseline.length ? 'no results on these posts yet' : 'refresh your results on Today', href: '/content' },
       ]} />
       <div className="bento">
@@ -82,7 +78,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         </Tile>
         {a.bestByUsual.length > 0 ? (
           <Tile title="Beat your usual most" span={2}>
-            <BarList color="var(--violet)" rows={a.bestByUsual.map((p) => ({ label: <><Plat p={p.platform} /> {p.title}</>, value: Number(p.vs_usual), shown: x(p.vs_usual), href: itemHref(p.id) }))} />
+            <BarList color="var(--violet)" rows={a.bestByUsual.map((p) => ({ label: <><Plat p={p.platform} /> {p.title}</>, value: Number(p.vs_usual), shown: times(p.vs_usual), href: itemHref(p.id) }))} />
           </Tile>
         ) : (
           <Tile title="Best by engagement" span={2}>
@@ -109,7 +105,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
                       <tr key={p.id}>
                         <td><Link href={itemHref(p.id)} scroll={false} style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><Plat p={p.platform} />{p.title}</Link></td>
                         <td className="faint" title={when(p.published_at)}>{ago(p.published_at)}</td>
-                        <td className="mono">{x(p.vs_usual)}</td>
+                        <td className="mono">{times(p.vs_usual)}</td>
                         <td className="mono">{has ? compact(p.reach ?? p.impressions) : '—'}</td>
                         <td className="mono">{has ? compact(p.engagement) : '—'}</td>
                         <td className="mono">{has ? compact(p.clicks) : '—'}</td>
@@ -138,7 +134,7 @@ function BreakdownTable({ rows, name }: { rows: Breakdown[]; name: (k: string) =
           <tr key={r.key}>
             <td style={{ whiteSpace: 'nowrap' }}>{name(r.key)}</td>
             <td className="mono">{r.posts}</td>
-            <td className="mono">{r.vsUsual == null ? '—' : `${r.vsUsual.toFixed(1)}x`}</td>
+            <td className="mono">{times(r.vsUsual)}</td>
             <td className="mono">{compact(r.reach)}</td>
             <td className="mono">{compact(r.engagement)}</td>
           </tr>
@@ -156,7 +152,7 @@ function FormatList({ rows, empty }: { rows: FormatStat[]; empty: string }) {
       <thead><tr><th>Format</th><th>Posts</th><th>Median vs usual</th></tr></thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.name}><td>{r.name}</td><td className="mono">{r.posts}</td><td className="mono">{r.vsUsual == null ? '—' : `${r.vsUsual.toFixed(1)}x`}</td></tr>
+          <tr key={r.name}><td>{r.name}</td><td className="mono">{r.posts}</td><td className="mono">{times(r.vsUsual)}</td></tr>
         ))}
       </tbody>
     </table>

@@ -7,10 +7,7 @@ import { KpiStrip, Section, Tile, Funnel, PillarBars, Plat, StatusChip, Dot, Nee
 import { ApiButton, RunModuleButton } from './ui/actions';
 import { TodoTracker } from './ui/TodoTracker';
 import { ItemDrawer } from './ui/ItemDrawer';
-import { ago, when, shortDate, compact, RUN_COLOR, TONE, withParams } from './ui/format';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { ago, when, shortDate, compact, times, RUN_COLOR, TONE, withParams } from './ui/format';
 
 const KIND_LABEL: Record<TodayAction['kind'], string> = {
   fix: 'Fix', blocked: 'Blocked', approve: 'Approve', topic: 'Decide', draft: 'Run', signal: 'Run', task: 'Task',
@@ -48,7 +45,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
         { label: 'Blocked', value: k.blocked, sub: k.blocked ? 'approved but can’t go out' : 'nothing stuck', href: '/content/board?stage=approved' },
         { label: 'Reach · 7d', value: compact(k.reach7d), sub: `${compact(k.engagement7d)} likes, comments & shares`, href: '/content/analytics?range=7' },
         k.best7d
-          ? { label: 'Best this week', value: `${k.best7d.vsUsual.toFixed(1)}x`, sub: `your usual · ${k.best7d.title.slice(0, 40)}`, href: itemHref(k.best7d.id) }
+          ? { label: 'Best this week', value: times(k.best7d.vsUsual), sub: `your usual · ${k.best7d.title.slice(0, 40)}`, href: itemHref(k.best7d.id) }
           : { label: 'Best this week', value: '—', sub: today.own.baseline.length ? 'no results on this week’s posts yet' : 'needs your own results' },
       ]} />
       <OwnResultsLine own={today.own} />
@@ -148,7 +145,7 @@ function ActionButtons({ a, itemHref }: { a: TodayAction; itemHref: (id: string)
         <ApiButton path={`/content/api/topics/${a.topicId}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn btn-sm" />
       </>}
       {a.moduleId && <RunModuleButton id={a.moduleId} label={a.kind === 'fix' || a.kind === 'blocked' ? 'Retry' : 'Run'} />}
-      {a.href && <Link href={a.href} className="btn btn-sm">Fix →</Link>}
+      {a.href && <Link href={a.href} className="btn btn-sm">{a.kind === 'fix' ? 'Fix' : 'Open'} →</Link>}
       {a.todoId && <Link href="#tasks" className="btn btn-sm">View</Link>}
     </span>
   );

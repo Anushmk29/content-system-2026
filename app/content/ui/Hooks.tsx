@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { HookRow } from '@pratapai/content-pipeline';
 import { Plat } from './viz';
 import { MakeMine, type StyleOpt } from './Decode';
-import { PLATFORM } from './format';
+import { PLATFORM, times } from './format';
 
 const SOURCES = [['all', 'all'], ['them', 'competitors'], ['you', 'you']] as const;
 
@@ -44,7 +44,7 @@ export function Hooks({ hooks, styles }: { hooks: HookRow[]; styles: StyleOpt[] 
           {shown.map((h) => (
             <li key={h.id}>
               <div className="row">
-                <b className="lift mono" data-win={h.lift > 1 || undefined}>{h.lift.toFixed(1)}x</b>
+                <b className="lift mono" data-win={h.lift > 1 || undefined}>{times(h.lift)}</b>
                 <div className="grow">
                   <p className="hook-t">{h.hook}</p>
                   <div className="d"><Plat p={h.platform} /> {h.source}{h.format ? ` · ${h.format}` : ''} · <a href={h.url} target="_blank" rel="noreferrer">open post</a></div>

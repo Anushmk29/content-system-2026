@@ -25,20 +25,10 @@ export interface ContentSignals {
   isControversialOpinion?: boolean;
   isCaseStudy?: boolean;
   isCompetitorComparison?: boolean;
-  isNewPositioning?: boolean;
-  isTemplateBased?: boolean;
-  derivedFromApprovedContent?: boolean;
 }
 
-/**
- * Classify the approval lane from QC signals (Bible §10.1 logic).
- * @param allowSafeAuto  v1 keeps this false — safe_auto is earned only after
- *                       templates are proven (Bible §17). Default false.
- */
-export function classifyLane(
-  signals: ContentSignals,
-  allowSafeAuto = false,
-): ApprovalLane {
+/** Classify the approval lane from QC signals (Bible §10.1 logic). safe_auto is never proposed. */
+export function classifyLane(signals: ContentSignals): ApprovalLane {
   const sensitive =
     signals.mentionsFaceOrVoice ||
     signals.hasClientClaim ||
@@ -47,11 +37,6 @@ export function classifyLane(
     signals.isCaseStudy ||
     signals.isCompetitorComparison;
   if (sensitive) return 'sensitive';
-
-  const safeAutoEligible =
-    allowSafeAuto && signals.isTemplateBased && signals.derivedFromApprovedContent &&
-    !signals.isNewPositioning; // qc-checklist: new positioning always gets a human (review)
-  if (safeAutoEligible) return 'safe_auto';
 
   // Everything else — new posts, blogs, positioning — defaults to the safer side.
   return 'review';

@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Content API Map",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      1080,
+      500
+    ]
+  },
+  "components": [
+    {
+      "id": "r-decode",
+      "type": "frontend",
+      "label": "Decode + videos",
+      "sublabel": "POST /decode · GET PATCH /decode/[run] · POST DELETE /decode/competitors · POST /decode/use · POST /videos/[id] · PATCH /scripts/[id]",
+      "pos": [
+        40,
+        30
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-items",
+      "type": "frontend",
+      "label": "Items + approvals",
+      "sublabel": "PATCH /items/[id] · GET POST DELETE /items/[id]/asset · PATCH /approvals/[id]",
+      "pos": [
+        40,
+        94
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-topics",
+      "type": "frontend",
+      "label": "Topics + signals",
+      "sublabel": "PATCH POST /topics/[id] · POST /signals",
+      "pos": [
+        40,
+        158
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-run",
+      "type": "frontend",
+      "label": "Run + pipeline",
+      "sublabel": "POST /run · POST /modules/[id]/run · GET /pipeline",
+      "pos": [
+        40,
+        222
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-brand",
+      "type": "frontend",
+      "label": "Brand + styles",
+      "sublabel": "PATCH /brand · /brand/fonts · /brand/logo · /brand/voice · POST /styles · /styles/[id] · /draft · /generate · GET /image",
+      "pos": [
+        40,
+        286
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-admin",
+      "type": "security",
+      "label": "Admin only",
+      "sublabel": "GET /dataset · POST /decisions · POST /decisions/seed · GET /costs",
+      "pos": [
+        40,
+        350
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "r-ops",
+      "type": "frontend",
+      "label": "Todos · metrics · health · login",
+      "sublabel": "POST /todos · PATCH DELETE /todos/[id] · POST /metrics · GET /health · POST DELETE /login",
+      "pos": [
+        40,
+        414
+      ],
+      "size": [
+        640,
+        50
+      ]
+    },
+    {
+      "id": "e-decode",
+      "type": "backend",
+      "label": "decode / videos / scripts",
+      "sublabel": "*-service.ts",
+      "pos": [
+        790,
+        30
+      ],
+      "size": [
+        250,
+        50
+      ]
+    },
+    {
+      "id": "e-items",
+      "type": "backend",
+      "label": "board · hook · asset",
+      "sublabel": "approval · console · draft-generator",
+      "pos": [
+        790,
+        126
+      ],
+      "size": [
+        250,
+        50
+      ]
+    },
+    {
+      "id": "e-run",
+      "type": "backend",
+      "label": "orchestrator.ts",
+      "sublabel": "+ pipeline-service",
+      "pos": [
+        790,
+        222
+      ],
+      "size": [
+        250,
+        50
+      ]
+    },
+    {
+      "id": "e-brand",
+      "type": "backend",
+      "label": "brand-service",
+      "sublabel": "+ style-service",
+      "pos": [
+        790,
+        286
+      ],
+      "size": [
+        250,
+        50
+      ]
+    },
+    {
+      "id": "e-ops",
+      "type": "backend",
+      "label": "dataset · cost · todo",
+      "sublabel": "analytics · health services",
+      "pos": [
+        790,
+        382
+      ],
+      "size": [
+        250,
+        50
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "a-decode",
+      "from": "r-decode",
+      "to": "e-decode"
+    },
+    {
+      "id": "a-items",
+      "from": "r-items",
+      "to": "e-items"
+    },
+    {
+      "id": "a-topics",
+      "from": "r-topics",
+      "to": "e-items"
+    },
+    {
+      "id": "a-run",
+      "from": "r-run",
+      "to": "e-run",
+      "variant": "emphasis"
+    },
+    {
+      "id": "a-brand",
+      "from": "r-brand",
+      "to": "e-brand"
+    },
+    {
+      "id": "a-admin",
+      "from": "r-admin",
+      "to": "e-ops",
+      "variant": "security"
+    },
+    {
+      "id": "a-ops",
+      "from": "r-ops",
+      "to": "e-ops"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Decode · items · topics",
+      "items": [
+        "startDecode · getDecodeRun · stopDecode · saveCompetitor · useDecode | stealFormat · transcribeVideo · markFilmed | markUploaded",
+        "planItem | rewriteWithHook | applyHookOption | editItemCopy · applyApprovalDecision · decideTopic | pickAngle · topicAngles · addSignal"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Run · brand · styles",
+      "items": [
+        "runModules(MODULES) · runModule · getPipelineBoard",
+        "saveBrand · uploadFont · setLogo · extractVoice | importOwnPosts · createStyle · remakeTemplate · draftCarousel · generateCreative"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Guards",
+      "items": [
+        "Admin only (ADMIN_PATHS + deniedAdmin): exportDataset · recordHumanLabel · seedQcExamples · costsCsv",
+        "Writes except /login pass denied(); GET /health, /pipeline, /decode/[run] skip the guard"
+      ]
+    }
+  ]
+}

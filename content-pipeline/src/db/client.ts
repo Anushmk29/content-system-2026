@@ -2,6 +2,7 @@
 // imported dynamically so pure-logic code can run/test without the driver, and
 // every connection sets search_path to the `content` schema so we never read or
 // write the host app's tables by accident.
+import type { Pool, PoolClient } from 'pg';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
 
@@ -17,16 +18,7 @@ export interface Db {
   tx<T>(fn: (db: Db) => Promise<T>): Promise<T>;
 }
 
-// Minimal shape we use from pg's Pool, to avoid a hard type dependency.
-interface PgQueryable {
-  query(text: string, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }>;
-}
-interface PgPoolLike extends PgQueryable {
-  connect(): Promise<PgQueryable & { release(): void }>;
-  end(): Promise<void>;
-}
-
-const run = async <T>(c: PgQueryable, text: string, params?: unknown[]): Promise<QueryResult<T>> => {
+const run = async <T>(c: Pool | PoolClient, text: string, params?: unknown[]): Promise<QueryResult<T>> => {
   const res = await c.query(text, params);
   return { rows: res.rows as T[], rowCount: res.rowCount ?? res.rows.length };
 };
@@ -48,16 +40,14 @@ function sslFor(url: string): false | { rejectUnauthorized: boolean } {
 }
 
 export function createDb(databaseUrl: string | undefined): Db {
-  let poolPromise: Promise<PgPoolLike> | null = null;
+  let poolPromise: Promise<Pool> | null = null;
 
-  async function getPool(): Promise<PgPoolLike> {
+  async function getPool(): Promise<Pool> {
     if (!databaseUrl) throw new Error('CONTENT_DATABASE_URL is not set');
     if (!poolPromise) {
       poolPromise = (async () => {
-        const pg = await import('pg');
-        const Pool = (pg as unknown as { default?: { Pool: new (c: object) => PgPoolLike }; Pool: new (c: object) => PgPoolLike }).Pool
-          ?? (pg as unknown as { default: { Pool: new (c: object) => PgPoolLike } }).default.Pool;
-        return new Pool({
+        const { default: pg } = await import('pg');
+        return new pg.Pool({
           connectionString: databaseUrl,
           // Every checked-out connection is scoped to the content schema.
           options: '-c search_path=content,public',

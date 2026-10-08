@@ -3,14 +3,15 @@
 import type { Db } from '../db/client.ts';
 import type { Logger } from '../logger.ts';
 import type { ContentEnv } from '../env.ts';
-import type { HealthReport } from '../health.ts';
 import type { ClaudeAdapter } from '../adapters/claude.ts';
 import type { PostizAdapter } from '../adapters/postiz.ts';
 import type { JevAdapter } from '../adapters/jev.ts';
 import type { ApifyAdapter } from '../adapters/apify.ts';
 import type { TinyfishAdapter } from '../adapters/tinyfish.ts';
+import type { YoutubeAdapter } from '../adapters/youtube.ts';
+import type { TranscriberAdapter } from '../adapters/transcriber.ts';
 
-export type RunStatus = 'ok' | 'degraded' | 'error' | 'skipped' | 'running';
+type RunStatus = 'ok' | 'degraded' | 'error' | 'skipped' | 'running';
 
 export interface Adapters {
   claude: ClaudeAdapter;
@@ -18,6 +19,8 @@ export interface Adapters {
   jev: JevAdapter;
   apify: ApifyAdapter;
   tinyfish: TinyfishAdapter;
+  youtube: YoutubeAdapter;
+  transcriber: TranscriberAdapter;
 }
 
 export interface ModuleContext {
@@ -40,8 +43,6 @@ export interface Module {
   readonly description: string;
   /** Do the work. Throwing is allowed — the orchestrator catches and records it. */
   run(ctx: ModuleContext): Promise<ModuleResult>;
-  /** Optional readiness probe shown on the dashboard. */
-  healthCheck?(ctx: ModuleContext): Promise<HealthReport>;
 }
 
 export const ok = (itemsProcessed: number, message: string, meta?: Record<string, unknown>): ModuleResult =>

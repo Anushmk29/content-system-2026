@@ -5,15 +5,14 @@ import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
 import { createRepo, type ContentItemRow } from '../db/repo.ts';
 import { generateCreative, type GenerateResult } from './style-service.ts';
-import type { Placement } from '../creative.ts';
+import { isPlacement } from '../creative.ts';
+import { EDITABLE_STATUSES } from '../../core/src/index.ts';
 import { splitSlides } from '../slides.ts';
 
-export const EDITABLE_STATUSES = ['idea', 'draft', 'qc_passed', 'needs_approval'];
-export type AssetMime = 'image/png' | 'image/jpeg' | 'video/mp4';
-export interface AssetInfo { idx: number; mime: AssetMime; source: 'generated' | 'upload'; style_id: string | null; size: number; created_at: string }
-export interface Media { buf: Buffer; mime: AssetMime; name: string }
+type AssetMime = 'image/png' | 'image/jpeg' | 'video/mp4';
+interface AssetInfo { idx: number; mime: AssetMime; source: 'generated' | 'upload'; style_id: string | null; size: number; created_at: string }
+interface Media { buf: Buffer; mime: AssetMime; name: string }
 
-const PLACEMENT: Record<string, Placement> = { instagram: 'instagram', linkedin: 'linkedin', facebook: 'facebook', x: 'x' };
 const MAX_IMAGES = 10;
 
 /**
@@ -50,7 +49,7 @@ async function replace(ctx: ModuleContext, itemId: string, files: { buf: Buffer;
 /** Make the post's creative from a saved style and attach it (replacing what was there). */
 export async function saveItemCreative(ctx: ModuleContext, itemId: string, input: { styleId: string; fresh?: boolean }): Promise<GenerateResult> {
   const item = await editableItem(ctx, itemId);
-  const placement = PLACEMENT[item.platform];
+  const placement = isPlacement(item.platform) ? item.platform : null;
   if (!placement) throw new Error('Blog posts don’t carry a creative.');
   // The creative's button: the post's CTA when it's button-sized, else none (the caption carries the link).
   const cta = item.cta && item.cta.length <= 28 ? item.cta : undefined;

@@ -4,11 +4,29 @@ import type { ModuleContext } from '../modules/module.ts';
 import type { SystemHealth } from './health-service.ts';
 import { createRepo, type ActivityRow } from '../db/repo.ts';
 import { groupIdeas } from './board-service.ts';
-import { pillarMix, type PillarMix } from './overview-service.ts';
+import { brand, pillarSlugs } from '../brand.ts';
 import { getOwnResults, type OwnResults } from './analytics-service.ts';
 import { CONTENT_STATUSES, WEEKLY_POST_TARGET } from '../../core/src/index.ts';
 
-export type ActionTone = 'danger' | 'warn' | 'brand' | 'info';
+interface PillarMix {
+  pillar: string;
+  count: number;
+  share: number;   // actual % of signed-off ideas, last 30 days
+  target: number;  // Bible target %
+}
+
+/** Per-pillar share of the given counts vs the brand's target mix, in the brand's pillar order. */
+function pillarMix(rows: { pillar: string; count: number }[]): PillarMix[] {
+  const total = rows.reduce((s, p) => s + p.count, 0);
+  const byPillar = new Map(rows.map((p) => [p.pillar, p.count]));
+  return pillarSlugs().map((pillar) => {
+    const count = byPillar.get(pillar) ?? 0;
+    const target = brand().pillars.find((p) => p.slug === pillar)?.target ?? 0;
+    return { pillar, count, share: total ? Math.round((count / total) * 100) : 0, target };
+  });
+}
+
+type ActionTone = 'danger' | 'warn' | 'brand' | 'info';
 
 export interface TodayAction {
   kind: 'fix' | 'blocked' | 'approve' | 'topic' | 'draft' | 'signal' | 'task';
@@ -23,7 +41,7 @@ export interface TodayAction {
   at?: string;
 }
 
-export interface UpNextRow {
+interface UpNextRow {
   id: string;
   title: string;
   platform: string;
@@ -71,6 +89,9 @@ const FIX_HINT: Record<string, string> = {
   database: 'Check CONTENT_DATABASE_URL.',
 };
 
+/** Connections that are fine to leave unset: not a "fix" on Today. */
+const OPTIONAL = ['jev', 'apify', 'youtube', 'transcriber'];
+
 export async function getToday(ctx: ModuleContext, health: SystemHealth, now = new Date()): Promise<Today> {
   const repo = createRepo(ctx.db);
   const [items, ready, topics, selected, signals, todos, published, recent, cycle, liveMix, activity, own] = await Promise.all([
@@ -93,7 +114,7 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
 
   // 1 · broken integrations + modules (the reason things are stuck)
   for (const a of [health.database, ...health.adapters]) {
-    if (a.state === 'error' || a.state === 'degraded' || (a.state === 'unconfigured' && a.id !== 'jev' && a.id !== 'apify')) {
+    if (a.state === 'error' || a.state === 'degraded' || (a.state === 'unconfigured' && !OPTIONAL.includes(a.id))) {
       actions.push({
         kind: 'fix', tone: a.state === 'error' ? 'danger' : 'warn',
         title: `${a.id} is ${a.state}`, detail: `${a.message} ${FIX_HINT[a.id] ?? ''}`.trim(), href: '/content/system',
@@ -115,7 +136,8 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   const publisher = health.modules.find((m) => m.id === 'publisher');
   const publisherBroken = publisher?.lastStatus === 'error' || publisher?.lastStatus === 'degraded';
   let blocked = 0;
-  for (const it of items.filter((i) => i.status === 'approved' && !i.postiz_id)) {
+  // A YouTube Short is filmed by hand, never scheduled: it has its own prompts below.
+  for (const it of items.filter((i) => i.status === 'approved' && !i.postiz_id && i.platform !== 'youtube')) {
     if (!readyIds.has(it.id)) {
       blocked++;
       actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · approved but a claim has no proof: add a proof link or edit the claim out`, itemId: it.id });
@@ -136,6 +158,13 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   }
 
   // 4 · work the pipeline can do next if you press run
+  const scripts = await ctx.db.query<{ to_film: string; filmed: string }>(
+    `select count(*) filter (where filmed_at is null) as to_film, count(*) filter (where filmed_at is not null) as filmed
+     from content.content_items where platform = 'youtube' and status = 'approved'`).then((r) => r.rows[0]);
+  if (Number(scripts?.to_film)) actions.push({ kind: 'task', tone: 'brand', title: `${scripts!.to_film} Short script(s) to film`, detail: 'Approved filming cards waiting for you; mark each filmed once recorded.', href: '/content/scripts' });
+  if (Number(scripts?.filmed)) actions.push({ kind: 'task', tone: 'info', title: `${scripts!.filmed} filmed Short(s) not uploaded yet`, detail: 'Upload to YouTube, then paste the link so its views get tracked.', href: '/content/scripts' });
+  const noAngle = selected.filter((t) => !t.angles?.length).length;
+  if (noAngle) actions.push({ kind: 'topic', tone: 'info', title: `${noAngle} selected topic(s) without an angle`, detail: 'Pick the belief each post flips (Ideas → Find angles), or drafting uses the strongest one it finds.', href: '/content/ideas' });
   if (selected.length) actions.push({ kind: 'draft', tone: 'info', title: `${selected.length} selected topic(s) waiting to be drafted`, detail: 'Run Draft Generator, then QC Gate.', moduleId: 'draft_generator' });
   if (signals.length) actions.push({ kind: 'signal', tone: 'info', title: `${signals.length} signal(s) waiting`, detail: 'Run Research Collector, then Topic Scorer.', moduleId: 'research' });
   for (const t of todos.filter((t) => t.priority <= 2)) {
@@ -145,11 +174,11 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   // up next: timed items in the next 7 days + approved ones with no time yet
   const horizon = now.getTime() + 7 * 86_400_000;
   const upNext: UpNextRow[] = items
-    .filter((i) => (i.status === 'approved' || i.status === 'queued'))
+    .filter((i) => (i.status === 'approved' || i.status === 'queued') && i.platform !== 'youtube')
     .map((i) => ({ id: i.id, title: i.title, platform: i.platform, status: i.status, at: i.scheduled_at ? new Date(i.scheduled_at).toISOString() : null }))
     .filter((r) => r.at === null || (new Date(r.at).getTime() >= now.getTime() - 3_600_000 && new Date(r.at).getTime() <= horizon))
     .sort((a, b) => (a.at ?? '9') < (b.at ?? '9') ? -1 : 1);
-  const runwayCount = items.filter((i) => i.status === 'queued' || (i.status === 'approved' && readyIds.has(i.id))).length;
+  const runwayCount = items.filter((i) => i.platform !== 'youtube' && (i.status === 'queued' || (i.status === 'approved' && readyIds.has(i.id)))).length;
 
   const oldest = waiting[0];
   const ideas = groupIdeas(items);

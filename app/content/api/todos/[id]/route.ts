@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { getContext, updateTodo, deleteTodo } from '@pratapai/content-pipeline';
 import { denied } from '../../guard';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const no = denied(req);
   if (no) return no;

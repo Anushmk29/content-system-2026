@@ -8,9 +8,6 @@ import { PageHead, KpiStrip, Plat, StatusChip, Chip, NeedsDb } from '../ui/viz';
 import { ItemDrawer } from '../ui/ItemDrawer';
 import { ago, when, prettyPillar, withParams, STATUS_LABEL, STATUS_COLOR, PILLAR_COLOR, PLATFORM, TONE } from '../ui/format';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const NEXT_STEP: Record<string, string> = {
   idea: 'Draft it', draft: 'Waiting on QC Gate', qc_passed: 'Route to approval', needs_approval: 'Waiting on you',
   approved: 'Ready to schedule', queued: 'Scheduled in Postiz', published: 'Add results', performance_captured: 'Measured', archived: 'Archived',

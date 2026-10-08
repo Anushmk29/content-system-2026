@@ -4,10 +4,14 @@
 // (CC BY-NC 4.0), restated in our own words.
 import { FUNNEL_STAGES } from '../../core/src/index.ts';
 import { brand, pillarSlugs, type Brand } from '../brand.ts';
+import { HOOK_PATTERN_KEYS, hookPatternList } from '../hook-patterns.ts';
 
 // Ideas come in from X and Reddit (Market Signals); drafts go out to these, LinkedIn = anchor.
-export const DRAFT_PLATFORMS = ['linkedin', 'blog', 'x', 'instagram', 'facebook'] as const;
+// youtube = a 45-second Short filming card (a script to record, never auto-posted); opt-in, so it
+// is not in the default set every selected topic gets.
+export const DRAFT_PLATFORMS = ['linkedin', 'blog', 'x', 'instagram', 'facebook', 'youtube'] as const;
 export type DraftPlatform = (typeof DRAFT_PLATFORMS)[number];
+export const DEFAULT_DRAFT_PLATFORMS: readonly DraftPlatform[] = ['linkedin', 'blog', 'x', 'instagram', 'facebook'];
 
 /** "Acme (bookkeeping for cafés)" */
 const who = (b: Brand) => (b.tagline ? `${b.name} (${b.tagline})` : b.name);
@@ -72,10 +76,13 @@ PER-PLATFORM SHAPE (Bible §11.2) — never the same copy everywhere:
   the CTA; at most 20 words per slide, one idea per slide. Separate each slide with a
   line containing only "---". Put only the slide text in body.
 - facebook: a warm, educational post, 80-150 words, slightly more conversational than
-  LinkedIn. End with a simple question to invite comments.`;
+  LinkedIn. End with a simple question to invite comments.
+- youtube: a 45-second Short FILMING CARD the founder records. hook = the first spoken line
+  (under 3 seconds). body = 3-5 beats separated by lines containing only "---"; each beat is
+  "[ON SCREEN: short text]" on one line, then the spoken lines. cta = the last spoken line.`;
 }
 
-export interface DraftBriefInput {
+interface DraftBriefInput {
   topicTitle: string;
   pillarHint?: string | null;
   funnelHint?: string | null;
@@ -88,15 +95,20 @@ export interface DraftBriefInput {
   steal?: string | null;
   /** Numbered proven hooks (see hook-service hookLines); each piece may name the one it used. */
   hooks?: string | null;
+  /** Hook patterns that work / flop on OUR posts (the learning loop, hook-service.patternAdvice). */
+  patternAdvice?: string | null;
+  /** The chosen Contrast-Formula angle: the belief the piece flips and the truth it argues. */
+  angle?: { belief: string; truth: string; proof_method?: string } | null;
 }
 
 const PIECE_NAME: Record<DraftPlatform, string> = {
   linkedin: 'LinkedIn post', blog: 'blog article', x: 'X thread', instagram: 'Instagram carousel', facebook: 'Facebook post',
+  youtube: 'YouTube Short script',
 };
 
 /** Build the user prompt that asks for the anchor + its repurposed drafts as JSON. */
 export function buildDraftPrompt(input: DraftBriefInput): string {
-  const [anchor, ...rest] = input.platforms?.length ? input.platforms : DRAFT_PLATFORMS;
+  const [anchor, ...rest] = input.platforms?.length ? input.platforms : DEFAULT_DRAFT_PLATFORMS;
   const all = [anchor!, ...rest];
   const order = rest.length
     ? `Write the ${PIECE_NAME[anchor!]} (anchor) first, then repurpose it into ${rest.map((p) => `the ${PIECE_NAME[p]}`).join(', ').replace(/, ([^,]*)$/, ' and $1')}.`
@@ -117,11 +129,17 @@ Copy its STRUCTURE: the beat order, the hook pattern, the length and rhythm. Not
 (the hook too: same shape, a new sentence, never their phrasing):
 pick a subject from our pillars that fits this structure, and write it in our voice, for our audience, with our offer.
 Never reuse their numbers, names, clients, results or claims. Any number you write is OUR claim and goes in "claims".` : ''}
+${input.angle ? `ANGLE (Contrast Formula) — the whole set argues this:
+COMMON BELIEF the audience holds: ${input.angle.belief}
+OUR TRUTH: ${input.angle.truth}${input.angle.proof_method ? `\nHOW TO PROVE IT: ${input.angle.proof_method}` : ''}
+Open by naming the belief, then flip it. Never invent proof; any number is a claim.` : ''}
+${input.patternAdvice ? `WHAT WORKS FOR US (hook patterns on our own posts, learned from results):
+${input.patternAdvice}` : ''}
 ${input.hooks ? `PROVEN HOOK PATTERNS — openings that beat their account's usual (ours and competitors'):
 ${input.hooks}
-Where one fits, open a piece with its PATTERN (a confession, a number-first line, a contrarian claim…):
-the shape only, never its words, names or numbers. Put that pattern's [number] in the piece's "hookFrom",
-or null when you wrote your own.` : ''}
+Open every piece with one of these PATTERNS (a confession, a number-first line, a contrarian claim…)
+unless none fits the subject: the shape only, never its words, names or numbers. Put that pattern's
+[number] in the piece's "hookFrom", or null when you wrote your own.` : ''}
 
 ${order}
 
@@ -130,11 +148,15 @@ Respond with ONLY a JSON object (no markdown fences, no prose) of this exact sha
   "pillar": one of ${JSON.stringify(pillarSlugs())},
   "funnelStage": one of ${JSON.stringify(FUNNEL_STAGES)},${brand().offers.length > 1 ? `
   "offer": the [index] of the offer that fits best,` : ''}
-${all.map((p) => `  ${`"${p}":`.padEnd(12)} { "title": string, "hook": string, "body": string, "cta": string${input.hooks ? ', "hookFrom": number | null' : ''} },`).join('\n')}
+${all.map((p) => `  ${`"${p}":`.padEnd(12)} { "title": string, "hook": string, "body": string, "cta": string, "hookPattern": string${input.hooks ? ', "hookFrom": number | null' : ''}, "hookOptions": [{ "hook": string, "pattern": string, "contrast": number, "pattern_strength": number, "platform_fit": number }] },`).join('\n')}
   "claims":   string[]
 }
 "claims" lists every specific factual/metric/result claim across all the drafts that
 would need external proof. Use [] if there are none. Do not invent claims.
+"hookPattern" names the kind of opening each piece uses, one of: ${HOOK_PATTERN_KEYS.join(', ')}.
+"hookOptions" is 3 different opening lines for that piece (the first is "hook"), each one able to open
+the same body, scored 1-10 on contrast (how sharply it flips what the reader assumes), pattern_strength
+(how cleanly it follows its pattern) and platform_fit (how native it reads there); "pattern" as above.
 This will be parsed with JSON.parse — every " inside a string value (quoting a word,
 a customer's phrase, etc.) MUST be escaped as \\". Prefer rewording to avoid quotes
 inside body text where possible.`;
@@ -155,8 +177,37 @@ CURRENT HOOK: ${input.hook || '(none)'}
 CURRENT BODY:
 ${input.body}
 
-Respond with ONLY JSON: { "hook": string, "body": string }
+Write 5 different opening options in that shape, and score each 1-10 on:
+- contrast: how sharply it flips what the reader assumes
+- pattern: how faithfully it follows the hook pattern's shape
+- platform: how native it reads on ${PIECE_NAME[input.platform]}
+and name each one's kind, one of: ${HOOK_PATTERN_KEYS.join(', ')}.
+Then rewrite the body to flow from the option you score highest.
+
+Respond with ONLY JSON:
+{ "options": [{ "hook": string, "pattern": string, "contrast": number, "pattern_strength": number, "platform_fit": number }],
+  "best": index of your top option, "body": string }
 Every " inside a string value MUST be escaped as \\".`;
+}
+
+// === Angles (Contrast Formula) ===============================================
+// Adapted from goviralbro's viral-angle prompt (MIT, Charles Dove): an angle = a belief the
+// audience holds + the truth we argue instead. The brand's own audience beliefs go first.
+export function buildAnglePrompt(topic: { title: string; customer_language?: string | null; market_context?: string | null }, b: Brand = brand()): string {
+  return `Find 5 angles for a post on this topic, for ${who(b)}.
+
+TOPIC: ${topic.title}
+${topic.customer_language ? `CUSTOMER LANGUAGE: ${topic.customer_language}` : ''}
+${topic.market_context ? `MARKET CHECK (what's already being said):\n${topic.market_context.slice(0, 1500)}` : ''}
+AUDIENCE: ${b.audience.split('\n')[0] || 'the brand\'s customers'}
+${b.audienceBeliefs.length ? `BELIEFS THIS AUDIENCE HOLDS (flip these first when they fit):\n${b.audienceBeliefs.map((x) => `- ${x}`).join('\n')}` : ''}
+
+Each angle = a COMMON BELIEF the audience holds about this topic + the TRUTH we argue instead
+(Contrast Formula: belief → truth). Rate strength 1-10: how surprised, and how convinced, the
+reader would be. proof_method = how we could prove the truth WITHOUT inventing anything
+(our own build, a demo, a public source, a worked example).
+
+Respond with ONLY JSON: {"angles":[{"belief": string, "truth": string, "strength": number, "proof_method": string}]}`;
 }
 
 // === Topic Scorer (Bible §7) ================================================

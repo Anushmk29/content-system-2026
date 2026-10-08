@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { FUNNEL_STAGES } from '@pratapai/content-pipeline/core';
 import type { TrainingExample } from '@pratapai/content-pipeline';
-import { useAction } from './actions';
+import { useAction, ApiButton } from './actions';
 
 type Answer = Record<string, unknown>;
 
@@ -103,14 +103,6 @@ function Field({ enums, name, value, onChange }: { enums: Enums; name: string; v
 
 /** Asks the LLM for labelled practice drafts for the QC checks (they queue for review). */
 export function SeedButton() {
-  const a = useAction();
-  return (
-    <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" className="btn" disabled={a.pending}
-        onClick={() => a.call('seed', 'POST', '/content/api/decisions/seed', { count: 20 }, (d) => `Added ${d?.created ?? 0} practice examples to review.`)}>
-        {a.busy ? 'Writing examples…' : 'Generate 20 QC practice examples'}
-      </button>
-      {a.feedback}
-    </span>
-  );
+  return <ApiButton path="/content/api/decisions/seed" body={{ count: 20 }} label="Generate 20 QC practice examples" busyLabel="Writing examples…"
+    okText={(d) => `Added ${d?.created ?? 0} practice examples to review.`} />;
 }

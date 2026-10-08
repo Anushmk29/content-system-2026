@@ -42,6 +42,6 @@ export function verifySession(token: string | null | undefined, now = Date.now()
   return role;
 }
 
-/** Pages and routes only the admin sees: engine health, run log, Jev training data. */
-export const ADMIN_PATHS = ['/content/system', '/content/training', '/content/api/dataset', '/content/api/decisions'];
+/** Pages and routes only the admin sees: engine health, run log, Jev training data, spend. */
+const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '/content/api/dataset', '/content/api/decisions', '/content/api/costs'];
 export const isAdminPath = (p: string) => ADMIN_PATHS.some((a) => p === a || p.startsWith(`${a}/`));

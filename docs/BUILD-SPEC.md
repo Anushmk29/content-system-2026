@@ -83,7 +83,7 @@ Lead/metrics data enters via `POST /content/api/leads` and `POST /content/api/me
 | `/content/api/pipeline` | GET | status counts + recent items |
 | `/content/api/run` | POST | run the whole pipeline |
 | `/content/api/modules/:id/run` | POST | run one module |
-| `/content/api/todos` | GET/POST | list / create todos |
+| `/content/api/todos` | POST | create todo |
 | `/content/api/todos/:id` | PATCH/DELETE | update / delete todo |
 | `/content/api/telegram/webhook` | POST | Telegram approve/changes/reject taps → status machine (§10) |
 | `/content/api/leads` | POST | capture an inbound lead (§13); triaged next run |

@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Decode run: runDecode stages",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": { "mode": "hidden" }
+  },
+  "lanes": [
+    { "id": "skips", "label": "Failure branches", "variant": "exception" },
+    { "id": "stages", "label": "runDecode stages" },
+    { "id": "tables", "label": "content.* tables written" }
+  ],
+  "mainPath": ["scrape", "transcribe", "judge", "sort", "decode"],
+  "nodes": [
+    { "id": "scrape", "lane": "stages", "col": 0, "type": "backend", "label": "scraping", "sublabel": "Apify / YouTube Data API", "tag": "vs_own_median", "width": 140 },
+    { "id": "transcribe", "lane": "stages", "col": 1, "type": "backend", "label": "transcribing", "sublabel": "top videos, cap 15", "tag": "yt-dlp + whisper", "width": 140 },
+    { "id": "judge", "lane": "stages", "col": 2, "type": "backend", "label": "judging", "sublabel": "jev.decide, 8 at a time", "tag": "then scoreHunt", "width": 140 },
+    { "id": "sort", "lane": "stages", "col": 3, "type": "backend", "label": "sorting", "sublabel": "1 LLM call, max 10 formats", "tag": "skeleton templates", "width": 140 },
+    { "id": "decode", "lane": "stages", "col": 4, "type": "backend", "label": "decoding", "sublabel": "decodeBatch, 8 posts/call", "tag": "until 0 left: done", "width": 140 },
+    { "id": "trerr", "lane": "skips", "col": 1, "type": "security", "label": "transcript_error", "sublabel": "keeps caption, run goes on", "width": 140 },
+    { "id": "jevskip", "lane": "skips", "col": 2, "type": "security", "label": "Jev off or self run", "sublabel": "fit null: hunt = 100·demand", "width": 140 },
+    { "id": "posts", "lane": "tables", "col": 0, "type": "database", "label": "decoded_posts", "sublabel": "jev, hunt_score, seq, beats", "width": 140 },
+    { "id": "transcripts", "lane": "tables", "col": 1, "type": "database", "label": "transcripts", "sublabel": "by norm_url (cache)", "width": 140 },
+    { "id": "decisions", "lane": "tables", "col": 2, "type": "database", "label": "decisions", "sublabel": "logDecision competitor_post", "width": 140 },
+    { "id": "formats", "lane": "tables", "col": 3, "type": "database", "label": "decode_formats", "sublabel": "hook/value/cta_template", "width": 140 },
+    { "id": "runs", "lane": "tables", "col": 4, "type": "database", "label": "decode_runs", "sublabel": "+ cost_events (onCost)", "tag": "jev_health, cost_*_usd", "width": 140 }
+  ],
+  "edges": [
+    { "id": "s-t", "from": "scrape", "to": "transcribe", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "t-j", "from": "transcribe", "to": "judge", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "j-s", "from": "judge", "to": "sort", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "s-d", "from": "sort", "to": "decode", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "t-err", "from": "transcribe", "to": "trerr", "label": "transcribe fails", "variant": "security", "role": "error" },
+    { "id": "j-skip", "from": "judge", "to": "jevskip", "label": "skip Jev", "variant": "dashed", "role": "branch" },
+    { "id": "w-posts", "from": "scrape", "to": "posts", "variant": "dashed" },
+    { "id": "w-tr", "from": "transcribe", "to": "transcripts", "variant": "dashed" },
+    { "id": "w-dec", "from": "judge", "to": "decisions", "variant": "dashed" },
+    { "id": "w-fmt", "from": "sort", "to": "formats", "variant": "dashed" },
+    { "id": "w-run", "from": "decode", "to": "runs", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Every stage",
+      "items": [
+        "Writes decode_runs.stage; a resumed run starts at its saved stage",
+        "Stop = status 'stopped', checked between accounts and batches",
+        "Judging sets jev_health = mean weakest-answer confidence of the first 20 judged posts",
+        "bill() adds LLM/Jev spend to cost_ai_usd / cost_jev_usd; adapters log each call to cost_events"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Failures",
+      "items": [
+        "0 posts scraped or no formats from the LLM: status 'error' + message",
+        "A failed decode batch lands its posts with no format; the run continues",
+        "Jev errors: message 'they rank on demand only'"
+      ]
+    }
+  ]
+}

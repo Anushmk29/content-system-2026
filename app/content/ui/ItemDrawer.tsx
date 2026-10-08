@@ -2,13 +2,11 @@
 // before approval, claims, approve/changes/reject, posting time, metrics and history.
 import Link from 'next/link';
 import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks } from '@pratapai/content-pipeline';
-import { LIVE_STATUSES } from '@pratapai/content-pipeline/core';
+import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
 import { ApprovalActions, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
 import { EscTo } from './actions';
-import { PLATFORM, STATUS_COLOR, ago, when, prettyPillar, compact } from './format';
-
-const EDITABLE = ['idea', 'draft', 'qc_passed', 'needs_approval'];
+import { PLATFORM, STATUS_COLOR, ago, when, prettyPillar, compact, times } from './format';
 
 export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; closeHref: string; linkFor: (id: string) => string }) {
   const d = await getItemDetail(getContext(), id).catch(() => null);
@@ -25,7 +23,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
   const unproven = claims.filter((c) => !c.proof_url).length;
   const live = (LIVE_STATUSES as readonly string[]).includes(item.status);
   const p = PLATFORM[item.platform];
-  const editable = EDITABLE.includes(item.status);
+  const editable = EDITABLE_STATUSES.includes(item.status);
   const hasCreative = item.platform !== 'blog';
   const [assets, styles] = hasCreative
     ? await Promise.all([listItemAssets(getContext(), item.id).catch(() => []), editable ? listStyles(getContext()).catch(() => []) : []])
@@ -95,27 +93,29 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
           </div>
           {used && (
             <p className="faint" style={{ margin: '8px 0 0', fontSize: 12.5 }}>
-              Hook pattern from {used.self ? 'your own post' : used.source} · {used.lift.toFixed(1)}x their usual · <a href={used.url} target="_blank" rel="noreferrer">“{used.hook.length > 70 ? `${used.hook.slice(0, 70)}…` : used.hook}”</a>
+              Hook pattern from {used.self ? 'your own post' : used.source} · {times(used.lift)} their usual · <a href={used.url} target="_blank" rel="noreferrer">“{used.hook.length > 70 ? `${used.hook.slice(0, 70)}…` : used.hook}”</a>
             </p>
           )}
         </section>
 
-        {item.status === 'needs_approval' && (
-          <section><h3>Decision</h3><ApprovalActions itemId={item.id} unproven={unproven} /></section>
-        )}
-
         {editable && (
           <section>
-            <h3>Edit copy</h3>
-            {hooks.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <p className="faint" style={{ margin: '0 0 6px', fontSize: 12.5 }}>Borrow the shape of an opening that worked. The AI rewrites the hook and body; the subject and claims stay.</p>
-                <HookPicker key={item.id} itemId={item.id}
-                  hooks={hooks.map((h) => ({ id: h.id, label: `${h.lift.toFixed(1)}x · ${h.source} · ${h.hook.length > 80 ? `${h.hook.slice(0, 80)}…` : h.hook}` }))} />
-              </div>
-            )}
+            <h3>{item.status === 'needs_approval' ? 'Step 1 · Fix the words (optional)' : 'Edit copy'}</h3>
             <CopyEditor key={`${item.id}-${item.updated_at}`} itemId={item.id} hook={item.hook ?? ''} body={item.body ?? ''} cta={item.cta ?? ''} />
+            {hooks.length > 0 && (
+              <details style={{ marginTop: 12 }}>
+                <summary className="faint" style={{ cursor: 'pointer', fontSize: 12.5 }}>Want a stronger first line? Let the AI rewrite it in the style of a post that did well</summary>
+                <div style={{ marginTop: 8 }}>
+                  <HookPicker key={item.id} itemId={item.id}
+                    hooks={hooks.map((h) => ({ id: h.id, label: `${times(h.lift)} · ${h.source} · ${h.hook.length > 80 ? `${h.hook.slice(0, 80)}…` : h.hook}` }))} />
+                </div>
+              </details>
+            )}
           </section>
+        )}
+
+        {item.status === 'needs_approval' && (
+          <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} /></section>
         )}
 
         <section>

@@ -6,9 +6,6 @@ import { StyleUpload, StyleCard, type PlacementOpt } from '../ui/Styles';
 
 const PLACEMENT_OPTS: PlacementOpt[] = Object.entries(PLACEMENTS).map(([id, p]) => ({ id, label: p.label, w: p.w, h: p.h }));
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export default async function StylesPage() {
   let styles: StyleRow[] | null = null;
   let error: string | null = null;

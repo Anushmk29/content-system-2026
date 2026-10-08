@@ -1,0 +1,181 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Pipeline modules: MODULES order in registry.ts",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "create",
+      "label": "Find → draft → QC → publish"
+    },
+    {
+      "id": "learn",
+      "label": "Learn (runs after publisher)"
+    }
+  ],
+  "mainPath": [
+    "signals",
+    "research",
+    "scoring",
+    "draft",
+    "qc",
+    "publisher"
+  ],
+  "nodes": [
+    {
+      "id": "signals",
+      "lane": "create",
+      "col": 0,
+      "type": "external",
+      "label": "market-signals",
+      "sublabel": "→ research_inputs",
+      "tag": "RSS, Reddit, X, TinyFish",
+      "width": 136
+    },
+    {
+      "id": "research",
+      "lane": "create",
+      "col": 1,
+      "type": "backend",
+      "label": "research",
+      "sublabel": "→ topics (new)",
+      "tag": "LLM + web check",
+      "width": 136
+    },
+    {
+      "id": "scoring",
+      "lane": "create",
+      "col": 2,
+      "type": "backend",
+      "label": "scoring",
+      "sublabel": "5 factor scores",
+      "tag": "decide(): LLM + Jev",
+      "width": 136
+    },
+    {
+      "id": "draft",
+      "lane": "create",
+      "col": 3,
+      "type": "backend",
+      "label": "draft_generator",
+      "sublabel": "→ content_items draft",
+      "tag": "LLM",
+      "width": 136
+    },
+    {
+      "id": "qc",
+      "lane": "create",
+      "col": 4,
+      "type": "security",
+      "label": "qc_gate",
+      "sublabel": "submit if claims proven",
+      "tag": "decide(): LLM + Jev",
+      "width": 136
+    },
+    {
+      "id": "publisher",
+      "lane": "create",
+      "col": 5,
+      "type": "cloud",
+      "label": "publisher",
+      "sublabel": "v_publish_ready → queued",
+      "tag": "Postiz",
+      "width": 136
+    },
+    {
+      "id": "own",
+      "lane": "learn",
+      "col": 5,
+      "type": "cloud",
+      "label": "own_results",
+      "sublabel": "startDecode(self)",
+      "tag": "Apify",
+      "width": 136
+    },
+    {
+      "id": "analytics",
+      "lane": "learn",
+      "col": 4,
+      "type": "backend",
+      "label": "analytics",
+      "sublabel": "→ metrics, capture",
+      "tag": "Postiz stats",
+      "width": 136
+    },
+    {
+      "id": "review",
+      "lane": "learn",
+      "col": 3,
+      "type": "backend",
+      "label": "weekly_review",
+      "sublabel": "→ todos (1 per 7 days)",
+      "tag": "LLM",
+      "width": 136
+    }
+  ],
+  "edges": [
+    {
+      "from": "signals",
+      "to": "research"
+    },
+    {
+      "from": "research",
+      "to": "scoring"
+    },
+    {
+      "from": "scoring",
+      "to": "draft",
+      "label": "selected"
+    },
+    {
+      "from": "draft",
+      "to": "qc"
+    },
+    {
+      "from": "qc",
+      "to": "publisher",
+      "label": "human approves"
+    },
+    {
+      "from": "publisher",
+      "to": "own",
+      "role": "branch"
+    },
+    {
+      "from": "own",
+      "to": "analytics",
+      "role": "branch"
+    },
+    {
+      "from": "analytics",
+      "to": "review",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Orchestrator (runModules)",
+      "items": [
+        "Runs MODULES in registry order; own_results runs before analytics",
+        "runModule never throws: a failure is recorded, later modules still run",
+        "Each run → content.module_runs; costs tagged by withCostScope"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Provider calls",
+      "items": [
+        "LLM adapter: OpenRouter first, Anthropic fallback",
+        "scoring + qc_gate: decide() → LLM, Jev shadow logged to content.decisions",
+        "TinyFish: market-signals, research web check; Postiz: publisher, analytics; Apify: own_results"
+      ]
+    }
+  ]
+}

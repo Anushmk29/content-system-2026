@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Own results: from your accounts to \"x your usual\"",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "engine",
+      "label": "Engine (modules, decode-service)"
+    },
+    {
+      "id": "data",
+      "label": "Postgres (content.)"
+    },
+    {
+      "id": "ui",
+      "label": "Pages"
+    }
+  ],
+  "mainPath": [
+    "refresh",
+    "start",
+    "run",
+    "posts",
+    "perf",
+    "page"
+  ],
+  "nodes": [
+    {
+      "id": "ownmod",
+      "lane": "engine",
+      "col": 0,
+      "type": "messagebus",
+      "label": "own_results module",
+      "sublabel": "skips if < 7 days",
+      "width": 132
+    },
+    {
+      "id": "refresh",
+      "lane": "ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Refresh my results",
+      "sublabel": "POST /content/api/decode",
+      "width": 140
+    },
+    {
+      "id": "start",
+      "lane": "engine",
+      "col": 1,
+      "type": "backend",
+      "label": "startDecode",
+      "sublabel": "{ self: true }"
+    },
+    {
+      "id": "run",
+      "lane": "engine",
+      "col": 2,
+      "type": "cloud",
+      "label": "runDecode",
+      "sublabel": "YouTube API / Apify"
+    },
+    {
+      "id": "sync",
+      "lane": "engine",
+      "col": 3,
+      "type": "backend",
+      "label": "syncOwnMetrics",
+      "sublabel": "match published_url"
+    },
+    {
+      "id": "amod",
+      "lane": "engine",
+      "col": 4,
+      "type": "messagebus",
+      "label": "analytics module",
+      "sublabel": "Postiz postStats",
+      "width": 124
+    },
+    {
+      "id": "posts",
+      "lane": "data",
+      "col": 2,
+      "type": "database",
+      "label": "decoded_posts",
+      "sublabel": "own-account posts"
+    },
+    {
+      "id": "metrics",
+      "lane": "data",
+      "col": 4,
+      "type": "database",
+      "label": "metrics",
+      "sublabel": "per content_item"
+    },
+    {
+      "id": "perf",
+      "lane": "data",
+      "col": 3,
+      "type": "database",
+      "label": "v_content_performance",
+      "sublabel": "vs_usual (v_own_baseline)",
+      "width": 160
+    },
+    {
+      "id": "page",
+      "lane": "ui",
+      "col": 3,
+      "type": "frontend",
+      "label": "Analytics page",
+      "sublabel": "getAnalytics"
+    },
+    {
+      "id": "drawer",
+      "lane": "ui",
+      "col": 4,
+      "type": "frontend",
+      "label": "Board / Calendar",
+      "sublabel": "ItemDrawer",
+      "width": 130
+    }
+  ],
+  "edges": [
+    {
+      "from": "ownmod",
+      "to": "start",
+      "label": "weekly"
+    },
+    {
+      "from": "refresh",
+      "to": "start"
+    },
+    {
+      "from": "start",
+      "to": "run",
+      "label": "background"
+    },
+    {
+      "from": "run",
+      "to": "posts",
+      "label": "insert"
+    },
+    {
+      "from": "run",
+      "to": "sync",
+      "label": "is_self"
+    },
+    {
+      "from": "sync",
+      "to": "metrics",
+      "label": "norm_url"
+    },
+    {
+      "from": "amod",
+      "to": "metrics",
+      "label": "insertMetrics"
+    },
+    {
+      "from": "posts",
+      "to": "perf",
+      "label": "median reactions"
+    },
+    {
+      "from": "metrics",
+      "to": "perf",
+      "label": "latest row"
+    },
+    {
+      "from": "perf",
+      "to": "page",
+      "label": "performanceSince"
+    },
+    {
+      "from": "perf",
+      "to": "drawer",
+      "label": "performanceFor"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Your usual",
+      "items": [
+        "v_own_baseline = median reactions per platform, latest own run",
+        "vs_usual = latest likes / that median; null until an own run exists",
+        "Own runs default to 30 posts per platform (competitors: 10)"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Where it shows",
+      "items": [
+        "Analytics: 7/30/90 days, best by usual / reach / engagement",
+        "Item drawer on Board and Calendar: reach, qualified, comments, shares",
+        "YouTube needs CONTENT_YOUTUBE_API_KEY; others CONTENT_APIFY_TOKEN"
+      ]
+    }
+  ]
+}

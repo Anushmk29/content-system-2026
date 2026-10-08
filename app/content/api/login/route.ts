@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getContext, logAction } from '@pratapai/content-pipeline';
 import { SESSION_COOKIE, SESSION_DAYS, roleForPassword, signSession } from '../../auth';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const cookie = (req: Request) => ({
   httpOnly: true, sameSite: 'lax' as const, path: '/content',
@@ -14,6 +12,7 @@ export async function POST(req: Request) {
   const { password } = (await req.json().catch(() => ({}))) as { password?: string };
   const role = roleForPassword(typeof password === 'string' ? password : null);
   if (!role) return NextResponse.json({ ok: false, error: 'Wrong password.' }, { status: 401 });
+  if (role === 'client') void logAction(getContext(), { role, method: 'LOGIN', path: '/content/login' });
   const res = NextResponse.json({ ok: true, role });
   res.cookies.set(SESSION_COOKIE, signSession(role), { ...cookie(req), maxAge: SESSION_DAYS * 86_400 });
   return res;

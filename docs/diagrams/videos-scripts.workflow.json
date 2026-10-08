@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Videos and Scripts: from competitor video to your own Short",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": { "mode": "hidden" }
+  },
+  "lanes": [
+    {
+      "id": "videos",
+      "label": "Decode → Videos tab"
+    },
+    {
+      "id": "drafts",
+      "label": "Make my version"
+    },
+    {
+      "id": "scripts",
+      "label": "Scripts tab (you)"
+    }
+  ],
+  "mainPath": [
+    "run",
+    "transcribe",
+    "read",
+    "make",
+    "approve",
+    "film",
+    "upload",
+    "results"
+  ],
+  "nodes": [
+    {
+      "id": "run",
+      "lane": "videos",
+      "col": 0,
+      "type": "backend",
+      "label": "Run Decode",
+      "sublabel": "competitors' posts"
+    },
+    {
+      "id": "transcribe",
+      "lane": "videos",
+      "col": 1,
+      "type": "cloud",
+      "label": "Transcribe",
+      "sublabel": "top 15 videos",
+      "tag": "yt-dlp + whisper"
+    },
+    {
+      "id": "read",
+      "width": 130,
+      "lane": "videos",
+      "col": 2,
+      "type": "frontend",
+      "label": "Read transcript",
+      "sublabel": "real spoken hook"
+    },
+    {
+      "id": "make",
+      "width": 130,
+      "lane": "drafts",
+      "col": 2,
+      "type": "backend",
+      "label": "Make my version",
+      "sublabel": "tick YouTube Short"
+    },
+    {
+      "id": "approve",
+      "lane": "drafts",
+      "col": 3,
+      "type": "security",
+      "label": "Approvals",
+      "sublabel": "edit + approve"
+    },
+    {
+      "id": "film",
+      "lane": "scripts",
+      "col": 3,
+      "type": "frontend",
+      "label": "To film",
+      "sublabel": "record, ✓ Filmed"
+    },
+    {
+      "id": "upload",
+      "width": 130,
+      "lane": "scripts",
+      "col": 4,
+      "type": "external",
+      "label": "Upload to YouTube",
+      "sublabel": "paste link"
+    },
+    {
+      "id": "results",
+      "width": 130,
+      "lane": "scripts",
+      "col": 5,
+      "type": "database",
+      "label": "Refresh my results",
+      "sublabel": "views vs your usual"
+    }
+  ],
+  "edges": [
+    {
+      "from": "run",
+      "to": "transcribe",
+      "label": "videos found"
+    },
+    {
+      "from": "transcribe",
+      "to": "read",
+      "label": "saved"
+    },
+    {
+      "from": "read",
+      "to": "make",
+      "label": "pick a winner"
+    },
+    {
+      "from": "make",
+      "to": "approve"
+    },
+    {
+      "from": "approve",
+      "to": "film",
+      "label": "approved"
+    },
+    {
+      "from": "film",
+      "to": "upload"
+    },
+    {
+      "from": "upload",
+      "to": "results",
+      "label": "link"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Videos tab",
+      "items": [
+        "Filter: All / Transcribed / Failed / Not yet",
+        "Read transcript to see the real opening line",
+        "Retry failed rows; Transcribe ones past the 15 cap"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Scripts tab",
+      "items": [
+        "In review → To film → Filmed → Uploaded",
+        "You film and upload; nothing posts by itself",
+        "Needs YouTube handle + CONTENT_YOUTUBE_API_KEY for views"
+      ]
+    }
+  ]
+}

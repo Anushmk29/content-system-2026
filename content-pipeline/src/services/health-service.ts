@@ -5,7 +5,7 @@ import { rollup, type HealthReport, type HealthState } from '../health.ts';
 import { MODULES } from '../modules/registry.ts';
 import { createRepo, type ModuleHealthRow } from '../db/repo.ts';
 
-export interface ModuleHealth {
+interface ModuleHealth {
   id: string;
   title: string;
   description: string;
@@ -25,17 +25,22 @@ export interface SystemHealth {
   modules: ModuleHealth[];
 }
 
+// External probes (Postiz, OpenRouter… up to 8s) are cached per adapter set; the layout
+// runs this on every page view. DB + module run state below stay live.
+const PROBE_TTL_MS = 60_000;
+const probeCache = new WeakMap<object, { at: number; p: Promise<HealthReport[]> }>();
+
+function probeAdapters(a: ModuleContext['adapters']): Promise<HealthReport[]> {
+  const hit = probeCache.get(a);
+  if (hit && Date.now() - hit.at < PROBE_TTL_MS) return hit.p;
+  const p = Promise.all([a.claude, a.postiz, a.jev, a.apify, a.youtube, a.transcriber, a.tinyfish].filter(Boolean).map((x) => x.healthCheck()));
+  probeCache.set(a, { at: Date.now(), p });
+  return p;
+}
+
 export async function getSystemHealth(ctx: ModuleContext): Promise<SystemHealth> {
   // Probe adapters + DB concurrently; probes never throw (they catch internally).
-  const [database, claude, postiz, jev, apify, tinyfish] = await Promise.all([
-    ctx.db.healthCheck(),
-    ctx.adapters.claude.healthCheck(),
-    ctx.adapters.postiz.healthCheck(),
-    ctx.adapters.jev.healthCheck(),
-    ctx.adapters.apify.healthCheck(),
-    ctx.adapters.tinyfish.healthCheck(),
-  ]);
-  const adapters = [claude, postiz, jev, apify, tinyfish];
+  const [database, adapters] = await Promise.all([ctx.db.healthCheck(), probeAdapters(ctx.adapters)]);
 
   // Pull last-known run state per module (empty if DB is down).
   let runRows: ModuleHealthRow[] = [];
@@ -79,3 +84,7 @@ export const getRunHistory = (ctx: ModuleContext, limit = 60) => createRepo(ctx.
 
 /** Approvals and runs as one newest-first feed. */
 export const getActivity = (ctx: ModuleContext, limit = 60) => createRepo(ctx.db).activity(limit);
+export const getActions = (ctx: ModuleContext, limit = 100) => createRepo(ctx.db).actions(limit);
+/** Never throws: a failed audit write must not block the client's action. */
+export const logAction = (ctx: ModuleContext, a: { role: string; method: string; path: string }) =>
+  createRepo(ctx.db).logAction(a).catch(() => {});

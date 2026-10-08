@@ -6,9 +6,6 @@ import { AddSignal } from '../ui/editors';
 import { ApiButton, RunModuleButton } from '../ui/actions';
 import { ago, prettyPillar, PILLAR_COLOR, TONE } from '../ui/format';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const BAND: Record<string, { color: string; label: string }> = {
   high: { color: TONE.ok, label: 'High — draft now' },
   queue: { color: TONE.teal, label: 'Queue' },
@@ -71,10 +68,14 @@ export default async function IdeasPage() {
             <>
               <ul className="row-list" style={{ marginBottom: 10 }}>
                 {data.selectedTopics.map((t) => (
-                  <li key={t.id} className="row">
-                    <span className="mono" style={{ color: BAND[t.priority_band]?.color }}>{t.score_total}</span>
-                    <span className="grow t">{t.title}</span>
-                    <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn btn-sm" />
+                  <li key={t.id} style={{ display: 'block', borderBottom: '1px solid var(--rule)', padding: '8px 0' }}>
+                    <div className="row" style={{ border: 0 }}>
+                      <span className="mono" style={{ color: BAND[t.priority_band]?.color }}>{t.score_total}</span>
+                      <span className="grow t">{t.title}</span>
+                      <ApiButton path={`/content/api/topics/${t.id}`} method="POST" label={t.angles?.length ? 'New angles' : 'Find angles'} busyLabel="thinking…" className="btn btn-sm" />
+                      <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn btn-sm" />
+                    </div>
+                    {t.angles?.length ? <Angles t={t} /> : null}
                   </li>
                 ))}
               </ul>
@@ -84,6 +85,27 @@ export default async function IdeasPage() {
         </Tile>
       </div>
     </>
+  );
+}
+
+/** The 5 Contrast-Formula angles; the picked one (else the strongest) is what the draft argues. */
+function Angles({ t }: { t: TopicRow }) {
+  const angles = t.angles ?? [];
+  const strongest = angles.reduce((b, a, i) => (a.strength > angles[b]!.strength ? i : b), 0);
+  const chosen = t.angle_idx ?? strongest;
+  return (
+    <ol style={{ margin: '6px 0 0', paddingLeft: 22, display: 'grid', gap: 6, fontSize: 12.5 }}>
+      {angles.map((a, i) => (
+        <li key={i} style={{ opacity: i === chosen ? 1 : 0.75 }}>
+          <span className="faint">They think:</span> {a.belief} <span className="faint">→ We say:</span> <b>{a.truth}</b>
+          <span className="mono faint"> · {a.strength}/10</span>
+          {a.proof_method && <span className="faint"> · proof: {a.proof_method}</span>}{' '}
+          {i === chosen
+            ? <Chip color={TONE.ok}>{t.angle_idx == null ? 'strongest, used' : 'picked'}</Chip>
+            : <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ angle: i }} label="Use this" className="btn btn-sm" />}
+        </li>
+      ))}
+    </ol>
   );
 }
 

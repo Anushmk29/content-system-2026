@@ -9,7 +9,7 @@ import type { ModuleContext } from '../modules/module.ts';
 import { createRepo, type DatasetRow } from '../db/repo.ts';
 import { toQcSignals } from '../modules/qc-parse.ts';
 import { randomUUID } from 'node:crypto';
-import { parseJsonObject } from '../modules/llm-json.ts';
+import { parseJsonObject, str } from '../modules/llm-json.ts';
 import { seedQcSystem, buildSeedQcPrompt } from '../prompts/brand-brain.ts';
 import { loadBrand } from './brand-service.ts';
 import { DECISION_TASKS, QC_SIGNALS, minConfidence, type DecisionTask } from '../modules/decision-tasks.ts';
@@ -131,7 +131,6 @@ export async function seedQcExamples(ctx: ModuleContext, count = 20): Promise<{ 
   if (!Array.isArray(examples)) throw new Error('LLM returned no examples');
 
   const repo = createRepo(ctx.db);
-  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
   let created = 0;
   for (const ex of examples.slice(0, n) as Array<Record<string, unknown>>) {
     const body = str(ex?.body);

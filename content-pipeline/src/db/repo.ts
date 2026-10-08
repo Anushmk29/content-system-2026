@@ -1,7 +1,7 @@
 // Typed data access over the `content` schema. Thin, explicit SQL — no ORM.
 // Content item status/approval writes are NOT here: they go through content-items.ts.
 import type { Db } from './client.ts';
-import { APPROVED_STATUSES } from '../../core/src/index.ts';
+import { APPROVED_STATUSES, EDITABLE_STATUSES } from '../../core/src/index.ts';
 
 export interface ContentItemRow {
   id: string;
@@ -44,8 +44,6 @@ export interface TodoRow {
   detail: string | null;
   status: string;
   priority: number;
-  content_item_id: string | null;
-  due_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +59,9 @@ export interface ModuleHealthRow {
   error: string | null;
 }
 
+/** One Contrast-Formula angle (prompts/brand-brain.ts buildAnglePrompt). */
+export interface Angle { belief: string; truth: string; strength: number; proof_method: string }
+
 export interface TopicRow {
   id: string;
   title: string;
@@ -70,6 +71,8 @@ export interface TopicRow {
   source_detail: string | null;
   customer_language: string | null;
   market_context: string | null;
+  angles?: Angle[] | null;
+  angle_idx?: number | null;
   priority_band: string;
   score_total: number;
   status: string;
@@ -96,6 +99,7 @@ export interface NewContentItem {
   owner?: string | null;
   offerIdx?: number | null;
   hookRef?: string | null;
+  hookPattern?: string | null;
 }
 
 export interface ResearchInputRow {
@@ -176,7 +180,7 @@ export function createRepo(db: Db) {
     unscoredTopics: () =>
       db.query<TopicRow>(
         `select id, title, pillar, funnel_stage, source, source_detail, customer_language, market_context,
-                priority_band, score_total, status
+                angles, angle_idx, priority_band, score_total, status
            from content.topics
           where status = 'new' and score_lead_intent is null
           order by created_at`,
@@ -263,17 +267,6 @@ export function createRepo(db: Db) {
           where postiz_id is not null and scheduled_at is not null group by platform`,
       ).then((r) => new Map(r.rows.map((x) => [x.platform, new Date(x.at)]))),
 
-    // --- pipeline board ----------------------------------------------------
-    statusCounts: () =>
-      db.query<{ status: string; n: string }>(
-        `select status, count(*)::text as n from content.content_items group by status`,
-      ).then((r) => r.rows.map((x) => ({ status: x.status, count: Number(x.n) }))),
-
-    recentItems: (limit = 25) =>
-      db.query<ContentItemRow>(
-        `select * from content.content_items order by created_at desc limit $1`, [limit],
-      ).then((r) => r.rows),
-
     // --- module runs ---------------------------------------------------------
     recordRun: (r: {
       moduleId: string; status: string; startedAt: string; finishedAt: string; durationMs: number;
@@ -309,11 +302,13 @@ export function createRepo(db: Db) {
         status ? [status] : [],
       ).then((r) => r.rows),
 
-    createTodo: (t: { title: string; detail?: string; priority?: number; contentItemId?: string; dueDate?: string }) =>
+    /** No priority → the column default applies. */
+    createTodo: (t: { title: string; detail?: string; priority?: number }) =>
       db.query<TodoRow>(
-        `insert into content.todos (title, detail, priority, content_item_id, due_date)
-         values ($1,$2,$3,$4,$5) returning *`,
-        [t.title, t.detail ?? null, t.priority ?? 3, t.contentItemId ?? null, t.dueDate ?? null],
+        t.priority == null
+          ? `insert into content.todos (title, detail) values ($1,$2) returning *`
+          : `insert into content.todos (title, detail, priority) values ($1,$2,$3) returning *`,
+        [t.title, t.detail ?? null, ...(t.priority == null ? [] : [t.priority])],
       ).then((r) => r.rows[0]!),
 
     updateTodo: (id: string, patch: { title?: string; detail?: string; status?: string; priority?: number }) =>
@@ -409,9 +404,9 @@ export function createRepo(db: Db) {
       db.query<ContentItemRow>(
         `update content.content_items set
            hook = coalesce($2, hook), body = coalesce($3, body), cta = coalesce($4, cta)
-          where id = $1 and status in ('idea','draft','qc_passed','needs_approval')
+          where id = $1 and status::text = any($5::text[])
           returning *`,
-        [id, p.hook ?? null, p.body ?? null, p.cta ?? null],
+        [id, p.hook ?? null, p.body ?? null, p.cta ?? null, EDITABLE_STATUSES],
       ).then((r) => r.rows[0] ?? null),
 
     /** Operator picks a posting time; only while approved and not yet handed to Postiz. */
@@ -481,6 +476,15 @@ export function createRepo(db: Db) {
              from content.module_runs r
          ) x order by at desc limit $1`, [limit],
       ).then((r) => r.rows),
+
+    /** The client's own changes (logins + every write request), newest first. */
+    actions: (limit = 100) =>
+      db.query<ActionRow>(
+        `select at::text, role, method, path from content.audit_log order by at desc limit $1`, [limit],
+      ).then((r) => r.rows),
+
+    logAction: (a: { role: string; method: string; path: string }) =>
+      db.query(`insert into content.audit_log (role, method, path) values ($1, $2, $3)`, [a.role, a.method, a.path]),
 
     recentRuns: (limit = 60) =>
       db.query<ModuleHealthRow>(
@@ -559,6 +563,13 @@ export interface ActivityRow {
   actor: string | null;
 }
 
+export interface ActionRow {
+  at: string;
+  role: string;
+  method: string;
+  path: string;
+}
+
 export interface DatasetRow {
   task: string;
   subject_id: string;
@@ -575,5 +586,3 @@ export interface DatasetRow {
     reach: number | null; qualified_engagement: number | null;
   } | null;
 }
-
-export type Repo = ReturnType<typeof createRepo>;

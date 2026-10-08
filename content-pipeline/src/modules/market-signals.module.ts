@@ -64,7 +64,7 @@ export function parseXSearch(json: XSearch): Signal[] {
 }
 
 /** TinyFish news search results → signals. */
-export function parseNews(results: SearchResult[]): Signal[] {
+function parseNews(results: SearchResult[]): Signal[] {
   return results.slice(0, PER_SOURCE).filter((r) => r.url && r.title).map((r) => ({
     channel: 'news',
     rawText: r.snippet ? `${r.title}\n\n${r.snippet} (${r.site_name})` : r.title,
@@ -77,7 +77,7 @@ export function parseNews(results: SearchResult[]): Signal[] {
  * signal when it changes (research_inputs dedupes on source_url). Digits are ignored in the hash:
  * ponytail: dates/counters would otherwise flag every visit; a real diff would need stored text.
  */
-export function watchSignal(page: FetchedPage, channel: string): Signal {
+function watchSignal(page: FetchedPage, channel: string): Signal {
   const norm = page.text.replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
   const v = createHash('sha256').update(norm).digest('hex').slice(0, 12);
   return {

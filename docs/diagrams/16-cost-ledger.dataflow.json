@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Cost ledger: every paid call, tagged and reconciled",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      920,
+      490
+    ]
+  },
+  "stages": [
+    {
+      "label": "Adapters (onCost)"
+    },
+    {
+      "label": "Ledger + bills"
+    },
+    {
+      "label": "cost-service.ts"
+    },
+    {
+      "label": "Consume"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "scope",
+      "type": "messagebus",
+      "label": "withCostScope",
+      "sublabel": "costScoped (index.ts)",
+      "stage": 1,
+      "row": 2,
+      "tag": "AsyncLocalStorage"
+    },
+    {
+      "id": "claude",
+      "type": "cloud",
+      "label": "claude.ts",
+      "sublabel": "OpenRouter, Anthropic",
+      "stage": 0,
+      "row": 0,
+      "tag": "llm, image",
+      "width": 86
+    },
+    {
+      "id": "jev",
+      "type": "cloud",
+      "label": "jev.ts",
+      "sublabel": "usage.cost",
+      "stage": 0,
+      "row": 1,
+      "tag": "decision",
+      "width": 80
+    },
+    {
+      "id": "apify",
+      "type": "cloud",
+      "label": "apify.ts",
+      "sublabel": "runCostUsd",
+      "stage": 0,
+      "row": 2,
+      "tag": "scrape",
+      "width": 80
+    },
+    {
+      "id": "orbill",
+      "type": "external",
+      "label": "OpenRouter",
+      "sublabel": "/api/v1/key, /activity",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "events",
+      "type": "database",
+      "label": "cost_events",
+      "sublabel": "costRecorder insert",
+      "stage": 1,
+      "row": 1,
+      "tag": "content schema"
+    },
+    {
+      "id": "reconcile",
+      "type": "security",
+      "label": "reconcileProviders",
+      "sublabel": "billed vs logged",
+      "stage": 2,
+      "row": 0,
+      "tag": "warn > 5%"
+    },
+    {
+      "id": "getcosts",
+      "type": "backend",
+      "label": "getCosts",
+      "sublabel": "IST day ranges",
+      "stage": 2,
+      "row": 1
+    },
+    {
+      "id": "csv",
+      "type": "backend",
+      "label": "costsCsv",
+      "sublabel": "rows in range",
+      "stage": 2,
+      "row": 2
+    },
+    {
+      "id": "apifybill",
+      "type": "external",
+      "label": "Apify",
+      "sublabel": "usage/monthly",
+      "stage": 3,
+      "row": 0
+    },
+    {
+      "id": "page",
+      "type": "frontend",
+      "label": "/content/costs",
+      "sublabel": "admin page",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "route",
+      "type": "frontend",
+      "label": "GET /content/api/costs",
+      "sublabel": "CSV download",
+      "stage": 3,
+      "row": 2,
+      "width": 160
+    }
+  ],
+  "flows": [
+    {
+      "id": "c-claude",
+      "from": "claude",
+      "to": "events",
+      "label": "llm, image",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-jev",
+      "from": "jev",
+      "to": "events",
+      "label": "decision",
+      "variant": "emphasis",
+      "labelAt": [
+        169,
+        262
+      ]
+    },
+    {
+      "id": "c-apify",
+      "from": "apify",
+      "to": "events",
+      "label": "scrape",
+      "variant": "emphasis"
+    },
+    {
+      "id": "s-events",
+      "from": "scope",
+      "to": "events",
+      "label": "getStore()",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-get",
+      "from": "events",
+      "to": "getcosts",
+      "label": "group by",
+      "variant": "default",
+      "route": "straight"
+    },
+    {
+      "id": "e-csv",
+      "from": "events",
+      "to": "csv",
+      "label": "select",
+      "variant": "default"
+    },
+    {
+      "id": "or-rec",
+      "from": "orbill",
+      "to": "reconcile",
+      "label": "billed",
+      "variant": "security"
+    },
+    {
+      "id": "ap-rec",
+      "from": "apifybill",
+      "to": "reconcile",
+      "label": "billed",
+      "variant": "security"
+    },
+    {
+      "id": "rec-get",
+      "from": "reconcile",
+      "to": "getcosts",
+      "label": "reconcile[]",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "get-page",
+      "from": "getcosts",
+      "to": "page",
+      "label": "Costs",
+      "variant": "emphasis"
+    },
+    {
+      "id": "csv-route",
+      "from": "csv",
+      "to": "route",
+      "label": "text/csv",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Tagging",
+      "items": [
+        "costRecorder reads scope.getStore(): feature, ref_type, ref_id; else 'untagged'",
+        "Orchestrator: module_run; decode-service: decode_run (decode | own_results)",
+        "A failed insert is logged, never thrown"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Reconcile",
+      "items": [
+        "/activity needs CONTENT_OPENROUTER_MGMT_KEY; /key uses CONTENT_OPENROUTER_API_KEY",
+        "Jev is billed on the OpenRouter key, so it counts there",
+        "Apify via CONTENT_APIFY_TOKEN; windows older than the ledger are 'partial'"
+      ]
+    }
+  ]
+}

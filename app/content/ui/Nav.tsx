@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export interface NavBadges { approvals: number; ideas: number; training: number; systemBroken: number }
+export interface NavBadges { approvals: number; ideas: number; training: number; systemBroken: number; scripts: number }
 
 const GROUPS: { label: string; admin?: boolean; links: { href: string; label: string; ico: string; badge?: keyof NavBadges; danger?: boolean }[] }[] = [
   { label: 'Workspace', links: [
@@ -13,16 +13,19 @@ const GROUPS: { label: string; admin?: boolean; links: { href: string; label: st
     { href: '/content/approvals', label: 'Approvals', ico: '04', badge: 'approvals' },
     { href: '/content/ideas', label: 'Ideas & signals', ico: '05', badge: 'ideas' },
     { href: '/content/decode', label: 'Decode', ico: '06' },
-    { href: '/content/hooks', label: 'Hooks', ico: '07' },
-    { href: '/content/styles', label: 'Styles', ico: '08' },
-    { href: '/content/brand', label: 'Brand kit', ico: '09' },
+    { href: '/content/videos', label: 'Videos', ico: '07' },
+    { href: '/content/scripts', label: 'Scripts', ico: '08', badge: 'scripts' },
+    { href: '/content/hooks', label: 'Hooks', ico: '09' },
+    { href: '/content/styles', label: 'Styles', ico: '10' },
+    { href: '/content/brand', label: 'Brand kit', ico: '11' },
   ] },
   { label: 'Growth', links: [
-    { href: '/content/analytics', label: 'Analytics', ico: '10' },
+    { href: '/content/analytics', label: 'Analytics', ico: '12' },
   ] },
   { label: 'Admin', admin: true, links: [
-    { href: '/content/training', label: 'Training', ico: '11', badge: 'training' },
-    { href: '/content/system', label: 'System', ico: '12', badge: 'systemBroken', danger: true },
+    { href: '/content/training', label: 'Training', ico: '13', badge: 'training' },
+    { href: '/content/costs', label: 'Costs', ico: '14' },
+    { href: '/content/system', label: 'System', ico: '15', badge: 'systemBroken', danger: true },
   ] },
 ];
 
@@ -34,11 +37,11 @@ export function Nav({ badges, admin, brandName }: { badges: NavBadges; admin: bo
   };
   return (
     <nav className="side" aria-label="Content pipeline">
-      <Link href="/content" className="brand">
+      <Link href={admin ? '/content/system' : '/content'} className="brand">
         <span className="brand-mark" />
         <span><b>Content</b><small>{brandName.toLowerCase() || 'studio'}</small></span>
       </Link>
-      {GROUPS.filter((g) => admin || !g.admin).map((g) => (
+      {(admin ? [...GROUPS.filter((g) => g.admin), ...GROUPS.filter((g) => !g.admin)] : GROUPS.filter((g) => !g.admin)).map((g) => (
         <div key={g.label} style={{ display: 'contents' }}>
           <div className="nav-label">{g.label}</div>
           {g.links.map((l) => {

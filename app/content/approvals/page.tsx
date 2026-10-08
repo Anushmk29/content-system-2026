@@ -8,9 +8,6 @@ import { ItemDrawer } from '../ui/ItemDrawer';
 import { ReviewKeys } from '../ui/actions';
 import { ago, when, withParams, TONE } from '../ui/format';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const LANE_COLOR: Record<string, string> = { safe_auto: TONE.ok, review: TONE.warn, sensitive: TONE.danger };
 
 export default async function ApprovalsPage({ searchParams }: { searchParams: SearchParams }) {

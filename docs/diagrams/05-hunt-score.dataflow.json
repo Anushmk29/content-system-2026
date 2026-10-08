@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Hunt score: huntScores()",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      1068,
+      540
+    ]
+  },
+  "stages": [
+    {
+      "label": "Inputs (decoded_posts)"
+    },
+    {
+      "label": "Signals"
+    },
+    {
+      "label": "Scores"
+    },
+    {
+      "label": "scoreHunt writes"
+    },
+    {
+      "label": "Ordering consumers"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "counts",
+      "type": "database",
+      "label": "views · reactions",
+      "sublabel": "+ comments, shares",
+      "stage": 0,
+      "row": 0,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "breakout",
+      "type": "database",
+      "label": "vs_own_median",
+      "sublabel": "breakout b vs own median",
+      "tag": "competitor+platform+post_type",
+      "stage": 0,
+      "row": 1,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "jev",
+      "type": "external",
+      "label": "Jev answers",
+      "sublabel": "icp_fit, proof, lane …",
+      "tag": "+ posted_at",
+      "stage": 0,
+      "row": 2,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "er",
+      "type": "backend",
+      "label": "ER + reach pct",
+      "sublabel": "pct() within platform",
+      "tag": "ER = eng / views",
+      "stage": 1,
+      "row": 0,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "fit",
+      "type": "backend",
+      "label": "fit = jevFit()",
+      "sublabel": "× (1 − P(off_niche))",
+      "tag": "weights in card",
+      "stage": 2,
+      "row": 2,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "paid",
+      "type": "security",
+      "label": "paid filter",
+      "sublabel": "ER < 0.2% or sponsored",
+      "tag": "or ER < 0.6% & b > 3",
+      "stage": 2,
+      "row": 0,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "demand",
+      "type": "backend",
+      "label": "demand",
+      "sublabel": "breakout · ER · reach",
+      "stage": 2,
+      "row": 1,
+      "width": 120,
+      "height": 66,
+      "tag": "weights .5 / .25 / .25"
+    },
+    {
+      "id": "posts",
+      "type": "database",
+      "label": "hunt_score",
+      "sublabel": "100·√(demand·fit)",
+      "tag": "100·demand if no Jev",
+      "stage": 3,
+      "row": 1,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "hooks",
+      "type": "frontend",
+      "label": "listHooks()",
+      "sublabel": "not paid, hunt desc",
+      "stage": 4,
+      "row": 0,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "steal",
+      "type": "frontend",
+      "label": "bestPost()",
+      "sublabel": "useDecode / stealFormat",
+      "stage": 4,
+      "row": 1,
+      "width": 120,
+      "height": 66
+    },
+    {
+      "id": "order",
+      "type": "backend",
+      "label": "decode order",
+      "sublabel": "sortFormats, decodeBatch",
+      "stage": 4,
+      "row": 2,
+      "width": 120,
+      "height": 66
+    }
+  ],
+  "flows": [
+    {
+      "from": "counts",
+      "to": "er",
+      "label": "engagements",
+      "variant": "emphasis"
+    },
+    {
+      "from": "breakout",
+      "to": "demand",
+      "label": "breakout b",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "jev",
+      "to": "fit",
+      "label": "answers",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "er",
+      "to": "paid",
+      "label": "ER",
+      "variant": "security",
+      "route": "straight"
+    },
+    {
+      "from": "er",
+      "to": "demand",
+      "label": "percentiles"
+    },
+    {
+      "from": "demand",
+      "to": "posts",
+      "label": "demand",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDx": -27
+    },
+    {
+      "from": "fit",
+      "to": "posts",
+      "label": "fit",
+      "variant": "emphasis"
+    },
+    {
+      "from": "paid",
+      "to": "posts",
+      "label": "paid",
+      "variant": "security"
+    },
+    {
+      "from": "posts",
+      "to": "hooks",
+      "label": "hooks",
+      "labelSegment": 2
+    },
+    {
+      "from": "posts",
+      "to": "steal",
+      "label": "steal",
+      "route": "straight",
+      "labelDx": 24
+    },
+    {
+      "from": "posts",
+      "to": "order",
+      "label": "batches",
+      "labelSegment": 2
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "From hunt-score.ts",
+      "items": [
+        "demand = 0.5·min(b/8, 1) + 0.25·pct(ER) + 0.25·pct(reach)",
+        "paid = ER < 0.002, or ER < 0.006 with b > 3, or Jev sponsored ≥ 0.8",
+        "pct(x) = share of same-platform peers strictly below x; 0.5 with fewer than 2; reach = views ?? reactions",
+        "fit weights: icp_fit .4, replicable .25, proof .2, fresh .15; icp_fit and proof = Jev score / 3, replicable = P(yes), fresh = max(0, 1 − age days / 90)",
+        "scoreHunt writes demand, fit, hunt_score, paid to decoded_posts (rounded to 0.001)"
+      ]
+    }
+  ]
+}

@@ -2,34 +2,20 @@
 // Using const-object + union types (not TS `enum`) so the module runs under
 // Node's native type-stripping with zero build step.
 
-export const PILLARS = [
-  'practical_ai_for_operators',
-  'proof_and_use_cases',
-  'founder_build_notes',
-  'ai_readiness_and_offer',
-] as const;
-export type Pillar = (typeof PILLARS)[number];
-
 export const FUNNEL_STAGES = [
   'awareness', 'education', 'trust', 'consideration', 'conversion', 'retention',
 ] as const;
 export type FunnelStage = (typeof FUNNEL_STAGES)[number];
+export const isFunnelStage = (x: unknown): x is FunnelStage =>
+  typeof x === 'string' && (FUNNEL_STAGES as readonly string[]).includes(x);
 
 export const PLATFORMS = [
   'blog', 'linkedin', 'x', 'instagram', 'facebook', 'reddit', 'email', 'youtube',
 ] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
-export const RISK_LEVELS = ['low', 'medium', 'high'] as const;
-export type RiskLevel = (typeof RISK_LEVELS)[number];
-
-export const APPROVAL_LANES = ['safe_auto', 'review', 'sensitive'] as const;
-export type ApprovalLane = (typeof APPROVAL_LANES)[number];
-
-export const APPROVAL_STATUSES = [
-  'not_required', 'pending', 'approved', 'rejected', 'changes_requested',
-] as const;
-export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+export type ApprovalLane = 'safe_auto' | 'review' | 'sensitive';
+export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected' | 'changes_requested';
 
 export const CONTENT_STATUSES = [
   'idea', 'draft', 'qc_passed', 'needs_approval', 'approved',
@@ -49,3 +35,12 @@ export function clamp1to5(n: unknown): number {
   if (!Number.isFinite(x)) return 1;
   return Math.min(5, Math.max(1, Math.round(x)));
 }
+
+/** Statuses whose copy and creative can still be edited (locked once approved). */
+export const EDITABLE_STATUSES: readonly string[] = ['idea', 'draft', 'qc_passed', 'needs_approval'];
+
+export const median = (xs: number[]): number | null => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+};

@@ -19,7 +19,7 @@ export const scoringModule: Module = {
     // 1) Auto-score unscored topics (LLM, Jev in shadow/primary — see decide.ts).
     let scored = 0;
     const failures: string[] = [];
-    if (canDecide(ctx, TOPIC_SCORE)) {
+    if (canDecide(ctx)) {
       const unscored = await repo.unscoredTopics();
       for (const t of unscored) {
         try {

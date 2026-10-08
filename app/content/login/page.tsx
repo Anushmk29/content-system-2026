@@ -16,7 +16,10 @@ export default function Login() {
     }).catch(() => null);
     if (res?.ok) {
       const next = new URLSearchParams(location.search).get('next');
-      window.location.href = next?.startsWith('/content') ? next : '/content';
+      const { role } = (await res.json().catch(() => ({}))) as { role?: string };
+      // The admin lands on its own area; a deep link (anything but the client home) still wins.
+      const home = role === 'admin' ? '/content/system' : '/content';
+      window.location.href = next?.startsWith('/content') && next !== '/content' ? next : home;
     } else {
       setErr(res?.status === 401 ? 'Wrong password.' : 'Could not reach the server.');
       setBusy(false);

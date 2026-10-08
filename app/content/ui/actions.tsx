@@ -20,10 +20,11 @@ export function useAction() {
   async function call(key: string, method: string, path: string, body?: unknown, okText?: (d: Json) => string): Promise<Json | null> {
     setBusy(key); setMsg(null);
     try {
+      const raw = body === undefined || body instanceof FormData; // FormData sets its own multipart header
       const res = await fetch(path, {
         method,
-        headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: raw ? undefined : { 'content-type': 'application/json' },
+        body: raw ? (body as FormData | undefined) : JSON.stringify(body),
       });
       const data: Json = await res.json().catch(() => ({}));
       if (res.status === 401) { toLogin(); return null; }
@@ -49,32 +50,24 @@ export function useAction() {
 }
 
 /** A single-shot button bound to an API route. */
-export function ApiButton({ path, method = 'POST', body, label, className = 'btn', showFeedback = true }: {
-  path: string; method?: string; body?: unknown; label: ReactNode;
-  className?: string; showFeedback?: boolean;
+export function ApiButton({ path, method = 'POST', body, label, busyLabel = '…', okText, className = 'btn' }: {
+  path: string; method?: string; body?: unknown; label: ReactNode; busyLabel?: ReactNode;
+  okText?: (d: Json) => string; className?: string;
 }) {
   const a = useAction();
   return (
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" className={className} disabled={a.pending} onClick={() => a.call('b', method, path, body)}>
-        {a.busy ? '…' : label}
+      <button type="button" className={className} disabled={a.pending} onClick={() => a.call('b', method, path, body, okText)}>
+        {a.busy ? busyLabel : label}
       </button>
-      {showFeedback && a.feedback}
+      {a.feedback}
     </span>
   );
 }
 
 /** Run one pipeline module (e.g. from a Today action). */
 export function RunModuleButton({ id, label, className = 'btn btn-sm' }: { id: string; label: string; className?: string }) {
-  const a = useAction();
-  return (
-    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" className={className} disabled={a.pending} onClick={() => a.call('run', 'POST', `/content/api/modules/${id}/run`, undefined, summarizeRun)}>
-        {a.busy ? '▸ running…' : `▶ ${label}`}
-      </button>
-      {a.feedback}
-    </span>
-  );
+  return <ApiButton path={`/content/api/modules/${id}/run`} label={`▶ ${label}`} busyLabel="▸ running…" okText={summarizeRun} className={className} />;
 }
 
 export function summarizeRun(data: Json): string {

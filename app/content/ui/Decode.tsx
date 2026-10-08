@@ -7,7 +7,8 @@ import type { DecodeView, DecodedPostRow, DecodeFormatRow, DecodeRunRow } from '
 import { KpiStrip, Section } from './viz';
 import { LogScatter, Face, type ScatterPoint } from './LogScatter';
 import { useAction } from './actions';
-import { CATEGORY, NO_CATEGORY, PLATFORM, compact } from './format';
+import { median } from '@pratapai/content-pipeline/core';
+import { CATEGORY, NO_CATEGORY, PLATFORM, compact, times } from './format';
 
 type Vars = CSSProperties & Record<`--${string}`, string>;
 type By = 'format' | 'competitor' | 'platform' | 'post type' | 'length';
@@ -19,22 +20,21 @@ const BEAT_LABEL = (t: string) => (t === 'offer' ? 'offer shows up' : t);
 const NONE = 'none';
 const DRIP = 120; // ms between cards of one poll's batch
 
-const median = (xs: number[]) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b), m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-};
-const byVs = (a: DecodedPostRow, b: DecodedPostRow) => (b.vs_own_median ?? -1) - (a.vs_own_median ?? -1) || b.reactions - a.reactions;
+const byVs = (a: DecodedPostRow, b: DecodedPostRow) => (b.hunt_score ?? -1) - (a.hunt_score ?? -1)
+  || (b.vs_own_median ?? -1) - (a.vs_own_median ?? -1) || b.reactions - a.reactions;
+const pretty = (s: string) => s.replace(/_/g, ' ');
 const lengthOf = (p: DecodedPostRow) => (p.post_type === 'video' && p.duration_s != null
   ? (p.duration_s < 30 ? 'video < 30s' : p.duration_s < 90 ? 'video 30–90s' : 'video 90s+')
   : p.caption.length < 280 ? 'short text' : p.caption.length < 1000 ? 'medium text' : 'long text');
-const x = (v: number | null) => (v == null ? '—' : `${v.toFixed(1)}x`);
 
 export type StyleOpt = { id: string; name: string };
 
-export function Decode({ view, initial, apifyReady, styles }: {
-  view: DecodeView; initial: { f?: string; v?: string; by?: string }; apifyReady: boolean; styles: StyleOpt[];
+export function Decode({ view, initial, apifyReady, youtubeReady, styles }: {
+  view: DecodeView; initial: { f?: string; v?: string; by?: string }; apifyReady: boolean; youtubeReady: boolean; styles: StyleOpt[];
 }) {
+  const [lane, setLane] = useState<string | null>(null);
+  const [hookType, setHookType] = useState<string | null>(null);
+  const [hidePaid, setHidePaid] = useState(true);
   const [run, setRun] = useState<DecodeRunRow | null>(view.run);
   const [posts, setPosts] = useState<DecodedPostRow[]>(view.posts);
   const [formats, setFormats] = useState<DecodeFormatRow[]>(view.formats);
@@ -71,7 +71,8 @@ export function Decode({ view, initial, apifyReady, styles }: {
 
   const fIdx = useMemo(() => new Map(formats.map((f) => [f.id, f])), [formats]);
   const colorOf = (id: string | null) => (id && fIdx.has(id) ? CATEGORY[fIdx.get(id)!.idx % CATEGORY.length]! : NO_CATEGORY);
-  const inFmt = (p: DecodedPostRow) => !fmt || (fmt === NONE ? !p.format_id : p.format_id === fmt);
+  const inFmt = (p: DecodedPostRow) => (!fmt || (fmt === NONE ? !p.format_id : p.format_id === fmt))
+    && (!lane || p.lane === lane) && (!hookType || p.hook_type === hookType) && (!hidePaid || !p.paid);
   const ranked = useMemo(() => [...posts].sort(byVs), [posts]);
   const rankOf = useMemo(() => new Map(ranked.map((p, i) => [p.id, i + 1])), [ranked]);
   const shown = ranked.filter(inFmt);
@@ -101,9 +102,11 @@ export function Decode({ view, initial, apifyReady, styles }: {
 
   const status = !run ? 'no run yet'
     : live && run.stage === 'scraping' ? `▸ scraping · ${run.total} posts`
+    : live && run.stage === 'transcribing' ? `▸ transcribing the best videos · ${run.total} posts`
+    : live && run.stage === 'judging' ? `▸ judging fit with Jev · ${run.total} posts`
     : live && run.stage === 'sorting' ? `▸ sorting into formats · ${run.total} posts`
     : live ? `▸ decoding · ${run.decoded.toLocaleString('en-US')} / ${run.total.toLocaleString('en-US')}`
-    : `${shown.length} posts · median ${compact(median(shown.map((p) => p.reactions)) ?? 0)} reactions · ${x(median(shown.flatMap((p) => p.vs_own_median ?? [])))} their usual`;
+    : `${shown.length} posts · median ${compact(median(shown.map((p) => p.reactions)) ?? 0)} reactions · ${times(median(shown.flatMap((p) => p.vs_own_median ?? [])))} their usual`;
 
   async function start(body: Record<string, unknown>) {
     const d = await a.call('start', 'POST', '/content/api/decode', body);
@@ -122,12 +125,18 @@ export function Decode({ view, initial, apifyReady, styles }: {
         { label: 'Competitors', value: new Set(posts.map((p) => p.competitor_id)).size || (run?.competitor_ids.length ?? 0) },
         { label: 'Sorted into a format', value: posts.filter((p) => p.format_id).length, denom: `${formats.length} formats` },
         { label: 'Median reactions', value: Math.round(median(posts.map((p) => p.reactions)) ?? 0) },
-        { label: 'AI + Apify cost · est', value: (run?.cost_ai_usd ?? 0) + (run?.cost_apify_usd ?? 0), money: true,
-          sub: run ? `$${run.cost_ai_usd.toFixed(2)} ai + $${run.cost_apify_usd.toFixed(2)} apify` : undefined },
+        { label: 'Run cost', value: (run?.cost_ai_usd ?? 0) + (run?.cost_apify_usd ?? 0) + (run?.cost_jev_usd ?? 0), money: true,
+          sub: run ? `$${run.cost_ai_usd.toFixed(2)} ai + $${run.cost_apify_usd.toFixed(2)} apify + $${(run.cost_jev_usd ?? 0).toFixed(3)} jev` : undefined },
       ]} />
+      {run?.jev_health != null && run.jev_health < 0.8 && (
+        <p className="mono" style={{ fontSize: 12, color: 'var(--warn)', margin: '0 0 16px' }}>
+          Jev is unsure about these posts (health {run.jev_health.toFixed(2)}, aim ≥ 0.80). Sharpen the audience and pillar wording in
+          the <a href="/content/brand">Brand kit</a>; the fit questions are built from it. Rankings still use demand.
+        </p>
+      )}
 
       <Section eyebrow="Inside the archive" title="every post they made, in one picture"
-        meta={<RunBar run={run} live={live} apifyReady={apifyReady} competitors={view.competitors.filter((c) => c.active).length}
+        meta={<RunBar run={run} live={live} apifyReady={apifyReady} youtubeReady={youtubeReady} competitors={view.competitors.filter((c) => c.active).length}
           busy={a.busy} feedback={a.feedback} onStart={start} onStop={stop} />}>
         <div className="band">
           <div>
@@ -151,9 +160,10 @@ export function Decode({ view, initial, apifyReady, styles }: {
                 <span className="dot" style={{ '--c': NO_CATEGORY } as Vars} />no clear format ({posts.filter((p) => !p.format_id).length})
               </button>
             </div>
+            <Filters posts={posts} lane={lane} setLane={setLane} hookType={hookType} setHookType={setHookType} hidePaid={hidePaid} setHidePaid={setHidePaid} />
             <table className="sr-only">
               <caption>Top posts by performance against each competitor’s usual</caption>
-              <tbody>{ranked.slice(0, 50).map((p) => <tr key={p.id}><td>{p.handle}</td><td>{p.platform}</td><td>{p.reactions} reactions</td><td>{p.comments + p.shares} comments+shares</td><td>{x(p.vs_own_median)} their usual</td></tr>)}</tbody>
+              <tbody>{ranked.slice(0, 50).map((p) => <tr key={p.id}><td>{p.handle}</td><td>{p.platform}</td><td>{p.reactions} reactions</td><td>{p.comments + p.shares} comments+shares</td><td>{times(p.vs_own_median)} their usual</td></tr>)}</tbody>
             </table>
           </div>
           <PostPane post={spot} rank={spot ? rankOf.get(spot.id)! : 0} of={posts.length} pinned={!!pin}
@@ -168,11 +178,34 @@ export function Decode({ view, initial, apifyReady, styles }: {
 }
 
 // ---- run controls: ⏸ stop while running, ▶ decode otherwise ----------------------
-function RunBar({ run, live, apifyReady, competitors, busy, feedback, onStart, onStop }: {
-  run: DecodeRunRow | null; live: boolean; apifyReady: boolean; competitors: number; busy: string | null;
+/** Lane / hook-type chips (from Jev + the breakdown) and the paid filter. */
+function Filters({ posts, lane, setLane, hookType, setHookType, hidePaid, setHidePaid }: {
+  posts: DecodedPostRow[]; lane: string | null; setLane: (v: string | null) => void;
+  hookType: string | null; setHookType: (v: string | null) => void; hidePaid: boolean; setHidePaid: (v: boolean) => void;
+}) {
+  const count = (k: 'lane' | 'hook_type') => [...posts.reduce((m, p) => (p[k] ? m.set(p[k]!, (m.get(p[k]!) ?? 0) + 1) : m), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]);
+  const lanes = count('lane'), hooks = count('hook_type'), paid = posts.filter((p) => p.paid).length;
+  if (!lanes.length && !hooks.length && !paid) return null;
+  return (
+    <div className="legend" style={{ marginTop: 6 }}>
+      {lanes.map(([k, n]) => (
+        <button key={`l${k}`} type="button" aria-pressed={lane === k} onClick={() => setLane(lane === k ? null : k)}>lane: {pretty(k)} ({n})</button>
+      ))}
+      {hooks.map(([k, n]) => (
+        <button key={`h${k}`} type="button" aria-pressed={hookType === k} onClick={() => setHookType(hookType === k ? null : k)}>hook: {pretty(k)} ({n})</button>
+      ))}
+      {paid > 0 && <button type="button" aria-pressed={hidePaid} onClick={() => setHidePaid(!hidePaid)}>hide paid ({paid})</button>}
+    </div>
+  );
+}
+
+function RunBar({ run, live, apifyReady, youtubeReady, competitors, busy, feedback, onStart, onStop }: {
+  run: DecodeRunRow | null; live: boolean; apifyReady: boolean; youtubeReady: boolean; competitors: number; busy: string | null;
   feedback: React.ReactNode; onStart: (b: Record<string, unknown>) => void; onStop: () => void;
 }) {
-  const [platforms, setPlatforms] = useState<string[]>(['x', 'instagram', 'linkedin', 'facebook']);
+  const [platforms, setPlatforms] = useState<string[]>([...(apifyReady ? ['x', 'instagram', 'linkedin', 'facebook'] : []), ...(youtubeReady ? ['youtube'] : [])]);
+  const ready = (apifyReady && platforms.some((p) => p !== 'youtube')) || (youtubeReady && platforms.includes('youtube'));
   const [days, setDays] = useState(90);
   const [cap, setCap] = useState(10);
   const resumable = run && (run.status === 'stopped' || run.status === 'error');
@@ -188,7 +221,7 @@ function RunBar({ run, live, apifyReady, competitors, busy, feedback, onStart, o
           <button type="button" className="btn btn-ink btn-sm" disabled={busy === 'stop'} onClick={onStop}>⏸ stop</button>
         ) : (
           <>
-            {['x', 'instagram', 'linkedin', 'facebook'].map((p) => (
+            {['x', 'instagram', 'linkedin', 'facebook', 'youtube'].map((p) => (
               <label key={p} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                 <input type="checkbox" checked={platforms.includes(p)} onChange={(e) => setPlatforms(e.target.checked ? [...platforms, p] : platforms.filter((q) => q !== p))} />
                 {PLATFORM[p]?.glyph ?? p}
@@ -197,8 +230,8 @@ function RunBar({ run, live, apifyReady, competitors, busy, feedback, onStart, o
             <label>days <input className="input" type="number" min={7} max={365} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 64, padding: '2px 6px' }} /></label>
             <label>cap <input className="input" type="number" min={5} max={500} value={cap} onChange={(e) => setCap(Number(e.target.value))} style={{ width: 64, padding: '2px 6px' }} /></label>
             {resumable && <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => onStart({ resumeRunId: run.id })}>resume</button>}
-            <button type="button" className="btn btn-lime btn-sm" disabled={!!busy || !apifyReady || !competitors || !platforms.length}
-              title={!apifyReady ? 'Add CONTENT_APIFY_TOKEN to .env first' : !competitors ? 'Add a competitor first' : undefined}
+            <button type="button" className="btn btn-lime btn-sm" disabled={!!busy || !ready || !competitors || !platforms.length}
+              title={!ready ? 'Add CONTENT_APIFY_TOKEN (or CONTENT_YOUTUBE_API_KEY for YouTube) to .env first' : !competitors ? 'Add a competitor first' : undefined}
               onClick={() => onStart({ platforms, lookbackDays: days, postCap: cap })}>{busy === 'start' ? '…' : '▶ decode'}</button>
           </>
         )}
@@ -230,10 +263,11 @@ function TopGrid({ gridRef, posts, spotId, onPick }: {
     <div className="topgrid" ref={gridRef} style={{ position: 'relative', minHeight: 120 }}>
       {!posts.length && <p className="empty" style={{ fontSize: 12, gridColumn: '1 / -1' }}>Top posts land here as they’re decoded.</p>}
       {posts.map((p) => (
-        <button key={p.id} type="button" aria-current={p.id === spotId || undefined} title={`@${p.handle} · ${x(p.vs_own_median)} their usual`}
+        <button key={p.id} type="button" aria-current={p.id === spotId || undefined}
+          title={`@${p.handle} · ${times(p.vs_own_median)} their usual${p.hunt_score != null ? ` · hunt ${Math.round(p.hunt_score)}` : ''}${p.paid ? ' · paid' : ''}`}
           ref={(el) => { if (el) cells.current.set(p.id, el); else cells.current.delete(p.id); }} onClick={() => onPick(p.id)}>
           <Face p={{ thumb: p.thumb, text: p.hook ?? p.caption, platformColor: PLATFORM[p.platform]?.color ?? NO_CATEGORY }} />
-          <span className="x">{x(p.vs_own_median)}</span>
+          <span className="x">{times(p.vs_own_median)}</span>
         </button>
       ))}
     </div>
@@ -275,7 +309,21 @@ function PostPane({ post, rank, of, pinned, format, color, styles }: {
           <div><span className="label">Comments + shares</span><b>{compact(post.comments + post.shares)}</b></div>
           <div><span className="label">Views</span><b>{post.views == null ? '—' : compact(post.views)}</b></div>
         </div>
-        <span className="pill" style={{ '--c': vs != null && vs > 1 ? 'var(--ok)' : 'var(--muted)' } as Vars}>{x(vs)} their usual</span>
+        <span className="pill" style={{ '--c': vs != null && vs > 1 ? 'var(--ok)' : 'var(--muted)' } as Vars}>{times(vs)} their usual</span>
+        {post.hunt_score != null && (
+          <span className="pill" style={{ '--c': 'var(--violet)', marginLeft: 6 } as Vars}
+            title={`demand ${post.demand ?? '—'} · fit ${post.fit ?? 'not judged'}`}>hunt {Math.round(post.hunt_score)}</span>
+        )}
+        {post.paid && <span className="pill" style={{ '--c': 'var(--danger)', marginLeft: 6 } as Vars} title="Low engagement for its reach, or Jev says sponsored: likely bought reach. Kept out of hooks and steal.">paid</span>}
+        {(post.lane || post.hook_type || post.value_structure || post.cta_type || post.text_source === 'transcript') && (
+          <div className="mono faint" style={{ fontSize: 11, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+            {post.lane && <span>lane: {pretty(post.lane)}</span>}
+            {post.hook_type && <span>hook: {pretty(post.hook_type)}</span>}
+            {post.value_structure && <span>value: {pretty(post.value_structure)}</span>}
+            {post.cta_type && <span>cta: {pretty(post.cta_type)}</span>}
+            {post.text_source === 'transcript' && <span>· read from the spoken transcript</span>}
+          </div>
+        )}
         {pinned && <span className="faint mono" style={{ fontSize: 10.5, marginLeft: 8 }}>pinned · esc to follow</span>}
 
         <div className="label" style={{ marginTop: 18 }}>Post anatomy</div>
@@ -357,7 +405,7 @@ function FormatsWin({ posts, formats, by, setBy, fmt, setFmt, colorOf, styles }:
                   </div>
                   {g.formatId && <FormatActions formatId={g.formatId} styles={styles} />}
                   <span className="mono" style={{ fontSize: 11.5, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {g.posts.length} posts<br /><span className="faint">{x(g.medVs)} · {compact(g.med ?? 0)}</span>
+                    {g.posts.length} posts<br /><span className="faint">{times(g.medVs)} · {compact(g.med ?? 0)}</span>
                   </span>
                 </>
               );
@@ -374,7 +422,19 @@ function FormatsWin({ posts, formats, by, setBy, fmt, setFmt, colorOf, styles }:
           <div className="stats">
             <div><span className="label">Matching posts</span><b>{scope.length.toLocaleString('en-US')}</b><span className="faint mono" style={{ fontSize: 11 }}>{cur?.name ?? 'all formats'}</span></div>
             <div><span className="label">Median reactions</span><b>{compact(median(scope.map((p) => p.reactions)) ?? 0)}</b></div>
-            <div><span className="label">Median vs their usual</span><b>{x(median(scope.flatMap((p) => p.vs_own_median ?? [])))}</b></div>
+            <div><span className="label">Median vs their usual</span><b>{times(median(scope.flatMap((p) => p.vs_own_median ?? [])))}</b></div>
+            {cur?.formatId && (() => {
+              const f = formats.find((x) => x.id === cur.formatId);
+              return f && (f.hook_template || f.value_template || f.cta_template) ? (
+                <div><span className="label">Skeleton</span>
+                  <span style={{ fontSize: 12.5, display: 'grid', gap: 4 }}>
+                    {f.hook_template && <span><span className="faint">hook</span> {f.hook_template}</span>}
+                    {f.value_template && <span><span className="faint">value</span> {f.value_template}</span>}
+                    {f.cta_template && <span><span className="faint">cta</span> {f.cta_template}</span>}
+                  </span>
+                </div>
+              ) : null;
+            })()}
           </div>
         </div>
       )}
@@ -412,7 +472,7 @@ function Gaps({ posts, formats, colorOf, styles }: { posts: DecodedPostRow[]; fo
                 <span className="dot" style={{ '--c': g.color, marginTop: 6 } as Vars} />
                 <div className="grow"><div className="t" style={{ fontWeight: 600 }}>{g.name}</div><div className="d">{g.desc}</div></div>
                 <FormatActions formatId={g.formatId!} styles={styles} />
-                <span className="mono" style={{ fontSize: 11.5, textAlign: 'right' }}>{g.posts.length} posts<br /><span className="faint">{x(g.medVs)} their usual</span></span>
+                <span className="mono" style={{ fontSize: 11.5, textAlign: 'right' }}>{g.posts.length} posts<br /><span className="faint">{times(g.medVs)} their usual</span></span>
               </div>
             </li>
           ))}
@@ -424,7 +484,7 @@ function Gaps({ posts, formats, colorOf, styles }: { posts: DecodedPostRow[]; fo
 const fmtOurs = (formats: DecodeFormatRow[], id: string) => formats.find((f) => f.id === id)?.our_post_count ?? 0;
 
 // ---- make my version: their structure, our post --------------------------------------
-const TARGETS = [['linkedin', 'LinkedIn'], ['x', 'X'], ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['blog', 'Blog']] as const;
+const TARGETS = [['linkedin', 'LinkedIn'], ['x', 'X'], ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['blog', 'Blog'], ['youtube', 'YouTube Short']] as const;
 
 export function MakeMine({ target, platform, styles }: { target: { postId?: string; formatId?: string }; platform?: string; styles: StyleOpt[] }) {
   const a = useAction();

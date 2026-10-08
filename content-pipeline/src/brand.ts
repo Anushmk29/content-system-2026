@@ -12,6 +12,8 @@ export interface Brand {
   name: string;
   tagline: string;
   audience: string;
+  /** Myths/assumptions this audience holds; angles flip these first (Contrast Formula). */
+  audienceBeliefs: string[];
   voice: string;
   voiceSamples: string[];
   pillars: BrandPillar[];
@@ -33,6 +35,7 @@ export const DEFAULT_BRAND: Brand = {
   tagline: 'practical AI builds for SME operators and founders',
   audience: `Founder-led SMEs and service businesses with manual workflows who know AI can help but
 don't know where to start. Never adopt enterprise/procurement language.`,
+  audienceBeliefs: [],
   voice: `Calm, practical, premium, founder-led, NO hype:
 - Outcome-first: start with business value, not tool names.
 - Practical over theoretical: tell them what to do next.
@@ -71,8 +74,9 @@ export const pillarSlugs = (b: Brand = active): string[] =>
   (b.pillars.length ? b.pillars : DEFAULT_BRAND.pillars).map((p) => p.slug);
 
 /** The offer a post links to: its chosen one when valid, else the primary, else none. */
-export function offerFor(idx: number | null | undefined, b: Brand = active): BrandOffer | null {
-  return (idx != null ? b.offers[idx] : undefined) ?? b.offers.find((o) => o.primary) ?? b.offers[0] ?? null;
+export function offerFor(idx: number | null | undefined): BrandOffer | null {
+  const { offers } = active;
+  return (idx != null ? offers[idx] : undefined) ?? offers.find((o) => o.primary) ?? offers[0] ?? null;
 }
 
 /** "Proof & use-cases!" → "proof_use_cases". */

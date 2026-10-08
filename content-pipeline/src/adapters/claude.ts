@@ -6,35 +6,41 @@
 import type { Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
+import { setTimeout as sleep } from 'node:timers/promises';
+import type { OnCost } from '../cost-ledger.ts';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 // Sensible defaults; override per provider with CONTENT_LLM_MODEL.
 const DEFAULT_OPENROUTER_MODEL = 'anthropic/claude-sonnet-5.5';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5.5';
-// Image generation ("nano banana"); OpenRouter only. Override with CONTENT_IMAGE_MODEL.
-const DEFAULT_IMAGE_MODEL = 'google/gemini-2.5-flash-image';
+// Image generation ("nano banana"); OpenRouter only.
+const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
 // A hung call fails its one item instead of stalling the module (and, now runs are
 // sequential, the whole pipeline). 120s covers the 8000-token seed batch.
 const TIMEOUT_MS = 120_000;
+// USD per million tokens [input, output] for the direct Anthropic path, which reports no cost.
+// ponytail: family-level list prices; the ledger marks these rows estimated.
+const anthropicPrice = (m: string): [number, number] => /haiku/.test(m) ? [1, 5] : /opus/.test(m) ? [5, 25] : [3, 15];
 
-export interface LlmConfig {
+interface LlmConfig {
   openrouterApiKey?: string;
   anthropicApiKey?: string;
   model?: string;
-  imageModel?: string;
+  /** Called once per API call (success or failure) — the cost ledger. */
+  onCost?: OnCost;
 }
 
 /** `images` are data URLs (data:image/png;base64,…) sent alongside the prompt. */
-export interface CompleteOpts { system?: string; model?: string; maxTokens?: number; images?: string[] }
+interface CompleteOpts { system?: string; model?: string; maxTokens?: number; images?: string[] }
 
 export interface ClaudeAdapter extends Adapter {
   readonly provider: 'openrouter' | 'anthropic' | 'none';
   readonly model: string;
   complete(prompt: string, opts?: CompleteOpts): Promise<string>;
   /** One image from a prompt, optionally guided by reference images (data URLs). OpenRouter only. */
-  generateImage(prompt: string, opts?: { images?: string[]; aspectRatio?: string; model?: string }): Promise<Buffer>;
-  /** Real USD spent by this process so far (OpenRouter `usage.cost`; Anthropic calls report 0). Diff it around a job. */
+  generateImage(prompt: string, opts?: { images?: string[]; aspectRatio?: string }): Promise<Buffer>;
+  /** USD spent by this process so far (OpenRouter `usage.cost`; Anthropic is estimated from tokens). Diff it around a job. */
   readonly spentUsd: number;
 }
 
@@ -50,6 +56,9 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
   type OrMessage = { content?: string; images?: Array<{ image_url?: { url?: string } }> };
 
   async function openRouter(body: Record<string, unknown>): Promise<OrMessage> {
+    const kind = body.modalities ? 'image' : 'llm';
+    const log = (e: { ok: boolean; costUsd?: number; model?: string; inputTokens?: number; outputTokens?: number; error?: string }) =>
+      c.onCost?.({ provider: 'openrouter', kind, model: String(body.model), costUsd: 0, units: kind === 'image' && e.ok ? 1 : undefined, ...e });
     const send = () => fetch(OPENROUTER_URL, {
       method: 'POST',
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -62,16 +71,25 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
       },
       body: JSON.stringify({ ...body, usage: { include: true } }),
     });
-    // Rate limits / brief outages (several calls at once, e.g. a carousel's layouts): wait as told, retry up to 3 times.
-    let res = await send();
-    for (let i = 0; i < 3 && (res.status === 429 || res.status >= 500); i++) {
-      const wait = Math.min(30, Number(res.headers.get('retry-after')) || 5 * 2 ** i);
-      await new Promise((r) => setTimeout(r, wait * 1000));
-      res = await send();
+    type Reply = { model?: string; choices?: Array<{ message?: OrMessage }>; usage?: { cost?: number; prompt_tokens?: number; completion_tokens?: number } };
+    let data: Reply;
+    try {
+      // Rate limits / brief outages (several calls at once, e.g. a carousel's layouts): wait as told, retry up to 3 times.
+      let res = await send();
+      for (let i = 0; i < 3 && (res.status === 429 || res.status >= 500); i++) {
+        const wait = Math.min(30, Number(res.headers.get('retry-after')) || 5 * 2 ** i);
+        await sleep(wait * 1000);
+        res = await send();
+      }
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
+      data = (await res.json()) as Reply;
+    } catch (e) {
+      log({ ok: false, error: (e as Error).message });
+      throw e;
     }
-    if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-    const data = (await res.json()) as { choices?: Array<{ message?: OrMessage }>; usage?: { cost?: number } };
-    spentUsd += Number(data.usage?.cost ?? 0);
+    const cost = Number(data.usage?.cost ?? 0);
+    spentUsd += cost;
+    log({ ok: true, costUsd: cost, model: data.model ?? String(body.model), inputTokens: data.usage?.prompt_tokens, outputTokens: data.usage?.completion_tokens });
     return data.choices?.[0]?.message ?? {};
   }
 
@@ -95,6 +113,9 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
       if (!m) throw new Error('Anthropic images must be data URLs');
       return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } };
     });
+    const m = opts?.model ?? model;
+    const log = (e: { ok: boolean; costUsd?: number; inputTokens?: number; outputTokens?: number; error?: string }) =>
+      c.onCost?.({ provider: 'anthropic', kind: 'llm', model: m, costUsd: 0, ...e, meta: e.ok ? { estimated: true } : undefined });
     const res = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -104,14 +125,22 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: opts?.model ?? model,
+        model: m,
         max_tokens: opts?.maxTokens ?? 2048,
         system: opts?.system,
         messages: [{ role: 'user', content: images.length ? [...images, { type: 'text', text: prompt }] : prompt }],
       }),
     });
-    if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    if (!res.ok) {
+      const err = new Error(`Anthropic ${res.status}: ${await res.text()}`);
+      log({ ok: false, error: err.message });
+      throw err;
+    }
+    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+    const [inUsd, outUsd] = anthropicPrice(m);
+    const cost = ((data.usage?.input_tokens ?? 0) * inUsd + (data.usage?.output_tokens ?? 0) * outUsd) / 1e6;
+    spentUsd += cost;
+    log({ ok: true, costUsd: cost, inputTokens: data.usage?.input_tokens, outputTokens: data.usage?.output_tokens });
     return (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
   }
 
@@ -131,7 +160,7 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
     async generateImage(prompt, opts) {
       if (provider !== 'openrouter') throw new Error('Image generation needs CONTENT_OPENROUTER_API_KEY');
       const msg = await openRouter({
-        model: opts?.model ?? c.imageModel ?? DEFAULT_IMAGE_MODEL,
+        model: IMAGE_MODEL,
         modalities: ['image', 'text'],
         messages: [{ role: 'user', content: userContent(prompt, opts?.images) }],
         ...(opts?.aspectRatio ? { image_config: { aspect_ratio: opts.aspectRatio } } : {}),

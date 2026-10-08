@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Content item lifecycle (CONTENT_EVENTS)",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      980,
+      566
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "content_items.status"
+    },
+    {
+      "id": "exits",
+      "label": "Archive + results"
+    }
+  ],
+  "states": [
+    {
+      "id": "draft",
+      "type": "start",
+      "label": "draft",
+      "sublabel": "draft_generator",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "width": 100
+    },
+    {
+      "id": "needs_approval",
+      "type": "waiting",
+      "label": "needs_approval",
+      "sublabel": "human lane",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "width": 100
+    },
+    {
+      "id": "approved",
+      "type": "decision",
+      "label": "approved",
+      "sublabel": "human / safe_auto",
+      "lane": "main",
+      "col": 2,
+      "step": "03",
+      "width": 100
+    },
+    {
+      "id": "queued",
+      "type": "external",
+      "label": "queued",
+      "sublabel": "booked in Postiz",
+      "lane": "main",
+      "col": 3,
+      "step": "04",
+      "width": 100
+    },
+    {
+      "id": "published",
+      "type": "success",
+      "label": "published",
+      "sublabel": "live",
+      "lane": "main",
+      "col": 4,
+      "step": "05",
+      "width": 100
+    },
+    {
+      "id": "archived",
+      "type": "neutral",
+      "label": "archived",
+      "sublabel": "terminal",
+      "lane": "exits",
+      "col": 0
+    },
+    {
+      "id": "captured",
+      "type": "success",
+      "label": "performance_captured",
+      "sublabel": "analytics signal",
+      "lane": "exits",
+      "col": 2,
+      "width": 150
+    }
+  ],
+  "transitions": [
+    {
+      "from": "draft",
+      "to": "needs_approval",
+      "label": "submit"
+    },
+    {
+      "from": "needs_approval",
+      "to": "approved",
+      "label": "approve"
+    },
+    {
+      "from": "approved",
+      "to": "queued",
+      "label": "schedule"
+    },
+    {
+      "from": "queued",
+      "to": "published",
+      "label": "go_live"
+    },
+    {
+      "from": "approved",
+      "to": "published",
+      "label": "upload (Short)",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "route": "top-channel"
+    },
+    {
+      "from": "needs_approval",
+      "to": "draft",
+      "label": "changes",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "route": "bottom-channel"
+    },
+    {
+      "from": "approved",
+      "to": "draft",
+      "label": "changes",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "route": "bottom-channel",
+      "labelDx": 80
+    },
+    {
+      "from": "approved",
+      "to": "archived",
+      "label": "reject",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelDy": 24,
+      "labelDx": 30
+    },
+    {
+      "from": "published",
+      "to": "captured",
+      "label": "capture",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Who fires each event",
+      "items": [
+        "submit: qc_gate; approve / changes / reject: approval-service",
+        "schedule: publisher (Postiz); go_live: goLiveDue() once the slot passes",
+        "upload: markUploaded() for a hand-uploaded YouTube Short; capture: analytics"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Guards, retries, failures",
+      "items": [
+        "reject also legal from draft and needs_approval → archived",
+        "transition() is a compare-and-set; wrong state throws IllegalTransition",
+        "Unproven claims keep it draft; a failed Postiz schedule stays approved for the next run"
+      ]
+    }
+  ]
+}

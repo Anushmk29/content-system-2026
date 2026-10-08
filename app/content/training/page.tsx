@@ -5,9 +5,6 @@ import { loadHealth } from '../data';
 import { PageHead, KpiStrip, Section, NeedsDb, Chip } from '../ui/viz';
 import { LabelQueue, SeedButton } from '../ui/LabelQueue';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export default async function TrainingPage() {
   const ctx = getContext();
   let training: TrainingOverview | null = null;

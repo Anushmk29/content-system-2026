@@ -20,5 +20,6 @@ test('passwords map to roles; sessions verify, expire, and resist tampering', ()
   assert.equal(verifySession(t, 1), null);                                // password change logs everyone out
 
   assert.ok(isAdminPath('/content/system') && isAdminPath('/content/api/decisions/seed'));
+  assert.ok(isAdminPath('/content/costs') && isAdminPath('/content/api/costs'));
   assert.ok(!isAdminPath('/content/systems') && !isAdminPath('/content'));
 });

@@ -9,11 +9,11 @@ import { fetchGoogleFont, fontInfo, registerFonts } from '../fonts.ts';
 import type { Look } from '../creative.ts';
 
 interface KitRow {
-  name: string; tagline: string; audience: string; voice_prompt: string; voice_samples: string[];
+  name: string; tagline: string; audience: string; audience_beliefs: string[]; voice_prompt: string; voice_samples: string[];
   pillars: BrandPillar[]; offers: BrandOffer[]; palette: string[]; heading_font: string | null; body_font: string | null;
   has_logo: boolean; logo_corner: LogoCorner; own_handles: Brand['ownHandles']; onboarded_at: string | null;
 }
-const KIT_COLS = `name, tagline, audience, voice_prompt, voice_samples, pillars, offers, palette, heading_font, body_font,
+const KIT_COLS = `name, tagline, audience, audience_beliefs, voice_prompt, voice_samples, pillars, offers, palette, heading_font, body_font,
   logo_png is not null as has_logo, logo_corner, own_handles, onboarded_at`;
 
 /** A blank kit: what the setup form starts from on a fresh install. */
@@ -22,7 +22,7 @@ export const EMPTY_BRAND: Brand = {
 };
 
 const toBrand = (r: KitRow): Brand => ({
-  name: r.name, tagline: r.tagline, audience: r.audience, voice: r.voice_prompt, voiceSamples: r.voice_samples ?? [],
+  name: r.name, tagline: r.tagline, audience: r.audience, audienceBeliefs: r.audience_beliefs ?? [], voice: r.voice_prompt, voiceSamples: r.voice_samples ?? [],
   pillars: r.pillars ?? [], offers: r.offers ?? [], palette: r.palette ?? [],
   headingFont: r.heading_font, bodyFont: r.body_font, hasLogo: r.has_logo, logoCorner: r.logo_corner,
   ownHandles: r.own_handles ?? {}, onboardedAt: r.onboarded_at, saved: true,
@@ -49,7 +49,7 @@ export async function loadBrand(ctx: ModuleContext): Promise<Brand> {
 }
 
 export interface BrandPatch {
-  name?: string; tagline?: string; audience?: string; voice?: string; voiceSamples?: string[];
+  name?: string; tagline?: string; audience?: string; audienceBeliefs?: string[]; voice?: string; voiceSamples?: string[];
   pillars?: Partial<BrandPillar>[]; offers?: Partial<BrandOffer>[]; palette?: string[];
   headingFont?: string | null; bodyFont?: string | null; logoCorner?: LogoCorner;
   ownHandles?: Record<string, unknown>; onboarded?: boolean;
@@ -63,6 +63,7 @@ export function cleanPatch(p: BrandPatch): BrandPatch {
   if (p.name !== undefined) { out.name = text(p.name, 80); if (!out.name) throw new Error('Brand name can’t be empty.'); }
   if (p.tagline !== undefined) out.tagline = text(p.tagline, 160);
   if (p.audience !== undefined) out.audience = text(p.audience, 2000);
+  if (p.audienceBeliefs !== undefined) out.audienceBeliefs = (p.audienceBeliefs ?? []).map((s) => text(s, 240)).filter(Boolean).slice(0, 10);
   if (p.voice !== undefined) out.voice = text(p.voice, 4000);
   if (p.voiceSamples !== undefined) out.voiceSamples = (p.voiceSamples ?? []).map((s) => text(s, 3000)).filter(Boolean).slice(0, 10);
   if (p.pillars !== undefined) {
@@ -108,13 +109,15 @@ export async function saveBrand(ctx: ModuleContext, patch: BrandPatch): Promise<
   const b: Brand = { ...base, ...Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'onboarded')) };
   await ctx.db.query(
     `insert into content.brand_kit (id, name, tagline, audience, voice_prompt, voice_samples, pillars, offers, palette,
-       heading_font, body_font, logo_corner, own_handles, onboarded_at)
-     values (true, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, case when $13 then now() end)
+       heading_font, body_font, logo_corner, own_handles, onboarded_at, audience_beliefs)
+     values (true, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, case when $13 then now() end, $14)
      on conflict (id) do update set name = $1, tagline = $2, audience = $3, voice_prompt = $4, voice_samples = $5,
        pillars = $6, offers = $7, palette = $8, heading_font = $9, body_font = $10, logo_corner = $11, own_handles = $12,
-       onboarded_at = case when $13 then coalesce(content.brand_kit.onboarded_at, now()) else content.brand_kit.onboarded_at end`,
+       onboarded_at = case when $13 then coalesce(content.brand_kit.onboarded_at, now()) else content.brand_kit.onboarded_at end,
+       audience_beliefs = $14`,
     [b.name, b.tagline, b.audience, b.voice, JSON.stringify(b.voiceSamples), JSON.stringify(b.pillars), JSON.stringify(b.offers),
-     JSON.stringify(b.palette), b.headingFont, b.bodyFont, b.logoCorner, JSON.stringify(b.ownHandles), p.onboarded === true]);
+     JSON.stringify(b.palette), b.headingFont, b.bodyFont, b.logoCorner, JSON.stringify(b.ownHandles), p.onboarded === true,
+     JSON.stringify(b.audienceBeliefs)]);
   return loadBrand(ctx);
 }
 
@@ -144,9 +147,12 @@ export async function extractVoice(ctx: ModuleContext, samples: string[]): Promi
 export async function importOwnPosts(ctx: ModuleContext, platform: DecodePlatform, handle: string): Promise<{ samples: string[]; costUsd: number }> {
   if (!DECODE_PLATFORMS.includes(platform)) throw new Error('unknown platform');
   if (!handle.trim()) throw new Error('Enter your profile or page link.');
-  if (!ctx.adapters.apify.configured) throw new Error('Importing needs the Apify connection (ask your admin).');
   const since = new Date(Date.now() - 365 * 86_400_000);
-  const { posts, costUsd } = await ctx.adapters.apify.scrape(platform, handle.trim(), { since, limit: 40 });
+  if (platform !== 'youtube' && !ctx.adapters.apify.configured) throw new Error('Importing needs the Apify connection (ask your admin).');
+  if (platform === 'youtube' && !ctx.adapters.youtube.configured) throw new Error('Importing from YouTube needs CONTENT_YOUTUBE_API_KEY (ask your admin).');
+  const { posts, costUsd } = platform === 'youtube'
+    ? await ctx.adapters.youtube.scrape(handle.trim(), { since, limit: 40 })
+    : await ctx.adapters.apify.scrape(platform, handle.trim(), { since, limit: 40 });
   const samples = posts.filter((p) => p.caption.length >= 80)
     .sort((a, b) => (b.reactions + 2 * b.comments) - (a.reactions + 2 * a.comments))
     .slice(0, 8).map((p) => p.caption);

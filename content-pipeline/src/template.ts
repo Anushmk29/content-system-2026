@@ -8,10 +8,10 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { existsSync, readFileSync } from 'node:fs';
 import { fetchGoogleFont } from './fonts.ts';
-import { parseJsonObject } from './modules/llm-json.ts';
+import { parseJsonObject, str } from './modules/llm-json.ts';
 
 /** The example's own words per slot: what the preview shows, and the length each slot was designed for. */
-export interface Slots {
+interface Slots {
   headline?: string; body?: string; kicker?: string; label?: string; cta?: string; items?: string[];
   number?: number; page?: number; total?: number; logo?: string; bg?: string;
 }
@@ -83,11 +83,6 @@ function words(line: string, accent: string | undefined): El[] {
 const px = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && /^[\d.]+(px)?$/.test(v.trim()) ? parseFloat(v) : NaN);
 
 /**
- * Text into a slot element: wraps by word, keeps its alignment, and shrinks the font when the
- * new text is longer than the example's (designed) text. ponytail: length ratio, not measured;
- * swap for measuring with Satori's layout if posts still overflow.
- */
-/**
  * Clash check (textClashes) draws: null = the design with all text invisible; { slot, ink } = only
  * that slot's text (in the marker colour, or invisible) with everything not behind it hidden.
  * Colour and opacity never move anything, so every draw has the same layout.
@@ -96,6 +91,11 @@ type Paint = null | { slot: string; ink: 'marker' | 'clear' };
 type Fill = Pick<Template, 'accent' | 'sample'> & { paint?: Paint };
 const MARKER = '#ff00ff';
 
+/**
+ * Text into a slot element: wraps by word, keeps its alignment, and shrinks the font when the
+ * new text is longer than the example's (designed) text. ponytail: length ratio, not measured;
+ * swap for measuring with Satori's layout if posts still overflow.
+ */
 function setText(el: El, name: string, text: string, t: Fill, notes: string[]) {
   const style = (el.props.style ??= {});
   if (t.paint !== undefined) {
@@ -175,11 +175,7 @@ const pad2 = (n?: number) => (n ? String(n).padStart(2, '0') : undefined);
 type Drawable = Pick<Template, 'html' | 'w' | 'h' | 'fonts' | 'accent' | 'sample'>;
 
 /** One PNG from a template + this slide's words. `notes` collects anything the viewer should fix. */
-export function renderTemplate(t: Drawable, s: Slots, notes: string[] = []): Promise<Buffer> {
-  return draw(t, s, notes);
-}
-
-async function draw(t: Drawable, s: Slots, notes: string[], paint?: Paint, width = t.w): Promise<Buffer> {
+export async function renderTemplate(t: Drawable, s: Slots, notes: string[] = [], paint?: Paint, width = t.w): Promise<Buffer> {
   const parsed = parseHtml(t.html) as unknown as El;
   // satori-html wraps the markup in a 100% div; the template's own root is inside it.
   const kids = (Array.isArray(parsed.props.children) ? parsed.props.children : [parsed.props.children]).filter((k) => typeof k !== 'string' || k.trim()) as Node[];
@@ -197,7 +193,7 @@ async function draw(t: Drawable, s: Slots, notes: string[], paint?: Paint, width
   return Buffer.from(new Resvg(svg, { fitTo: width === t.w ? { mode: 'original' } : { mode: 'width', value: width } }).render().asPng());
 }
 
-export interface Clash { slot: string; problem: 'shape' | 'edge' | 'text'; /** where, in template px */ box: { x0: number; y0: number; x1: number; y1: number } }
+interface Clash { slot: string; problem: 'shape' | 'edge' | 'text'; /** where, in template px */ box: { x0: number; y0: number; x1: number; y1: number } }
 
 const CHECK_W = 360;
 const NAMES: Record<string, string> = { headline: 'the headline', body: 'the body text', kicker: 'the lead-in line', label: 'the label', cta: 'the button text', item: 'a list item' };
@@ -217,7 +213,7 @@ export function describeClash(c: Clash, withBox = false): string {
  * ponytail: one background per text, so text meant to span two backgrounds would be flagged too.
  */
 export async function textClashes(t: Drawable, s: Slots): Promise<Clash[]> {
-  const raw = async (paint: Paint) => (await sharp(await draw(t, s, [], paint, CHECK_W)).removeAlpha().raw().toBuffer({ resolveWithObject: true }));
+  const raw = async (paint: Paint) => (await sharp(await renderTemplate(t, s, [], paint, CHECK_W)).removeAlpha().raw().toBuffer({ resolveWithObject: true }));
   const base = await raw(null);
   const { width: W, height: H } = base.info, B = base.data, k = t.w / W;
   const boxOf = (ps: number[]) => {
@@ -271,7 +267,6 @@ export function parseTemplateReply(raw: string, w: number, h: number): Template 
   for (const part of [raw.slice(0, at), raw.slice(at + 7 + code.length)]) {
     try { o = parseJsonObject(part); break; } catch { /* next part, else defaults below */ }
   }
-  const str = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
   const sm = (o.sample && typeof o.sample === 'object' ? o.sample : {}) as Record<string, unknown>;
   const sample: Slots = {};
   for (const k of ['headline', 'body', 'kicker', 'label', 'cta'] as const) if (str(sm[k])) sample[k] = str(sm[k]);

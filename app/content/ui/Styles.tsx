@@ -1,30 +1,17 @@
 'use client';
-// Style library: upload an example (multipart, so not useAction's JSON path) and manage saved styles.
+// Style library: upload an example and manage saved styles.
 import { useRef, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import type { StyleRow, LayoutSpec } from '@pratapai/content-pipeline';
-import { useAction, toLogin } from './actions';
+import { useAction } from './actions';
+import { splitPosts } from './format';
 
 export function StyleUpload() {
-  const router = useRouter();
+  const a = useAction();
   const form = useRef<HTMLFormElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true); setMsg(null);
-    try {
-      const res = await fetch('/content/api/styles', { method: 'POST', body: new FormData(e.currentTarget) });
-      const d = await res.json().catch(() => ({}));
-      if (res.status === 401) toLogin();
-      else if (!res.ok || d.ok === false) setMsg({ text: d.error ?? `error ${res.status}`, bad: true });
-      else { setMsg({ text: d.message, bad: !d.style?.has_plate }); form.current?.reset(); router.refresh(); }
-    } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true });
-    } finally {
-      setBusy(false);
-    }
+    if (await a.call('up', 'POST', '/content/api/styles', new FormData(e.currentTarget))) form.current?.reset();
   }
 
   return (
@@ -33,8 +20,8 @@ export function StyleUpload() {
       <input className="input" name="name" placeholder="Style name, e.g. Gold stat card" required style={{ width: 240 }} aria-label="Style name" />
       <input className="input" name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required
         aria-label="Example image, or every slide of a carousel" title="One image, or select all slides of a carousel (in order)" />
-      <button type="submit" className="btn btn-ink" disabled={busy}>{busy ? 'Analysing and rebuilding the layout… (2–4 minutes)' : 'Analyse & save'}</button>
-      {msg && <span role="status" style={{ fontSize: 12.5, color: msg.bad ? 'var(--danger)' : 'var(--ok)' }}>{msg.text}</span>}
+      <button type="submit" className="btn btn-ink" disabled={!!a.busy}>{a.busy ? 'Analysing and rebuilding the layout… (2–4 minutes)' : 'Analyse & save'}</button>
+      {a.feedback}
     </form>
     </>
   );
@@ -155,7 +142,7 @@ function TemplateFix({ id, layouts, hasTpl }: { id: string; layouts: [string, Pi
 export interface PlacementOpt { id: string; label: string; w: number; h: number }
 
 /** Make creatives from a saved style: pick where it's going, write the slides, download the PNGs. */
-export function CreatePanel({ styleId, placements, slides }: { styleId: string; placements: PlacementOpt[]; slides?: number }) {
+function CreatePanel({ styleId, placements, slides }: { styleId: string; placements: PlacementOpt[]; slides?: number }) {
   const a = useAction();
   const draft = useAction();
   const [topic, setTopic] = useState('');
@@ -177,7 +164,7 @@ export function CreatePanel({ styleId, placements, slides }: { styleId: string; 
 
   async function write() {
     const d = await draft.call('draft', 'POST', `/content/api/styles/${styleId}/draft`, { topic, slides: count },
-      (d) => `Drafted ${d.text.split(/^\s*---\s*$/m).length} slides · $${Number(d.costUsd).toFixed(3)} — edit below, then make`);
+      (d) => `Drafted ${splitPosts(d.text).length} slides · $${Number(d.costUsd).toFixed(3)} — edit below, then make`);
     if (d) { setText(d.text); if (d.cta) setCta(d.cta); }
   }
 

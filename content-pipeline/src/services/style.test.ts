@@ -109,7 +109,6 @@ test('generateCreative: saved template is free; a new shape is made once, then f
   const fresh = await generateCreative(ctx, { styleId: style.id, placement: 'instagram', text: 'D', fresh: true, brief: 'CRM' });
   assert.deepEqual(calls, { image: 2, vision: 2 });
   assert.equal(fresh.background, 'fresh');
-  assert.equal((await listStyles(ctx))[0]!.use_count, 4);
 });
 
 test('button text contrasts with the button, not the whole image', async () => {

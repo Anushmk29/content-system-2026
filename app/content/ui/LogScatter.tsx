@@ -5,6 +5,7 @@
 // New points fly in as a stream of cards from the right edge of the top-posts grid, shrinking
 // as they land. A ring follows the spotlit post. All motion is CSS transitions on real changes.
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { median } from '@pratapai/content-pipeline/core';
 import { compact } from './format';
 
 export interface ScatterPoint {
@@ -53,11 +54,9 @@ export function LogScatter({ points, match, matchColor, spotId, onPick, origin, 
     const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0), sxy = xs.reduce((a, x, i) => a + (x - mx) * (ys[i]! - my), 0);
     const slope = sxx ? sxy / sxx : 0;
     const trend = n > 2 ? [x0, x1].map((lx) => [r(((lx - x0) / (x1 - x0)) * 100), r(100 - ((my + slope * (lx - mx) - y0) / (y1 - y0)) * 100)]) : null;
-    const sorted = onChart.map((p) => p.x).sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    const median = !sorted.length ? null : sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+    const med = median(onChart.map((p) => p.x));
     const decades = (a: number, b: number) => Array.from({ length: Math.floor(b) - Math.ceil(a) + 1 }, (_, i) => Math.ceil(a) + i);
-    return { fx, fy, trend, median, xt: decades(x0, x1), yt: decades(y0, y1) };
+    return { fx, fy, trend, median: med, xt: decades(x0, x1), yt: decades(y0, y1) };
   }, [points]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rounded so the server's style text and the browser's re-serialised one match (hydration).

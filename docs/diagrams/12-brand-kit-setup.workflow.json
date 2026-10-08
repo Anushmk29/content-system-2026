@@ -1,0 +1,225 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Brand kit: setup wizard to every prompt",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "ui",
+      "label": "/content/setup"
+    },
+    {
+      "id": "api",
+      "label": "API routes"
+    },
+    {
+      "id": "data",
+      "label": "Postgres and outside calls"
+    },
+    {
+      "id": "runtime",
+      "label": "Pipeline readers"
+    }
+  ],
+  "mainPath": [
+    "setup",
+    "patch",
+    "kit",
+    "load",
+    "prompts"
+  ],
+  "nodes": [
+    {
+      "id": "setup",
+      "lane": "ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Setup wizard",
+      "sublabel": "6 steps, then onboarded",
+      "width": 160
+    },
+    {
+      "id": "patch",
+      "lane": "api",
+      "col": 1,
+      "type": "backend",
+      "label": "PATCH /content/api/brand",
+      "sublabel": "saveBrand + cleanPatch",
+      "width": 190
+    },
+    {
+      "id": "voice",
+      "lane": "api",
+      "col": 3,
+      "type": "backend",
+      "label": "POST /content/api/brand/voice",
+      "sublabel": "extractVoice",
+      "width": 204
+    },
+    {
+      "id": "logo",
+      "lane": "api",
+      "col": 2,
+      "type": "backend",
+      "label": "/content/api/brand/logo",
+      "sublabel": "GET POST DELETE",
+      "width": 190
+    },
+    {
+      "id": "fonts",
+      "lane": "api",
+      "col": 4,
+      "type": "backend",
+      "label": "/content/api/brand/fonts",
+      "sublabel": "POST DELETE",
+      "width": 190
+    },
+    {
+      "id": "google",
+      "lane": "data",
+      "col": 0,
+      "type": "external",
+      "label": "fetchGoogleFont",
+      "sublabel": "ensureFont, first use",
+      "width": 160
+    },
+    {
+      "id": "claude",
+      "lane": "data",
+      "col": 3,
+      "type": "cloud",
+      "label": "claude.complete",
+      "sublabel": "voice guide, 700 tokens",
+      "width": 170
+    },
+    {
+      "id": "kit",
+      "lane": "data",
+      "col": 1,
+      "type": "database",
+      "label": "content.brand_kit",
+      "sublabel": "one row, logo_png",
+      "width": 170
+    },
+    {
+      "id": "fontsdb",
+      "lane": "data",
+      "col": 4,
+      "type": "database",
+      "label": "content.brand_fonts",
+      "sublabel": "family, weight, file",
+      "width": 170
+    },
+    {
+      "id": "load",
+      "lane": "runtime",
+      "col": 2,
+      "type": "backend",
+      "label": "loadBrand()",
+      "sublabel": "setBrand, brand()",
+      "width": 150
+    },
+    {
+      "id": "prompts",
+      "lane": "runtime",
+      "col": 3,
+      "type": "backend",
+      "label": "brand-brain.ts",
+      "sublabel": "buildAnglePrompt",
+      "width": 150
+    },
+    {
+      "id": "jev",
+      "lane": "runtime",
+      "col": 4,
+      "type": "backend",
+      "label": "Jev questions",
+      "sublabel": "competitorPostQuestions",
+      "width": 180
+    }
+  ],
+  "edges": [
+    {
+      "from": "setup",
+      "to": "patch",
+      "label": "each step"
+    },
+    {
+      "from": "setup",
+      "to": "voice",
+      "label": "samples"
+    },
+    {
+      "from": "setup",
+      "to": "logo"
+    },
+    {
+      "from": "setup",
+      "to": "fonts"
+    },
+    {
+      "from": "patch",
+      "to": "google",
+      "label": "new font",
+      "role": "branch"
+    },
+    {
+      "from": "patch",
+      "to": "kit",
+      "label": "upsert"
+    },
+    {
+      "from": "voice",
+      "to": "claude"
+    },
+    {
+      "from": "logo",
+      "to": "kit",
+      "label": "sharp PNG"
+    },
+    {
+      "from": "fonts",
+      "to": "fontsdb",
+      "label": "uploadFont"
+    },
+    {
+      "from": "kit",
+      "to": "load",
+      "label": "readBrand"
+    },
+    {
+      "from": "load",
+      "to": "prompts"
+    },
+    {
+      "from": "load",
+      "to": "jev"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Setup flow",
+      "items": [
+        "Steps: You, Voice, Audience and themes, Offers, Look, Competitors",
+        "Finish sends PATCH { onboarded: true }; layout redirects until onboarded_at is set",
+        "Voice guide is returned unsaved; the client edits it, then PATCH saves it"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Who reads brand()",
+      "items": [
+        "brandSystem, scoringSystem, qcSystem and buildAnglePrompt (audienceBeliefs flipped first)",
+        "Jev lanes come from pillars; icp_fit from audience",
+        "brandLook() registers fonts and logo for creatives"
+      ]
+    }
+  ]
+}

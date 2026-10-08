@@ -32,6 +32,10 @@ exactly what to expect.
 | 7 | **Client password** | **required in production** | `CONTENT_RUN_SECRET` | The client's login for the whole dashboard; also the `x-content-secret` header for cron. Production refuses to serve without it. Blank in dev = open. |
 | 7b | Admin password | optional | `CONTENT_ADMIN_SECRET` | Your login: also opens System + Training. Changing either password logs everyone out. |
 | 8 | A Next.js host app | optional | — | Only needed for the **dashboard + HTTP routes**. The pipeline itself runs headless via `npm run pipeline`. |
+| 9 | Jev (decision model) | automatic | `CONTENT_OPENROUTER_API_KEY` (+ optional `CONTENT_JEV_MODE`, `CONTENT_JEV_MODEL`) | Runs through OpenRouter on the same key, shadow mode by default. About $0.00001 a decision. `CONTENT_JEV_MODE=off` turns it off. |
+| 10 | YouTube Data API key | optional | `CONTENT_YOUTUBE_API_KEY` | YouTube channels in Decode, free (Google Cloud → YouTube Data API v3 → API key). Without it, Decode skips YouTube. |
+| 11 | **Transcription tools on the host** | optional | `CONTENT_PYTHON`, `CONTENT_YTDLP`, `CONTENT_WHISPER_MODEL` (default `small`), `CONTENT_TRANSCRIBE_CAP` (default 15) | `pip install yt-dlp faster-whisper`. Decode then reads what competitor videos actually say. **This needs a real server (VPS or Docker), not serverless (Vercel)**: it downloads audio and runs whisper locally. If a GPU has no CUDA libraries, it falls back to CPU. |
+| 12 | OpenRouter management key | optional | `CONTENT_OPENROUTER_MGMT_KEY` | Lets the admin **Costs** page check spend day by day against OpenRouter's bill. Without it, the check uses today / this week / this month. |
 
 **Nothing except the database URL is required to start.** Every integration degrades
 gracefully: an unconfigured adapter shows as `unconfigured`/`degraded` on the dashboard
@@ -241,7 +245,7 @@ trigger `POST /content/api/modules/weekly_review/run` once a week.
 | `/content/api/leads` | POST | — | capture an inbound lead |
 | `/content/api/metrics` | POST | `x-content-secret` | record a performance snapshot (external webhook) |
 | `/content/api/telegram/webhook` | POST | secret token | approve/changes/reject taps |
-| `/content/api/todos` `/todos/:id` | GET/POST/PATCH/DELETE | — | operator todo tracker |
+| `/content/api/todos` `/todos/:id` | POST/PATCH/DELETE | — | operator todo tracker |
 
 (Auth headers only enforced when the matching secret env var is set.)
 

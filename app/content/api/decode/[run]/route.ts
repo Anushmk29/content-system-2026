@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { getContext, getDecodeRun, stopDecode } from '@pratapai/content-pipeline';
 import { denied } from '../../guard';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 // GET /content/api/decode/:run?after=<seq> → the run + posts decoded since `after` (the page polls this).
 export async function GET(req: Request, { params }: { params: Promise<{ run: string }> }) {
   const { run } = await params;

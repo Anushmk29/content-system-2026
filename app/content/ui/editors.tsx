@@ -2,7 +2,6 @@
 // Interactive pieces of the item drawer / approvals / ideas pages. Each one is a
 // thin form over an API route via useAction (refresh + feedback + login redirect handled there).
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAction } from './actions';
 
 // ---- approve / changes / reject ---------------------------------------------
@@ -63,18 +62,52 @@ export function CopyEditor({ itemId, hook, body, cta }: { itemId: string; hook: 
 }
 
 // ---- rewrite with a library hook ------------------------------------------------
+interface HookOption { hook: string; pattern: string | null; contrast: number; patternStrength: number; platformFit: number; learned: number; score: number }
+
 export function HookPicker({ itemId, hooks }: { itemId: string; hooks: { id: string; label: string }[] }) {
   const a = useAction();
+  const swap = useAction();
   const [id, setId] = useState(hooks[0]?.id ?? '');
+  const [options, setOptions] = useState<HookOption[]>([]);
+  const [applied, setApplied] = useState('');
   return (
-    <div className="hook-pick">
-      <select className="input" value={id} onChange={(e) => setId(e.target.value)} aria-label="Hook to borrow">
-        {hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
-      </select>
-      <button type="button" className="btn" disabled={!id || a.pending} onClick={() => a.call('hook', 'PATCH', `/content/api/items/${itemId}`, { hookId: id })}>
-        {a.busy ? 'Rewriting…' : 'Rewrite with this hook'}
-      </button>
-      {a.feedback}
+    <div>
+      <div className="hook-pick">
+        <select className="input" value={id} onChange={(e) => setId(e.target.value)} aria-label="Post style to copy">
+          {hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
+        </select>
+        <button type="button" className="btn" disabled={!id || a.pending} onClick={async () => {
+          const d = await a.call('hook', 'PATCH', `/content/api/items/${itemId}`, { hookId: id });
+          const opts: HookOption[] = Array.isArray(d?.options) ? d.options : [];
+          setOptions(opts);
+          setApplied(opts[0]?.hook ?? '');
+        }}>
+          {a.busy ? 'Rewriting…' : 'Rewrite'}
+        </button>
+        {a.feedback}
+      </div>
+      {options.length > 1 && (
+        <div style={{ marginTop: 10 }}>
+          <p className="faint" style={{ margin: '0 0 6px', fontSize: 12.5 }}>Done — the best first line is already in the post above. Prefer another? Click it.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {options.map((o, i) => {
+              const on = o.hook === applied;
+              return (
+                <button key={i} type="button" className="btn" aria-pressed={on} disabled={swap.pending || on}
+                  title={`score ${o.score} · ${o.pattern ?? 'other'} · contrast ${o.contrast} · pattern ${o.patternStrength} · platform ${o.platformFit}`}
+                  style={{ textAlign: 'left', justifyContent: 'flex-start', whiteSpace: 'normal', fontWeight: on ? 600 : 400, borderColor: on ? 'var(--ink)' : undefined, opacity: 1 }}
+                  onClick={async () => {
+                    const d = await swap.call(`s${i}`, 'PATCH', `/content/api/items/${itemId}`, { swapHook: o.hook, pattern: o.pattern });
+                    if (d) setApplied(o.hook);
+                  }}>
+                  {on ? '✓ ' : ''}{o.hook}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {swap.feedback}
     </div>
   );
 }
@@ -148,12 +181,9 @@ export function CreativePanel({ itemId, platform, assets, styles, editable }: {
   styles: Array<{ id: string; name: string }>;
 }) {
   const a = useAction();
-  const router = useRouter();
   const [styleId, setStyleId] = useState(styles[0]?.id ?? '');
   const [fresh, setFresh] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [upMsg, setUpMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const [uploading, setUploading] = useState(false);
   const url = `/content/api/items/${itemId}/asset`;
   const v = encodeURIComponent(assets[0]?.created_at ?? '');
   const make = async () => {
@@ -165,15 +195,10 @@ export function CreativePanel({ itemId, platform, assets, styles, editable }: {
     if (!files?.length) return;
     const form = new FormData();
     for (const f of Array.from(files)) form.append('file', f);
-    setUploading(true); setUpMsg(null); setWarnings([]);
-    const res = await fetch(url, { method: 'POST', body: form });
-    if (res.status === 401) { window.location.href = '/content/login'; return; }
-    const d = await res.json().catch(() => null);
-    setUploading(false);
-    setUpMsg({ text: d?.message ?? d?.error ?? `error ${res.status}`, ok: !!d?.ok });
-    if (d?.ok) router.refresh();
+    setWarnings([]);
+    await a.call('up', 'POST', url, form);
   };
-  const busy = a.pending || uploading;
+  const busy = a.pending;
   return (
     <div className="cr">
       {assets.length > 0 ? (
@@ -209,10 +234,10 @@ export function CreativePanel({ itemId, platform, assets, styles, editable }: {
             </label>
           )}
           <div className="cr-row">
-            <label className="btn btn-sm" aria-disabled={busy}>{uploading ? 'Uploading…' : 'Use my own image or video'}
+            <label className="btn btn-sm" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : 'Use my own image or video'}
               <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
             {assets.length > 0 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirm('Remove the creative from this post?') && a.call('rm', 'DELETE', url)}>Remove</button>}
-            {upMsg ? <span role="status" style={{ fontSize: 12.5, color: upMsg.ok ? 'var(--ok)' : 'var(--danger)' }}>{upMsg.text}</span> : a.feedback}
+            {a.feedback}
           </div>
           {warnings.length > 0 && <ul className="cr-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
         </div>

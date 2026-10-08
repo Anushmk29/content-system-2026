@@ -1,0 +1,248 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Login + Role Gate",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      600
+    ]
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "or cron"
+    },
+    {
+      "id": "mw",
+      "type": "security",
+      "label": "middleware.ts",
+      "sublabel": "/content/:path*"
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "auth.ts",
+      "sublabel": "HMAC session"
+    },
+    {
+      "id": "login",
+      "type": "backend",
+      "label": "api/login",
+      "sublabel": "route.ts"
+    },
+    {
+      "id": "route",
+      "type": "backend",
+      "label": "API route",
+      "sublabel": "handle()"
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "guard.ts",
+      "sublabel": "denied()"
+    },
+    {
+      "id": "engine",
+      "type": "database",
+      "label": "logAction",
+      "sublabel": "content.audit_log"
+    }
+  ],
+  "segments": [
+    {
+      "from": 158,
+      "to": 330,
+      "label": "Log in"
+    },
+    {
+      "from": 336,
+      "to": 532,
+      "label": "Gated request"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-post",
+      "from": "browser",
+      "to": "mw",
+      "y": 176,
+      "label": "POST /content/api/login",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-public",
+      "from": "mw",
+      "to": "login",
+      "y": 204,
+      "label": "PUBLIC path: pass()"
+    },
+    {
+      "id": "m-role",
+      "from": "login",
+      "to": "auth",
+      "y": 232,
+      "label": "roleForPassword()",
+      "variant": "security"
+    },
+    {
+      "id": "m-role-ret",
+      "from": "auth",
+      "to": "login",
+      "y": 260,
+      "label": "admin | client | null",
+      "variant": "return"
+    },
+    {
+      "id": "m-log-login",
+      "from": "login",
+      "to": "engine",
+      "y": 288,
+      "label": "LOGIN (client only)",
+      "variant": "dashed"
+    },
+    {
+      "id": "m-cookie",
+      "from": "login",
+      "to": "browser",
+      "y": 316,
+      "label": "content_session = signSession(role)",
+      "variant": "return"
+    },
+    {
+      "id": "m-req",
+      "from": "browser",
+      "to": "mw",
+      "y": 350,
+      "label": "request + cookie",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-verify",
+      "from": "mw",
+      "to": "auth",
+      "y": 378,
+      "label": "verifySession()",
+      "variant": "security"
+    },
+    {
+      "id": "m-verify-ret",
+      "from": "auth",
+      "to": "mw",
+      "y": 406,
+      "label": "role | null → 401",
+      "variant": "return"
+    },
+    {
+      "id": "m-pass",
+      "from": "mw",
+      "to": "route",
+      "y": 434,
+      "label": "x-content-role",
+      "variant": "security"
+    },
+    {
+      "id": "m-guard",
+      "from": "route",
+      "to": "guard",
+      "y": 462,
+      "label": "denied(req)",
+      "variant": "security"
+    },
+    {
+      "id": "m-log-act",
+      "from": "guard",
+      "to": "engine",
+      "y": 490,
+      "label": "client write",
+      "variant": "dashed"
+    },
+    {
+      "id": "m-resp",
+      "from": "route",
+      "to": "browser",
+      "y": 517,
+      "label": "JSON | 401 | 403",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "mw",
+      "from": 176,
+      "to": 204,
+      "type": "security"
+    },
+    {
+      "participant": "login",
+      "from": 204,
+      "to": 316,
+      "type": "backend"
+    },
+    {
+      "participant": "auth",
+      "from": 232,
+      "to": 260,
+      "type": "security"
+    },
+    {
+      "participant": "mw",
+      "from": 350,
+      "to": 434,
+      "type": "security"
+    },
+    {
+      "participant": "auth",
+      "from": 378,
+      "to": 406,
+      "type": "security"
+    },
+    {
+      "participant": "route",
+      "from": 434,
+      "to": 517,
+      "type": "backend"
+    },
+    {
+      "participant": "guard",
+      "from": 462,
+      "to": 490,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "middleware.ts",
+      "items": [
+        "Drops browser x-content-role; role from x-content-secret or content_session",
+        "openMode() (no CONTENT_RUN_SECRET): 503 in production, admin in dev; non-admin on ADMIN_PATHS gets 403"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "auth.ts + login",
+      "items": [
+        "Admin password wins; cookie role.expiry.sig, HMAC-SHA256, 30 days",
+        "DELETE /content/api/login clears the cookie (maxAge 0)"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "guard.ts",
+      "items": [
+        "No role: 401 locked; GET passes; admin writes 403 View only",
+        "deniedAdmin: 403 admin only; handle() turns throws into 400"
+      ]
+    }
+  ]
+}

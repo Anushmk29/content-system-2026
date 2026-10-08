@@ -10,8 +10,8 @@ import type { NewContentItem } from '../db/repo.ts';
 const db = await createTestDb();
 const items = createContentItems(db);
 // No LLM and no Jev: the gate runs on format rules + claims alone.
-const ctx = (allowSafeAuto = false) => ({
-  db, env: { allowSafeAuto }, logger: { warn() {} },
+const ctx = () => ({
+  db, env: {}, logger: { warn() {} },
   adapters: { claude: { configured: false }, jev: { configured: false, mode: 'off' } },
 }) as unknown as ModuleContext;
 
@@ -30,20 +30,6 @@ test('unproven claim stays draft; a plain post goes to a human (review)', async 
   await qcGateModule.run(ctx());
   assert.deepEqual(await state(claimed!), { status: 'draft', approval_lane: null });
   assert.deepEqual(await state(plain!), { status: 'needs_approval', approval_lane: 'review' });
-});
-
-test('safe_auto is earned only when allowed, template-based and derived from approved work', async () => {
-  const [anchor, card] = await draftSet(['article', 'quote_card']);
-  await items.transition(anchor!, { event: 'submit', lane: 'review' });
-  await items.transition(anchor!, { event: 'approve' });
-  await qcGateModule.run(ctx(true));
-  assert.deepEqual(await state(card!), { status: 'approved', approval_lane: 'safe_auto' });
-
-  const [a2, c2] = await draftSet(['article', 'quote_card']);
-  await items.transition(a2!, { event: 'submit', lane: 'review' });
-  await items.transition(a2!, { event: 'approve' });
-  await qcGateModule.run(ctx(false));
-  assert.deepEqual(await state(c2!), { status: 'needs_approval', approval_lane: 'review' }, 'flag off → human');
 });
 
 test('approval decisions: legal once, idempotent on repeat, refused once scheduled', async () => {

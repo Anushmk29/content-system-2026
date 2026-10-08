@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Decode API: routes to engine",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1060,
+      660
+    ]
+  },
+  "participants": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Decode page",
+      "sublabel": "Decode.tsx"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Route handlers",
+      "sublabel": "/content/api/decode"
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "decode-service",
+      "sublabel": "content-pipeline"
+    },
+    {
+      "id": "scrape",
+      "type": "external",
+      "label": "Apify / YouTube",
+      "sublabel": "public posts"
+    },
+    {
+      "id": "router",
+      "type": "cloud",
+      "label": "OpenRouter",
+      "sublabel": "LLM + Jev"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Postgres",
+      "sublabel": "content.*"
+    }
+  ],
+  "segments": [
+    {
+      "from": 158,
+      "to": 329,
+      "label": "Start run"
+    },
+    {
+      "from": 344,
+      "to": 424,
+      "label": "Poll + stop"
+    },
+    {
+      "from": 439,
+      "to": 461,
+      "label": "Competitors"
+    },
+    {
+      "from": 476,
+      "to": 585,
+      "label": "Use"
+    }
+  ],
+  "messages": [
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 174,
+      "label": "POST /decode { … } or { self: true }",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "engine",
+      "y": 203,
+      "label": "startDecode()",
+      "variant": "emphasis"
+    },
+    {
+      "from": "engine",
+      "to": "db",
+      "y": 232,
+      "label": "insert decode_runs",
+      "variant": "emphasis"
+    },
+    {
+      "from": "engine",
+      "to": "scrape",
+      "y": 261,
+      "label": "runDecode (bg): scrape()",
+      "variant": "dashed"
+    },
+    {
+      "from": "engine",
+      "to": "router",
+      "y": 290,
+      "label": "jev.decide + LLM",
+      "variant": "dashed"
+    },
+    {
+      "from": "engine",
+      "to": "db",
+      "y": 319,
+      "label": "decoded_posts, formats",
+      "variant": "dashed"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 356,
+      "label": "GET /decode/[run]?after=seq",
+      "variant": "default"
+    },
+    {
+      "from": "api",
+      "to": "ui",
+      "y": 385,
+      "label": "{ run, formats, posts }",
+      "variant": "return"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 414,
+      "label": "PATCH /decode/[run]: stop",
+      "variant": "security"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 451,
+      "label": "POST | DELETE /decode/competitors",
+      "variant": "default"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 488,
+      "label": "POST /decode/use { mode }",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "engine",
+      "y": 517,
+      "label": "useDecode | stealFormat",
+      "variant": "emphasis"
+    },
+    {
+      "from": "engine",
+      "to": "router",
+      "y": 546,
+      "label": "counter | draftTopic",
+      "variant": "dashed"
+    },
+    {
+      "from": "engine",
+      "to": "db",
+      "y": 575,
+      "label": "Ideas signal | drafts + QC",
+      "variant": "emphasis"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 169,
+      "to": 208
+    },
+    {
+      "participant": "engine",
+      "from": 198,
+      "to": 324
+    },
+    {
+      "participant": "api",
+      "from": 351,
+      "to": 390
+    },
+    {
+      "participant": "api",
+      "from": 483,
+      "to": 522
+    },
+    {
+      "participant": "engine",
+      "from": 512,
+      "to": 580
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Engine functions",
+      "items": [
+        "POST /decode returns 201 { run } at once; runDecode keeps working in the background (withCostScope)",
+        "PATCH: stopDecode sets status stopped · competitors: saveCompetitor / deleteCompetitor",
+        "use: addSignal · counter: 1 LLM call + addSignal · steal: stealFormat = draftTopic + qcItem, drafts wait in Approvals"
+      ]
+    }
+  ]
+}

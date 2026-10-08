@@ -7,10 +7,6 @@ function isProven(c: Claim): boolean {
   return typeof c.proofUrl === 'string' && c.proofUrl.trim().length > 0;
 }
 
-export function unprovenClaims(claims: Claim[]): Claim[] {
-  return claims.filter((c) => !isProven(c));
-}
-
 export function hasUnprovenClaims(claims: Claim[]): boolean {
   return claims.some((c) => !isProven(c));
 }

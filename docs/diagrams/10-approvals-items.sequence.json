@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Approvals: edit, hook swap, creative, decide",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1060,
+      610
+    ]
+  },
+  "participants": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Approvals page",
+      "sublabel": "ItemDrawer"
+    },
+    {
+      "id": "hooks",
+      "type": "backend",
+      "label": "hook-service",
+      "sublabel": "rewrite + score"
+    },
+    {
+      "id": "llm",
+      "type": "cloud",
+      "label": "Claude",
+      "sublabel": "adapters.claude"
+    },
+    {
+      "id": "assets",
+      "type": "backend",
+      "label": "asset-service",
+      "sublabel": "EDITABLE_STATUSES"
+    },
+    {
+      "id": "appr",
+      "type": "security",
+      "label": "approval-service",
+      "sublabel": "lifecycle guard"
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "Postgres",
+      "sublabel": "content.*"
+    }
+  ],
+  "segments": [
+    {
+      "from": 160,
+      "to": 354,
+      "label": "Copy + hooks"
+    },
+    {
+      "from": 368,
+      "to": 434,
+      "label": "Creative"
+    },
+    {
+      "from": 448,
+      "to": 514,
+      "label": "Decision"
+    }
+  ],
+  "messages": [
+    {
+      "from": "ui",
+      "to": "pg",
+      "y": 180,
+      "label": "PATCH items/[id] {hook, body, cta} → editItemCopy",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ui",
+      "to": "hooks",
+      "y": 212,
+      "label": "PATCH items/[id] {hookId} → rewriteWithHook",
+      "variant": "emphasis"
+    },
+    {
+      "from": "hooks",
+      "to": "llm",
+      "y": 244,
+      "label": "buildHookRewritePrompt → 5 options",
+      "variant": "default"
+    },
+    {
+      "from": "hooks",
+      "to": "pg",
+      "y": 276,
+      "label": "best of scoreHookOptions → hook_ref",
+      "variant": "default"
+    },
+    {
+      "from": "ui",
+      "to": "hooks",
+      "y": 308,
+      "label": "PATCH {swapHook, pattern} → applyHookOption",
+      "variant": "emphasis"
+    },
+    {
+      "from": "hooks",
+      "to": "pg",
+      "y": 340,
+      "label": "hook + hook_pattern (no AI)",
+      "variant": "default"
+    },
+    {
+      "from": "ui",
+      "to": "assets",
+      "y": 388,
+      "label": "POST · GET · DELETE items/[id]/asset",
+      "variant": "emphasis"
+    },
+    {
+      "from": "assets",
+      "to": "pg",
+      "y": 420,
+      "label": "content_assets + asset_url",
+      "variant": "default"
+    },
+    {
+      "from": "ui",
+      "to": "appr",
+      "y": 468,
+      "label": "PATCH approvals/[id] {action}",
+      "variant": "security"
+    },
+    {
+      "from": "appr",
+      "to": "pg",
+      "y": 500,
+      "label": "transition + insert approvals",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Creative + locks",
+      "items": [
+        "POST {styleId} → saveItemCreative · multipart → uploadItemAssets · GET ?i=n → getItemAsset · DELETE → removeItemAssets",
+        "Edits only while status in EDITABLE_STATUSES; IllegalTransition refuses illegal moves"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Hook score",
+      "items": [
+        "0.4·contrast + 0.35·pattern_strength + 0.25·platform_fit + 10 × learned weight",
+        "Top 5 returned; best applied, others via swapHook"
+      ]
+    }
+  ]
+}

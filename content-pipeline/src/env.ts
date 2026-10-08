@@ -5,14 +5,14 @@
 export interface ContentEnv {
   databaseUrl: string | undefined;
   openrouterApiKey: string | undefined;
+  // Optional OpenRouter management key: lets the Costs page check spend day by day (/api/v1/activity).
+  openrouterMgmtKey: string | undefined;
   anthropicApiKey: string | undefined;
   llmModel: string | undefined;
-  // OpenRouter image model for creatives (default google/gemini-2.5-flash-image).
-  imageModel: string | undefined;
   // OpenRouter model for the typed decisions (topic score, QC); defaults to llmModel.
   decisionModel: string | undefined;
-  // TypeSafe Jev decision model (typed classify/score decisions). Off without a key.
-  typesafeApiKey: string | undefined;
+  // TypeSafe Jev decision model (typed classify/score decisions), served through OpenRouter on the
+  // same key. CONTENT_JEV_MODE=off turns it off; CONTENT_JEV_MODEL pins another version.
   jevModel: string | undefined;
   jevMode: 'off' | 'shadow' | 'primary' | undefined;
   jevMinConfidence: number | undefined;
@@ -34,16 +34,19 @@ export interface ContentEnv {
   // Decode (competitor spy): Apify token + optional actor-id overrides per platform.
   apifyToken: string | undefined;
   apifyActors: Partial<Record<'x' | 'instagram' | 'linkedin' | 'facebook', string>>;
+  // YouTube in Decode: free Data API v3 key (console.cloud.google.com → YouTube Data API v3).
+  youtubeApiKey: string | undefined;
+  // Local transcription of competitor videos (yt-dlp + faster-whisper on this host).
+  ytdlp: string | undefined;
+  python: string | undefined;
+  whisperModel: string | undefined;
+  transcribeCap: number;
   // Hour (UTC, 0-23) each platform's daily post goes out. Default 4 = 09:30 IST.
   postHourUtc: number;
   // Auto-select up to N high-band topics per run for drafting. 0 = off (you pick in the dashboard).
   autoSelectTopics: number;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
-  // earn auto-publishing for proven, template-based content (Bible §17 phase 6). Off by default.
-  allowSafeAuto: boolean;
-  // optional shared secret guarding the run endpoints before exposing them to a scheduler.
-  runSecret: string | undefined;
 }
 
 function read(name: string): string | undefined {
@@ -55,11 +58,10 @@ export function loadEnv(): ContentEnv {
   return {
     databaseUrl: read('CONTENT_DATABASE_URL'),
     openrouterApiKey: read('CONTENT_OPENROUTER_API_KEY'),
+    openrouterMgmtKey: read('CONTENT_OPENROUTER_MGMT_KEY'),
     anthropicApiKey: read('CONTENT_ANTHROPIC_API_KEY'),
     llmModel: read('CONTENT_LLM_MODEL'),
-    imageModel: read('CONTENT_IMAGE_MODEL'),
     decisionModel: read('CONTENT_DECISION_MODEL'),
-    typesafeApiKey: read('CONTENT_TYPESAFE_API_KEY'),
     jevModel: read('CONTENT_JEV_MODEL'),
     jevMode: jevMode(read('CONTENT_JEV_MODE')),
     jevMinConfidence: read('CONTENT_JEV_MIN_CONFIDENCE') ? Number(read('CONTENT_JEV_MIN_CONFIDENCE')) : undefined,
@@ -76,11 +78,14 @@ export function loadEnv(): ContentEnv {
     apifyToken: read('CONTENT_APIFY_TOKEN'),
     apifyActors: Object.fromEntries((['x', 'instagram', 'linkedin', 'facebook'] as const)
       .map((p) => [p, read(`CONTENT_APIFY_ACTOR_${p.toUpperCase()}`)]).filter(([, v]) => v)),
+    youtubeApiKey: read('CONTENT_YOUTUBE_API_KEY'),
+    ytdlp: read('CONTENT_YTDLP'),
+    python: read('CONTENT_PYTHON'),
+    whisperModel: read('CONTENT_WHISPER_MODEL'),
+    transcribeCap: clampInt(read('CONTENT_TRANSCRIBE_CAP'), 15, 0, 200),
     postHourUtc: clampInt(read('CONTENT_POST_HOUR_UTC'), 4, 0, 23),
     autoSelectTopics: clampInt(read('CONTENT_AUTO_SELECT_TOPICS'), 0, 0, 10),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
-    allowSafeAuto: (read('CONTENT_ALLOW_SAFE_AUTO') ?? '').toLowerCase() === 'true',
-    runSecret: read('CONTENT_RUN_SECRET'),
   };
 }
 

@@ -1,8 +1,5 @@
 import { getContext, getStyleImage, previewStyle } from '@pratapai/content-pipeline';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 // GET /content/api/styles/:id/image?kind=source|plate|preview&layout=<carousel layout id> → the stored PNG,
 // or (preview) the layout template drawn with the example's own words.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {

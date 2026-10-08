@@ -4,9 +4,6 @@ import { getContext, loadBrand, listFonts, CURATED_FONTS, EMPTY_BRAND, type Bran
 import { PageHead, NeedsDb } from '../ui/viz';
 import { BrandKit } from '../ui/BrandKit';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export default async function BrandPage() {
   let kit: Brand | null = null, fonts: FontRow[] = [], error: string | null = null;
   try {

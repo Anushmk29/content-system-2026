@@ -1,7 +1,7 @@
 // Pure parser for the Topic Scorer's LLM response (Bible §7). The LLM returns the
 // five 1-5 factor scores; we clamp them and (optionally) accept a pillar/funnel
 // classification. The DB then derives score_total + priority_band (generated cols).
-import { FUNNEL_STAGES, clamp1to5, type FunnelStage } from '../../core/src/index.ts';
+import { isFunnelStage, clamp1to5, type FunnelStage } from '../../core/src/index.ts';
 import { pillarSlugs } from '../brand.ts';
 import { parseJsonObject } from './llm-json.ts';
 
@@ -27,8 +27,8 @@ export function parseTopicScore(raw: string): ParsedTopicScore {
   if (typeof o.pillar === 'string' && pillarSlugs().includes(o.pillar)) {
     out.pillar = o.pillar;
   }
-  if (typeof o.funnelStage === 'string' && (FUNNEL_STAGES as readonly string[]).includes(o.funnelStage)) {
-    out.funnelStage = o.funnelStage as FunnelStage;
+  if (isFunnelStage(o.funnelStage)) {
+    out.funnelStage = o.funnelStage;
   }
   return out;
 }

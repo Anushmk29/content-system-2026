@@ -1,21 +1,21 @@
 // Postiz adapter — the single publishing rail (Bible §12). Self-hosted, public API v1
 // (docs.postiz.com/public-api): posts go to a connected channel (integration) by id, with
 // per-platform settings; media is uploaded first and referenced by {id, path}.
-import type { Adapter } from './adapter.ts';
+import { fetchJson, type Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
 
-export interface ScheduleInput {
+interface ScheduleInput {
   /** One entry per post; X gets several (a thread), everything else one. */
   parts: string[];
   platform: string;
-  scheduledAt?: string;     // ISO; omit for immediate queue
+  scheduledAt: string;      // ISO
   /** Images or one video, in order, attached to the first part (X: the first tweet). */
   media?: Array<{ buf: Buffer; mime: string; name: string }>;
   /** LinkedIn: the document title when several images go out as a swipeable carousel. */
   title?: string;
 }
-export interface ScheduleResult {
+interface ScheduleResult {
   postizId: string;
 }
 
@@ -25,8 +25,8 @@ export interface PostizAdapter extends Adapter {
   postStats(postizId: string): Promise<{ metrics: PostMetrics; raw: unknown }>;
 }
 
-export type MetricField = 'impressions' | 'reach' | 'likes' | 'comments' | 'shares' | 'saves' | 'clicks';
-export type PostMetrics = Partial<Record<MetricField, number>>;
+type MetricField = 'impressions' | 'reach' | 'likes' | 'comments' | 'shares' | 'saves' | 'clicks';
+type PostMetrics = Partial<Record<MetricField, number>>;
 type Series = Array<{ label: string; data?: Array<{ total: string | number }> }>;
 
 // Each platform names its numbers differently (X "Retweets", LinkedIn "Unique Impressions", IG
@@ -84,15 +84,11 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
   const configured = Boolean(apiUrl && apiKey);
   const base = `${(apiUrl ?? '').replace(/\/$/, '')}/public/v1`;
 
-  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const res = await fetch(`${base}${path}`, {
-      ...init,
-      headers: { authorization: apiKey!, ...(init.body instanceof FormData ? {} : { 'content-type': 'application/json' }) },
-      signal: init.signal ?? AbortSignal.timeout(60000),
-    });
-    if (!res.ok) throw new Error(`Postiz ${path} ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    return (await res.json()) as T;
-  }
+  const call = <T>(path: string, init: RequestInit = {}) => fetchJson<T>(`${base}${path}`, {
+    ...init,
+    headers: { authorization: apiKey!, ...(init.body instanceof FormData ? {} : { 'content-type': 'application/json' }) },
+    signal: init.signal ?? AbortSignal.timeout(60000),
+  }, `Postiz ${path}`);
 
   return {
     id: 'postiz',
@@ -114,8 +110,8 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
       const created = await call<Array<{ postId?: string }>>('/posts', {
         method: 'POST',
         body: JSON.stringify({
-          type: input.scheduledAt ? 'schedule' : 'now',
-          date: input.scheduledAt ?? new Date().toISOString(),
+          type: 'schedule',
+          date: input.scheduledAt,
           shortLink: false,
           tags: [],
           posts: [{

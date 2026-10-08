@@ -1,5 +1,4 @@
-// Public surface of @pratapai/content-core.
-// n8n Code nodes / future services import from here.
+// Pure, tested pipeline rules: '@pratapai/content-pipeline/core'.
 export * from './types.ts';
 export * from './lanes.ts';
 export * from './claims.ts';

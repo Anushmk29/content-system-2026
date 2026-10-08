@@ -4,9 +4,6 @@ import { getContext, loadBrand, listFonts, listCompetitors, CURATED_FONTS, EMPTY
 import { NeedsDb } from '../ui/viz';
 import { Setup } from '../ui/Setup';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export default async function SetupPage() {
   let kit: Brand | null = null, fonts: FontRow[] = [], competitors: CompetitorRow[] = [], error: string | null = null;
   try {

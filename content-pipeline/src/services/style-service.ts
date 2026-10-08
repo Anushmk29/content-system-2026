@@ -4,7 +4,7 @@
 // pay to re-analyse the example.
 import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
-import { parseJsonObject } from '../modules/llm-json.ts';
+import { parseJsonObject, str } from '../modules/llm-json.ts';
 import { PLACEMENTS, renderCreative, toSlides, type Placement, type SlideText } from '../creative.ts';
 import { brandSystem } from '../prompts/brand-brain.ts';
 import { brandLook, loadBrand } from './brand-service.ts';
@@ -29,12 +29,12 @@ export interface StyleSpec {
   /** The example rebuilt as a layout template (template.ts). Styles saved before templates have none and use the painted-text path. */
   tpl?: Template;
 }
-export const SLIDE_KINDS = ['cover', 'content', 'list', 'stat', 'quote', 'cta'] as const;
-export type SlideKind = (typeof SLIDE_KINDS)[number];
+const SLIDE_KINDS = ['cover', 'content', 'list', 'stat', 'quote', 'cta'] as const;
+type SlideKind = (typeof SLIDE_KINDS)[number];
 export type LayoutSpec = { kind: SlideKind; text_zones: TextZone[] } & Pick<StyleSpec, 'button' | 'badge' | 'align' | 'headline_font' | 'tpl'>;
 export interface StyleRow {
   id: string; name: string; style_prompt: string; spec: StyleSpec; aspect: string;
-  has_plate: boolean; analysis_cost_usd: number; use_count: number; created_at: string;
+  has_plate: boolean; analysis_cost_usd: number; created_at: string;
 }
 
 // Ratios the image model accepts (OpenRouter image_config.aspect_ratio).
@@ -110,7 +110,7 @@ async function makePlate(ctx: ModuleContext, prompt: string, ref: Buffer, aspect
 // so the saved template already looks like the example before anyone uses it.
 
 /** Pixel frame a template is written at: the placement size for that shape, else 1080 wide. */
-export function frameFor(aspect: string): { w: number; h: number } {
+function frameFor(aspect: string): { w: number; h: number } {
   const p = Object.values(PLACEMENTS).find((x) => x.aspect === aspect);
   if (p) return { w: p.w, h: p.h };
   const [x, y] = aspect.split(':').map(Number);
@@ -260,7 +260,6 @@ async function makeTemplate(ctx: ModuleContext, input: { source: Buffer; aspect:
 }
 
 const clamp01 = (n: unknown) => Math.min(1, Math.max(0, Number(n) || 0));
-const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 /** LLM response → style prompt + spec. Throws when the prompt is missing; everything else is defaulted. */
 export function parseStyle(raw: string): { style_prompt: string; spec: StyleSpec } {
@@ -469,7 +468,7 @@ async function createCarouselStyle(ctx: ModuleContext, name: string, slides: { p
 }
 
 const COLS = `id, name, style_prompt, spec, aspect, plate_png is not null as has_plate,
-  analysis_cost_usd::float8 as analysis_cost_usd, use_count, created_at`;
+  analysis_cost_usd::float8 as analysis_cost_usd, created_at`;
 
 export async function listStyles(ctx: ModuleContext): Promise<StyleRow[]> {
   return (await ctx.db.query<StyleRow>(`select ${COLS} from content.style_refs order by created_at desc`)).rows;
@@ -670,7 +669,6 @@ export async function generateCreative(ctx: ModuleContext, input: GenerateInput)
     return png;
   }));
   warnings.sort();
-  await ctx.db.query(`update content.style_refs set use_count = use_count + 1 where id = $1`, [input.styleId]);
   const made = [...tpls.values(), ...html.values()].some((t) => t.made);
   return { images, costUsd: claude.spentUsd - before, background: input.fresh ? 'fresh' : made ? 'new-size' : 'template', layouts: picks, warnings };
 }

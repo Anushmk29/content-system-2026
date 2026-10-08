@@ -86,11 +86,13 @@ export function layoutZones(zones: TextZone[], obstacles: TextZone[] = []): { he
   };
 }
 
+// 0.6em ≈ average bold sans glyph width; erring wide keeps text out of neighbouring shapes.
+const wrapAt = (text: string, wPx: number, size: number) => wrap(text, Math.max(4, Math.floor(wPx / (size * 0.6))));
+
 /** Largest font size (≤ max) at which `text` fits a w×h px box. */
 export function fitText(text: string, w: number, h: number, max: number): { size: number; lines: string[] } {
   for (let size = Math.round(max); ; size -= 4) {
-    // 0.6em ≈ average bold sans glyph width; erring wide keeps text out of neighbouring shapes.
-    const lines = wrap(text, Math.max(4, Math.floor(w / (size * 0.6))));
+    const lines = wrapAt(text, w, size);
     if (size <= 22 || lines.length * size * 1.2 <= h) return { size: Math.max(size, 22), lines };
   }
 }
@@ -100,14 +102,15 @@ const rgb = (hex: string) => {
   const f = n.length === 3 ? n.split('').map((c) => c + c).join('') : n.slice(0, 6);
   return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16));
 };
-const lumOf = (hex: string) => { const [r, g, b] = rgb(hex); return (0.2126 * r! + 0.7152 * g! + 0.0722 * b!) / 255; };
+const lum = (r: number, g: number, b: number) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+const lumOf = (hex: string) => { const [r, g, b] = rgb(hex); return lum(r!, g!, b!); };
 
 /** Mean luminance (0-1) of a zone. Crops to a buffer first: sharp's stats() ignores extract(). */
 async function zoneLum(bg: Buffer, W: number, H: number, z: TextZone): Promise<number> {
   const left = Math.min(W - 1, Math.round(z.x * W)), top = Math.min(H - 1, Math.round(z.y * H));
   const box = { left, top, width: Math.max(1, Math.min(W - left, Math.round(z.w * W))), height: Math.max(1, Math.min(H - top, Math.round(z.h * H))) };
   const { channels } = await sharp(await sharp(bg).extract(box).toBuffer()).stats();
-  return (0.2126 * channels[0]!.mean + 0.7152 * channels[1]!.mean + 0.0722 * channels[2]!.mean) / 255;
+  return lum(channels[0]!.mean, channels[1]!.mean, channels[2]!.mean);
 }
 
 /** Text colour that reads on a background of luminance `lum`, from the palette when one fits. */
@@ -155,7 +158,7 @@ export async function toPdf(pngs: Buffer[]): Promise<Buffer> {
 }
 
 /** How far down open background goes under a column [x0, x1] from y0 (fractions of the frame). */
-export type Room = (x0: number, x1: number, y0: number) => number;
+type Room = (x0: number, x1: number, y0: number) => number;
 
 /**
  * The open background around the text column, read from the template itself (pixel maths, $0):
@@ -190,14 +193,12 @@ export async function freeRegion(bg: Buffer, seed: { x: number; y: number }): Pr
   };
 }
 
-export interface TextPlan {
+interface TextPlan {
   x: number; w: number;
   head: { size: number; lines: string[] }; body: { size: number; lines: string[] };
   /** Text didn't fit even at the smallest readable sizes; it was cut with "…". */
   overflow: boolean;
 }
-
-const wrapAt = (text: string, wPx: number, size: number) => wrap(text, Math.max(4, Math.floor(wPx / (size * 0.6))));
 
 /**
  * Where and how big this slide's headline + body go. Keeps the example's column when the text

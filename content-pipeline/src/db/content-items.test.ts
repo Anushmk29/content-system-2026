@@ -57,9 +57,10 @@ test('review → approve → schedule; approval writes status, columns and log t
 test('illegal events are refused and change nothing', async () => {
   const [id] = await items.createDraftSet(await selectedTopic(), [piece('x', 'thread')], []);
   await assert.rejects(items.transition(id!, { event: 'approve' }), (e) => e instanceof IllegalTransition && /draft/.test(e.message));
-  await items.transition(id!, { event: 'auto_approve' });
-  assert.deepEqual(await row(id!), { status: 'approved', approval_status: 'not_required', approval_lane: 'safe_auto' });
-  assert.deepEqual(await approvals(id!), [{ decision: 'not_required', decided_by: 'safe_auto' }]);
+  await items.transition(id!, { event: 'submit', lane: 'review' });
+  await items.transition(id!, { event: 'approve' });
+  assert.deepEqual(await row(id!), { status: 'approved', approval_status: 'approved', approval_lane: 'review' });
+  assert.deepEqual(await approvals(id!), [{ decision: 'approved', decided_by: null }]);
   await items.transition(id!, { event: 'schedule', postizId: 'p', utmUrl: 'u', scheduledAt: new Date().toISOString() });
   await assert.rejects(items.transition(id!, { event: 'reject' }), IllegalTransition, 'already handed to Postiz');
   assert.equal((await row(id!)).status, 'queued');

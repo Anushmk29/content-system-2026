@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export interface FontInfo { family: string; weight: number; italic: boolean }
+interface FontInfo { family: string; weight: number; italic: boolean }
 
 /**
  * Family name and weight read from a TTF/OTF file (the names fontconfig will register it

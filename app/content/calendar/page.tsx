@@ -7,9 +7,6 @@ import { CalendarGrid, type CalItem } from '../ui/CalendarGrid';
 import { ItemDrawer } from '../ui/ItemDrawer';
 import { withParams } from '../ui/format';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const DAY = 86_400_000;
 
 export default async function CalendarPage({ searchParams }: { searchParams: SearchParams }) {

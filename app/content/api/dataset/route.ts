@@ -1,9 +1,6 @@
 import { getContext, exportDataset } from '@pratapai/content-pipeline';
 import { deniedAdmin as denied } from '../guard';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 // GET /content/api/dataset → training dataset as JSONL download.
 //   ?queue=1          only Jev-vs-LLM disagreements you haven't labelled yet
 //   ?workspace=<id>   per-customer slice (default 'default')

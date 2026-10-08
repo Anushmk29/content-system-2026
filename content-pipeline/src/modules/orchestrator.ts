@@ -3,8 +3,10 @@
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { createRepo } from '../db/repo.ts';
 import { loadBrand } from '../services/brand-service.ts';
+import { withCostScope } from '../cost-ledger.ts';
+import { randomUUID } from 'node:crypto';
 
-export interface RunRecord extends ModuleResult {
+interface RunRecord extends ModuleResult {
   moduleId: string;
   startedAt: string;
   finishedAt: string;
@@ -31,7 +33,7 @@ export async function runModule(module: Module, ctx: ModuleContext): Promise<Run
   try {
     log.info('run start');
     await loadBrand(ctx); // prompts read the saved brand kit
-    const result = await module.run(ctx);
+    const result = await withCostScope({ feature: module.id, refType: 'module_run', refId: randomUUID() }, () => module.run(ctx));
     rec = {
       moduleId: module.id, ...result,
       startedAt, finishedAt: new Date().toISOString(), durationMs: Math.round(performance.now() - t0),

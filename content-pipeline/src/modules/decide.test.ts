@@ -71,7 +71,7 @@ test('no LLM: Jev decides at any confidence', async () => {
   assert.deepEqual((await run({ llm: false, jev: JEV_UNSURE })).logged, ['jev:used']);
 });
 
-test('no LLM, no Jev, no rules: throws instead of inventing an answer', async () => {
+test('no LLM, no Jev: throws instead of inventing an answer', async () => {
   const { ctx } = ctxWith({ llm: false, jev: null });
   await assert.rejects(decide(ctx, TOPIC_SCORE, randomUUID(), { title: 't' }), /nothing to decide with/);
 });

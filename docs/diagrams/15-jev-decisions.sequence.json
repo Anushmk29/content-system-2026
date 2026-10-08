@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Jev decisions: route, log, label",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1060,
+      640
+    ]
+  },
+  "participants": [
+    {
+      "id": "mod",
+      "type": "backend",
+      "label": "Module",
+      "sublabel": "scoring / qc-gate"
+    },
+    {
+      "id": "decide",
+      "type": "backend",
+      "label": "decide()",
+      "sublabel": "modules/decide.ts"
+    },
+    {
+      "id": "jev",
+      "type": "external",
+      "label": "Jev",
+      "sublabel": "typesafe/jev-1.13"
+    },
+    {
+      "id": "llm",
+      "type": "cloud",
+      "label": "LLM teacher",
+      "sublabel": "adapters.claude"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "decisions",
+      "sublabel": "content schema"
+    },
+    {
+      "id": "ds",
+      "type": "backend",
+      "label": "dataset-service",
+      "sublabel": "services/"
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Training page",
+      "sublabel": "LabelQueue"
+    }
+  ],
+  "segments": [
+    {
+      "from": 160,
+      "to": 368,
+      "label": "Route (CONTENT_JEV_MODE)"
+    },
+    {
+      "from": 386,
+      "to": 556,
+      "label": "Label + export"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-call",
+      "from": "mod",
+      "to": "decide",
+      "y": 180,
+      "label": "decide(TOPIC_SCORE | QC_SIGNALS)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-jev",
+      "from": "decide",
+      "to": "jev",
+      "y": 214,
+      "label": "POST /api/alpha/decisions",
+      "variant": "default",
+      "note": "skipped when mode=off"
+    },
+    {
+      "id": "m-jev-r",
+      "from": "jev",
+      "to": "decide",
+      "y": 248,
+      "label": "answers + usage.cost",
+      "variant": "return"
+    },
+    {
+      "id": "m-primary",
+      "from": "decide",
+      "to": "db",
+      "y": 282,
+      "label": "primary, conf >= 0.8: jev used=true",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-llm",
+      "from": "decide",
+      "to": "llm",
+      "y": 316,
+      "label": "complete(CONTENT_DECISION_MODEL)",
+      "variant": "default"
+    },
+    {
+      "id": "m-shadow",
+      "from": "decide",
+      "to": "db",
+      "y": 350,
+      "label": "claude used=true, jev used=false",
+      "variant": "dashed"
+    },
+    {
+      "id": "m-view",
+      "from": "ui",
+      "to": "ds",
+      "y": 404,
+      "label": "getTrainingOverview -> queue",
+      "variant": "default"
+    },
+    {
+      "id": "m-label",
+      "from": "ui",
+      "to": "ds",
+      "y": 438,
+      "label": "POST /content/api/decisions",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-human",
+      "from": "ds",
+      "to": "db",
+      "y": 472,
+      "label": "source=human row",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-seed",
+      "from": "ui",
+      "to": "ds",
+      "y": 506,
+      "label": "POST .../decisions/seed",
+      "variant": "dashed"
+    },
+    {
+      "id": "m-export",
+      "from": "ui",
+      "to": "ds",
+      "y": 540,
+      "label": "GET /content/api/dataset",
+      "variant": "default"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "decide",
+      "from": 180,
+      "to": 350,
+      "type": "backend"
+    },
+    {
+      "participant": "jev",
+      "from": 214,
+      "to": 248,
+      "type": "external"
+    },
+    {
+      "participant": "ds",
+      "from": 404,
+      "to": 540,
+      "type": "backend"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Who decides",
+      "items": [
+        "off: Jev never called; LLM decides",
+        "shadow (default with a key): LLM answer used, Jev logged used=false",
+        "primary: Jev used when weakest confidence >= CONTENT_JEV_MIN_CONFIDENCE (0.8)",
+        "No LLM: Jev at any confidence, else throws"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Dataset",
+      "items": [
+        "Label = human row if any, else teacher",
+        "Weight: outcome 3 > human 2 > teacher 1",
+        "Seeds (LLM practice drafts) stay out of the export until you label them",
+        "JSONL download; ?queue=1 = unlabelled only"
+      ]
+    }
+  ]
+}

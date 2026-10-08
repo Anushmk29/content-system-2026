@@ -4,8 +4,9 @@
 // dataset service only ever pass a definition + a subject.
 // The Jev question wording mirrors scoringSystem / qcSystem in
 // prompts/brand-brain.ts; keep them in sync or the shadow comparison stops being apples-to-apples.
-import type { JevAnswer, JevQuestion } from '../adapters/jev.ts';
-import { FUNNEL_STAGES, clamp1to5, type FunnelStage } from '../../core/src/index.ts';
+import type { JevAnswer, JevQuestion, JevRule } from '../adapters/jev.ts';
+import { HOOK_PATTERNS } from '../hook-patterns.ts';
+import { isFunnelStage, clamp1to5, type FunnelStage } from '../../core/src/index.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { parseTopicScore, type ParsedTopicScore } from './score-parse.ts';
 import { QC_SIGNAL_KEYS, parseQcSignals, type QcSignals } from './qc-parse.ts';
@@ -23,8 +24,6 @@ export interface DecisionTaskDef<S, T> {
   prompt(state: string): string;
   /** LLM text → answer. `subject` is absent for hand labels. */
   parse(raw: string, subject?: S): T;
-  /** Answer with no model at all. Omitted when there is no sensible rule. */
-  rules?(subject: S): T;
 }
 
 /** One line on who the brand writes for, so Jev scores fit against the right audience. */
@@ -71,7 +70,7 @@ const yesNo = (instructions: string): JevQuestion => ({
 });
 
 // Same seven signals and wording as qcSystem / buildQcPrompt in brand-brain.ts.
-export const QC_QUESTIONS: Record<(typeof QC_SIGNAL_KEYS)[number], JevQuestion> = {
+const QC_QUESTIONS: Record<(typeof QC_SIGNAL_KEYS)[number], JevQuestion> = {
   hasClientClaim: yesNo("Does the draft name or describe a specific client's results or story?"),
   hasMetric: yesNo('Does it state a number, percentage, revenue, time saved or other metric?'),
   isControversialOpinion: yesNo('Does it take a strong stance many people would push back on?'),
@@ -102,7 +101,7 @@ export function topicScoreFromJev(a: Record<string, JevAnswer>): ParsedTopicScor
   };
   const p = a.pillar?.choice, f = a.funnelStage?.choice;
   if (p && pillarSlugs().includes(p)) out.pillar = p;
-  if (f && (FUNNEL_STAGES as readonly string[]).includes(f)) out.funnelStage = f as FunnelStage;
+  if (isFunnelStage(f)) out.funnelStage = f;
   return out;
 }
 
@@ -126,7 +125,6 @@ export const TOPIC_SCORE: DecisionTaskDef<TopicSubject, ParsedTopicScore> = {
   prompt: buildScorePrompt, parse: (raw) => parseTopicScore(raw),
 };
 
-// No rules: the QC gate's format rules already apply without any model.
 export const QC_SIGNALS: DecisionTaskDef<Parameters<typeof qcState>[0], QcSignals> = {
   task: 'qc_signals', state: qcState, questions: QC_QUESTIONS, fromJev: qcSignalsFromJev,
   get system() { return qcSystem(); },
@@ -136,3 +134,44 @@ export const QC_SIGNALS: DecisionTaskDef<Parameters<typeof qcState>[0], QcSignal
 export const DECISION_TASKS: Record<DecisionTask, DecisionTaskDef<never, unknown>> = {
   topic_score: TOPIC_SCORE, qc_signals: QC_SIGNALS,
 };
+
+// ---- competitor posts (Decode → hunt score) ----------------------------------------
+// Jev-only (no LLM teacher: it runs on every scraped post). Built per call from the Brand Kit,
+// so lanes, ICP and the creator profile are this install's own. Wording adapted from
+// competitor-hunter's jev/competitor-hunt.json (MIT, Charles Dove).
+export const competitorPostQuestions = (): Record<string, JevQuestion> => {
+  const b = brand();
+  const lanes = Object.fromEntries(pillarSlugs().map((slug) => {
+    const p = b.pillars.find((x) => x.slug === slug);
+    return [slug, p?.description || p?.label || slug];
+  }));
+  return {
+    lane: {
+      type: 'choice',
+      instructions: `Which of ${b.name}'s content lanes does this post's topic belong to?`,
+      criteria: { ...lanes, adjacent: 'Related to our audience but none of our lanes', off_niche: 'Unrelated to our audience' },
+    },
+    icp_fit: {
+      type: 'score',
+      instructions: `${audience()} How much would that audience care about this post's topic?`,
+      criteria: ['not at all', 'a little', 'clearly relevant', 'exactly their problem'],
+    },
+    hook_type: { type: 'choice', instructions: 'Which kind of hook does the post open with?', criteria: { ...HOOK_PATTERNS } },
+    proof: {
+      type: 'score',
+      instructions: 'How much concrete proof does the post show (numbers, screenshots, named results, a demo)?',
+      criteria: ['none, pure opinion', 'vague claims', 'some specifics', 'hard proof'],
+    },
+    replicable: { type: 'noul', instructions: `Could ${b.name} make its own version of this post with its own experience, without copying it?` },
+    sponsored: { type: 'noul', instructions: 'Is this post paid, sponsored, an ad or a paid partnership?' },
+    news_pegged: { type: 'noul', instructions: 'Does the post depend on a specific recent news event or launch?' },
+  };
+};
+
+export const COMPETITOR_RULES: JevRule[] = [{ when: { question: 'sponsored', noul_gte: 0.8 }, set: { paid: true } }];
+
+export const competitorState = (p: { platform: string; post_type: string; duration_s: number | null; caption: string; transcript?: string | null }) =>
+  [`PLATFORM: ${p.platform} (${p.post_type}${p.duration_s ? `, ${p.duration_s}s` : ''})`,
+   `CAPTION:\n${p.caption.slice(0, 3000)}`,
+   p.transcript && `TRANSCRIPT (start):\n${p.transcript.slice(0, 1500)}`,
+   `OUR PROFILE: ${brand().name}${brand().tagline ? ` — ${brand().tagline}` : ''}. ${audience()}`].filter(Boolean).join('\n');

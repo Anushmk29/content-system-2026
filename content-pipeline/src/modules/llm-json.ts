@@ -2,6 +2,9 @@
 // LLMs wrap JSON in prose or ```fences```; this finds the first balanced top-level
 // object, ignoring braces inside strings. Pure + dependency-free → unit-tested.
 
+/** A JSON field read as trimmed text ('' when it isn't a string). */
+export const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
 // Chars that legally follow a string's real closing quote in JSON (after whitespace).
 const CLOSES_STRING = new Set([',', '}', ']', ':', undefined]);
 

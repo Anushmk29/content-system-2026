@@ -7,9 +7,6 @@ import { PageHead, Section, NeedsDb } from '../ui/viz';
 import { Decode } from '../ui/Decode';
 import { Competitors } from '../ui/Competitors';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export default async function DecodePage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await params(searchParams);
   let view: DecodeView | null = null;
@@ -21,7 +18,9 @@ export default async function DecodePage({ searchParams }: { searchParams: Searc
       listStyles(getContext()).then((r) => r.map((s) => ({ id: s.id, name: s.name }))),
     ]);
   } catch (e) { error = (e as Error).message; }
-  const apify = (await loadHealth()).adapters.find((a) => a.id === 'apify');
+  const health = await loadHealth();
+  const apify = health.adapters.find((a) => a.id === 'apify');
+  const youtube = health.adapters.find((a) => a.id === 'youtube');
   const head = (
     <PageHead crumb="decode" title="Decode the competition."
       sub={view?.run
@@ -39,13 +38,13 @@ export default async function DecodePage({ searchParams }: { searchParams: Searc
   return (
     <>
       {head}
-      {apify?.state !== 'ok' && (
+      {apify?.state !== 'ok' && youtube?.state !== 'ok' && (
         <p className="mono" style={{ fontSize: 12, color: 'var(--warn)', margin: '-8px 0 20px' }}>
           Apify {apify?.state ?? 'unconfigured'}: {apify?.message}. Add CONTENT_APIFY_TOKEN to .env and restart to start decoding.
         </p>
       )}
       {view.competitors.length === 0 && competitors}
-      <Decode view={view} initial={{ f: sp.f, v: sp.v, by: sp.by }} apifyReady={apify?.state === 'ok'} styles={styles} />
+      <Decode view={view} initial={{ f: sp.f, v: sp.v, by: sp.by }} apifyReady={apify?.state === 'ok'} youtubeReady={youtube?.state === 'ok'} styles={styles} />
       {view.competitors.length > 0 && competitors}
     </>
   );

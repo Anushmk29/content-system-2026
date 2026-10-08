@@ -3,10 +3,9 @@
 // (/content/setup) reuses them one step at a time. Every field is something the drafts or the
 // creatives actually use; nothing here is decoration. BrandProof shows the saved kit as a post.
 import { useMemo, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import type { Brand, FontRow } from '@pratapai/content-pipeline';
 import { useAction } from './actions';
-import { CATEGORY } from './format';
+import { CATEGORY, splitPosts } from './format';
 
 type Saved = () => void;
 const SAVE = '/content/api/brand';
@@ -62,8 +61,6 @@ export function IdentitySection({ kit, onSaved, cta }: { kit: Brand; onSaved?: S
   );
 }
 
-const splitPosts = (t: string) => t.split(/^\s*---\s*$/m).map((s) => s.trim()).filter(Boolean);
-
 export function VoiceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Saved; cta?: string }) {
   const a = useAction();
   const [tab, setTab] = useState<'write' | 'samples' | 'import'>('write');
@@ -99,7 +96,7 @@ export function VoiceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Save
         <p className="bk-note">We fetch your best posts from the last year, then you turn them into a voice guide. Takes a minute or two and costs a few cents.</p>
         <div className="bk-line">
           <select className="input" value={platform} onChange={(e) => { setPlatform(e.target.value); setHandle(kit.ownHandles[e.target.value as keyof Brand['ownHandles']] ?? ''); }} aria-label="Platform" style={{ width: 150 }}>
-            <option value="linkedin">LinkedIn</option><option value="x">X</option><option value="instagram">Instagram</option><option value="facebook">Facebook</option>
+            <option value="linkedin">LinkedIn</option><option value="x">X</option><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="youtube">YouTube</option>
           </select>
           <input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} style={{ flex: '1 1 240px' }}
             placeholder={platform === 'linkedin' ? 'Your LinkedIn page or profile link' : platform === 'facebook' ? 'Your Facebook page link' : '@yourhandle'} aria-label="Your account" />
@@ -119,6 +116,7 @@ type PillarDraft = { label: string; description: string; target: number };
 export function AudienceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Saved; cta?: string }) {
   const a = useAction();
   const [audience, setAudience] = useState(kit.audience);
+  const [beliefs, setBeliefs] = useState((kit.audienceBeliefs ?? []).join('\n'));
   const [pillars, setPillars] = useState<PillarDraft[]>(kit.pillars.length ? kit.pillars : [{ label: '', description: '', target: 0 }]);
   const set = (i: number, p: Partial<PillarDraft>) => setPillars(pillars.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const total = pillars.reduce((s, p) => s + (Number(p.target) || 0), 0);
@@ -128,6 +126,10 @@ export function AudienceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: S
       <label className="bk-field"><span className="bk-lab">Who you write for</span>
         <textarea className="input" rows={4} value={audience} onChange={(e) => setAudience(e.target.value)}
           placeholder="e.g. Owners of 1–3 independent cafés. Great at coffee, not at numbers. Worried about cash flow, short on time." /></label>
+      <label className="bk-field"><span className="bk-lab">What they wrongly believe <span className="faint">(optional, one per line)</span></span>
+        <textarea className="input" rows={3} value={beliefs} onChange={(e) => setBeliefs(e.target.value)}
+          placeholder={'e.g. You need a big team to use AI\nAutomation is only for tech companies'} />
+        <span className="bk-note">Each post’s angle flips one of these: what they think → what’s actually true.</span></label>
       <div className="bk-field">
         <span className="bk-lab">Themes</span>
         {/* The split itself: each theme's share of posts, as one bar. */}
@@ -156,7 +158,7 @@ export function AudienceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: S
         </span>
       </div>
       <SaveRow a={a} label={cta} disabled={!audience.trim() || filled.length < 1}
-        onClick={() => save(a, { audience, pillars: filled.map((p) => ({ ...p, slug: kit.pillars.find((k) => k.label === p.label)?.slug })) }, onSaved)} />
+        onClick={() => save(a, { audience, audienceBeliefs: beliefs.split('\n').map((x) => x.trim()).filter(Boolean), pillars: filled.map((p) => ({ ...p, slug: kit.pillars.find((k) => k.label === p.label)?.slug })) }, onSaved)} />
     </Card>
   );
 }
@@ -200,7 +202,6 @@ function GoogleFonts({ families }: { families: string[] }) {
 }
 
 export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand; fonts: FontRow[]; curated: readonly string[]; onSaved?: Saved; cta?: string }) {
-  const router = useRouter();
   const a = useAction();
   const up = useAction();
   const [heading, setHeading] = useState(kit.headingFont ?? '');
@@ -215,10 +216,8 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
     if (!files?.length) return;
     const form = new FormData();
     for (const f of Array.from(files)) form.append('file', f);
-    up.clear();
-    const res = await fetch(path, { method: 'POST', body: form }).then((r) => r.json()).catch(() => null);
-    if (!res?.ok) { alert(res?.error ?? 'Upload failed'); return; }
-    if (key === 'logo') { setLogoV(Date.now()); router.refresh(); }
+    if (!(await up.call(key, 'POST', path, form))) return;
+    if (key === 'logo') setLogoV(Date.now());
     if (key === 'font') location.reload();
   };
   const fontPick = (label: string, value: string, set: (v: string) => void, weight: number) => (
@@ -292,9 +291,9 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
   );
 }
 
-const NETS = [['linkedin', 'LinkedIn', 'Page or profile link'], ['x', 'X', '@handle'], ['instagram', 'Instagram', '@handle'], ['facebook', 'Facebook', 'Page link']] as const;
+const NETS = [['linkedin', 'LinkedIn', 'Page or profile link'], ['x', 'X', '@handle'], ['instagram', 'Instagram', '@handle'], ['facebook', 'Facebook', 'Page link'], ['youtube', 'YouTube', '@handle or channel link']] as const;
 
-export function AccountsSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Saved; cta?: string }) {
+function AccountsSection({ kit }: { kit: Brand }) {
   const a = useAction();
   const [h, setH] = useState<Record<string, string>>({ ...kit.ownHandles });
   return (
@@ -305,7 +304,7 @@ export function AccountsSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: S
             <input className="input mono" style={{ fontSize: 12 }} placeholder={ph} value={h[k] ?? ''} onChange={(e) => setH({ ...h, [k]: e.target.value })} /></label>
         ))}
       </div>
-      <SaveRow a={a} label={cta} onClick={() => save(a, { ownHandles: h }, onSaved)} />
+      <SaveRow a={a} onClick={() => save(a, { ownHandles: h })} />
     </Card>
   );
 }

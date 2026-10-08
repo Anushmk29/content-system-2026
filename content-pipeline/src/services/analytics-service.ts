@@ -3,7 +3,7 @@
 // client's own median on that platform (Own Results scrape). Plus manual metrics entry.
 import type { ModuleContext } from '../modules/module.ts';
 import { createRepo, type PerformanceRow, type SeriesRow } from '../db/repo.ts';
-import { LIVE_STATUSES } from '../../core/src/index.ts';
+import { LIVE_STATUSES, median } from '../../core/src/index.ts';
 
 export const ANALYTICS_RANGES = [7, 30, 90] as const;
 export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number];
@@ -35,17 +35,13 @@ export interface Analytics {
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 const reachOf = (p: PerformanceRow) => n(p.reach ?? p.impressions);
-export const median = (xs: number[]): number | null => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
-  return Math.round((s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2) * 100) / 100;
+const vsOf = (ps: PerformanceRow[]) => {
+  const m = median(ps.flatMap((p) => (p.vs_usual == null ? [] : [Number(p.vs_usual)])));
+  return m == null ? null : Math.round(m * 100) / 100;
 };
-const vsOf = (ps: PerformanceRow[]) => median(ps.flatMap((p) => (p.vs_usual == null ? [] : [Number(p.vs_usual)])));
 
 export function breakdown(posts: PerformanceRow[], key: 'platform' | 'pillar'): Breakdown[] {
-  const m = new Map<string, PerformanceRow[]>();
-  for (const p of posts) m.set(p[key], [...(m.get(p[key]) ?? []), p]);
-  return [...m.entries()].map(([k, ps]) => ({
+  return [...Map.groupBy(posts, (p) => p[key])].map(([k, ps]) => ({
     key: k, posts: ps.length, reach: ps.reduce((s, p) => s + reachOf(p), 0),
     engagement: ps.reduce((s, p) => s + n(p.engagement), 0), vsUsual: vsOf(ps),
   })).sort((a, b) => (b.vsUsual ?? -1) - (a.vsUsual ?? -1) || b.engagement - a.engagement || b.reach - a.reach);
@@ -108,7 +104,7 @@ export async function getAnalytics(ctx: ModuleContext, range: AnalyticsRange): P
 }
 
 const METRIC_FIELDS = ['impressions', 'reach', 'likes', 'comments', 'shares', 'saves', 'clicks', 'qualifiedEngagement'] as const;
-export type MetricsInput = Partial<Record<(typeof METRIC_FIELDS)[number], unknown>>;
+type MetricsInput = Partial<Record<(typeof METRIC_FIELDS)[number], unknown>>;
 
 /** Hand-entered post metrics (e.g. copied from LinkedIn). Only for items that are live. */
 export async function recordMetrics(ctx: ModuleContext, itemId: string, input: MetricsInput): Promise<{ ok: boolean; message: string }> {

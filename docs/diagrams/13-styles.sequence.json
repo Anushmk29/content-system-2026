@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Styles: reference image to finished creative",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1060,
+      680
+    ]
+  },
+  "participants": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Styles page",
+      "sublabel": "/content/styles"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Route handlers",
+      "sublabel": "/content/api/styles"
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "style-service.ts",
+      "sublabel": "content-pipeline"
+    },
+    {
+      "id": "or",
+      "type": "cloud",
+      "label": "OpenRouter",
+      "sublabel": "complete + generateImage"
+    },
+    {
+      "id": "tpl",
+      "type": "backend",
+      "label": "template.ts",
+      "sublabel": "Satori + resvg"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Postgres",
+      "sublabel": "style_refs, style_variants"
+    }
+  ],
+  "segments": [
+    {
+      "from": 176,
+      "to": 342,
+      "label": "Add + fix reference"
+    },
+    {
+      "from": 388,
+      "to": 442,
+      "label": "Draft text"
+    },
+    {
+      "from": 488,
+      "to": 608,
+      "label": "Generate + view"
+    }
+  ],
+  "messages": [
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 190,
+      "label": "POST /styles (name, 1-10 files)",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "svc",
+      "y": 218,
+      "label": "createStyle()",
+      "variant": "emphasis"
+    },
+    {
+      "from": "svc",
+      "to": "or",
+      "y": 246,
+      "label": "complete ANALYSE_PROMPT (vision)"
+    },
+    {
+      "from": "svc",
+      "to": "tpl",
+      "y": 274,
+      "label": "makeTemplate: render + refine"
+    },
+    {
+      "from": "svc",
+      "to": "db",
+      "y": 302,
+      "label": "insert content.style_refs",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "svc",
+      "y": 330,
+      "label": "POST /styles/[id] { note } → remakeTemplate()"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 402,
+      "label": "POST /styles/[id]/draft { topic }"
+    },
+    {
+      "from": "svc",
+      "to": "or",
+      "y": 430,
+      "label": "draftCarousel: DRAFT_PROMPT + brandSystem()"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 502,
+      "label": "POST /styles/[id]/generate { placement, text }",
+      "variant": "emphasis"
+    },
+    {
+      "from": "svc",
+      "to": "or",
+      "y": 530,
+      "label": "generateImage (fresh or new size)",
+      "variant": "dashed"
+    },
+    {
+      "from": "svc",
+      "to": "tpl",
+      "y": 558,
+      "label": "renderTemplate per slide",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "ui",
+      "y": 576,
+      "label": "PNG data URLs (+ pdf for linkedin)",
+      "variant": "return"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "y": 597,
+      "label": "GET /styles/[id]/image → getStyleImage"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 184,
+      "to": 226
+    },
+    {
+      "participant": "svc",
+      "from": 212,
+      "to": 310
+    },
+    {
+      "participant": "api",
+      "from": 396,
+      "to": 438
+    },
+    {
+      "participant": "svc",
+      "from": 424,
+      "to": 436
+    },
+    {
+      "participant": "api",
+      "from": 496,
+      "to": 584
+    },
+    {
+      "participant": "svc",
+      "from": 524,
+      "to": 564
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Also on /content/api/styles/[id]",
+      "items": [
+        "PATCH renameStyle, DELETE deleteStyle; image?kind=preview uses previewStyle",
+        "generateCreative uses brandLook() fonts + logo; generateImage needs CONTENT_OPENROUTER_API_KEY"
+      ]
+    }
+  ]
+}

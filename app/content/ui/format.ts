@@ -29,6 +29,12 @@ export function compact(n: number | null | undefined): string {
   return Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n ?? 0)).toLowerCase();
 }
 
+/** "1.2x" — a multiple of the usual; "—" when unknown. */
+export const times = (v: number | null | undefined): string => (v == null ? '—' : `${Number(v).toFixed(1)}x`);
+
+/** Posts or slides written one after another with a line of --- between them. */
+export const splitPosts = (t: string): string[] => t.split(/^\s*---\s*$/m).map((s) => s.trim()).filter(Boolean);
+
 export function prettyPillar(p: string): string {
   return p.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -75,7 +81,7 @@ export const HEALTH_COLOR: Record<string, string> = {
 
 /** Needs attention? Jev and Apify are optional, so leaving them unconfigured is fine. */
 export const healthIssue = (a: { id: string; state: string }) =>
-  a.state !== 'ok' && !(a.state === 'unconfigured' && (a.id === 'jev' || a.id === 'apify'));
+  a.state !== 'ok' && !(a.state === 'unconfigured' && ['jev', 'apify', 'youtube', 'transcriber'].includes(a.id));
 
 /** Rebuild a URL with some query params changed (null removes). */
 export function withParams(path: string, current: Record<string, string | undefined>, patch: Record<string, string | null>): string {

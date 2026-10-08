@@ -6,12 +6,12 @@ import type { Db } from './client.ts';
 import type { NewContentItem } from './repo.ts';
 import { CONTENT_EVENTS, APPROVAL_STATUS_OF, type ApprovalLane, type ContentEvent } from '../../core/src/index.ts';
 
-export type Transition =
+type Transition =
   | { event: 'submit'; lane: ApprovalLane }
-  | { event: 'auto_approve' }
   | { event: 'approve' | 'changes' | 'reject'; decidedBy?: string | null; note?: string | null }
   | { event: 'schedule'; postizId: string; utmUrl: string; scheduledAt: string }
-  | { event: 'capture'; signal: string };
+  | { event: 'capture'; signal: string }
+  | { event: 'upload'; url: string };
 
 export class IllegalTransition extends Error {
   /** Current status, or null if the item doesn't exist. */
@@ -36,10 +36,10 @@ export function createContentItems(db: Db) {
           const r = await q.query<{ id: string }>(
             `insert into content.content_items
                (topic_id, anchor_id, title, pillar, funnel_stage, platform, format,
-                hook, cta, body, source_material, risk_level, owner, offer_idx, hook_ref, status)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'draft') returning id`,
+                hook, cta, body, source_material, risk_level, owner, offer_idx, hook_ref, hook_pattern, status)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'draft') returning id`,
             [topicId, ids[0] ?? null, p.title, p.pillar, p.funnelStage, p.platform, p.format,
-             p.hook ?? null, p.cta ?? null, p.body ?? null, p.sourceMaterial ?? null, p.riskLevel ?? null, p.owner ?? null, p.offerIdx ?? null, p.hookRef ?? null],
+             p.hook ?? null, p.cta ?? null, p.body ?? null, p.sourceMaterial ?? null, p.riskLevel ?? null, p.owner ?? null, p.offerIdx ?? null, p.hookRef ?? null, p.hookPattern ?? null],
           );
           ids.push(r.rows[0]!.id);
         }
@@ -58,13 +58,13 @@ export function createContentItems(db: Db) {
         let set = '', params: unknown[] = [];
         switch (t.event) {
           case 'submit': set = `, approval_lane = $4, approval_status = 'pending'`; params = [t.lane]; break;
-          case 'auto_approve': set = `, approval_lane = 'safe_auto', approval_status = 'not_required'`; break;
           case 'approve': case 'changes': case 'reject':
             // lane never changes on a human decision (escalate-only)
             set = `, approval_lane = coalesce(approval_lane, 'review'), approval_status = $4`;
             params = [APPROVAL_STATUS_OF[t.event]]; break;
           case 'schedule': set = `, postiz_id = $4, utm_url = $5, scheduled_at = $6`; params = [t.postizId, t.utmUrl, t.scheduledAt]; break;
           case 'capture': set = `, performance_signal = $4`; params = [t.signal]; break;
+          case 'upload': set = `, published_url = $4, published_at = now()`; params = [t.url]; break;
         }
         const r = await q.query<{ approval_lane: string; approval_status: string }>(
           `update content.content_items set status = $2 ${set}
@@ -76,14 +76,12 @@ export function createContentItems(db: Db) {
           const cur = await q.query<{ status: string }>(`select status from content.content_items where id = $1`, [id]);
           throw new IllegalTransition(id, t.event, cur.rows[0]?.status ?? null);
         }
-        if (t.event === 'auto_approve' || t.event === 'approve' || t.event === 'changes' || t.event === 'reject') {
+        if (t.event === 'approve' || t.event === 'changes' || t.event === 'reject') {
           const row = r.rows[0]!;
           await q.query(
             `insert into content.approvals (content_item_id, lane, decision, decided_by, note, decided_at)
              values ($1,$2,$3,$4,$5, now())`,
-            [id, row.approval_lane, row.approval_status,
-             t.event === 'auto_approve' ? 'safe_auto' : t.decidedBy ?? null,
-             t.event === 'auto_approve' ? null : t.note ?? null],
+            [id, row.approval_lane, row.approval_status, t.decidedBy ?? null, t.note ?? null],
           );
         }
       }),

@@ -33,25 +33,5 @@ test('classifyLane: any sensitive signal -> sensitive', () => {
 });
 
 test('classifyLane: plain new post -> review', () => {
-  assert.equal(classifyLane({ isNewPositioning: true }), 'review');
   assert.equal(classifyLane({}), 'review');
-});
-
-test('classifyLane: safe_auto is DISABLED by default (v1)', () => {
-  const templated = { isTemplateBased: true, derivedFromApprovedContent: true };
-  assert.equal(classifyLane(templated), 'review');               // default: not allowed
-  assert.equal(classifyLane(templated, true), 'safe_auto');      // only when explicitly enabled
-});
-
-test('classifyLane: sensitive beats safe_auto even when enabled', () => {
-  assert.equal(
-    classifyLane({ isTemplateBased: true, derivedFromApprovedContent: true, hasMetric: true }, true),
-    'sensitive',
-  );
-});
-
-test('classifyLane: new positioning never auto-approves, even when safe_auto is earned', () => {
-  const s = { isTemplateBased: true, derivedFromApprovedContent: true };
-  assert.equal(classifyLane(s, true), 'safe_auto');
-  assert.equal(classifyLane({ ...s, isNewPositioning: true }, true), 'review');
 });

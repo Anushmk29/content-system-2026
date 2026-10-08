@@ -79,7 +79,7 @@ const ctx = {
       },
     },
   },
-  env: { allowSafeAuto: false },
+  env: {},
   logger: { warn() {}, error() {}, info() {} },
 } as unknown as ModuleContext;
 let runId = '';
@@ -108,6 +108,7 @@ test('decode run: scrape → per-competitor median → formats → batched break
   r = (await getDecodeRun(ctx, runId))!;
   assert.equal(r.run.status, 'done');
   assert.equal(r.run.decoded, 10);
+  assert.ok(r.posts.every((p) => p.hunt_score != null && !p.paid), 'no Jev: every post ranks on demand alone');
   assert.deepEqual(r.posts.map((p) => p.seq), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.equal(r.run.cost_apify_usd, 0.5);
   assert.ok(Math.abs(r.run.cost_ai_usd - 0.03) < 1e-9, `ai cost ${r.run.cost_ai_usd}`);
@@ -155,7 +156,7 @@ test('stealFormat: copies the structure into drafts for only the chosen platform
 test('hook library: ranked best first, used by drafting, rewrite locked after approval', async () => {
   const hooks = await listHooks(ctx);
   assert.ok(hooks.length > 0);
-  assert.ok(hooks.every((h, i) => i === 0 || hooks[i - 1]!.lift >= h.lift), 'best first');
+  assert.ok(hooks.every((h, i) => i === 0 || (hooks[i - 1]!.hunt ?? -1) >= (h.hunt ?? -1)), 'best hunt score first');
   assert.equal(new Set(hooks.map((h) => h.url)).size, hooks.length, 'one row per post');
 
   const repo = createRepo(db);
@@ -166,7 +167,9 @@ test('hook library: ranked best first, used by drafting, rewrite locked after ap
   const ref = await db.query<{ hook_ref: string }>(`select hook_ref from content.content_items where id = $1`, [ids[0]]);
   assert.equal(ref.rows[0]!.hook_ref, best.id);
 
-  assert.deepEqual(await rewriteWithHook(ctx, ids[0]!, hooks.at(-1)!.id), { ok: true, message: 'Rewritten with that hook' });
+  const rw = await rewriteWithHook(ctx, ids[0]!, hooks.at(-1)!.id);
+  assert.equal(rw.ok, true);
+  assert.match(rw.message, /^Rewritten with that hook/);
   const after = (await repo.getItem(ids[0]!))!;
   assert.deepEqual([after.hook, after.body, after.hook_ref], ['New hook', 'rewritten', hooks.at(-1)!.id]);
   await db.query(`update content.content_items set status = 'approved' where id = $1`, [ids[0]]);

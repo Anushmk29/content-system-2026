@@ -1,0 +1,178 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Ideas: signal to topic to angle to draft",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "ops",
+      "label": "Ideas page (operator)"
+    },
+    {
+      "id": "engine",
+      "label": "content-pipeline"
+    },
+    {
+      "id": "db",
+      "label": "Postgres content.*"
+    }
+  ],
+  "mainPath": [
+    "capture",
+    "inputs",
+    "research",
+    "topics",
+    "decide",
+    "angles",
+    "pick",
+    "draft",
+    "items"
+  ],
+  "nodes": [
+    {
+      "id": "capture",
+      "lane": "ops",
+      "col": 0,
+      "type": "frontend",
+      "label": "Capture signal",
+      "sublabel": "POST /api/signals",
+      "tag": "addSignal"
+    },
+    {
+      "id": "inputs",
+      "width": 130,
+      "lane": "db",
+      "col": 0,
+      "type": "database",
+      "label": "research_inputs",
+      "sublabel": "status 'new'"
+    },
+    {
+      "id": "research",
+      "width": 130,
+      "lane": "engine",
+      "col": 1,
+      "type": "backend",
+      "label": "Research module",
+      "sublabel": "signal → topic"
+    },
+    {
+      "id": "topics",
+      "lane": "db",
+      "col": 2,
+      "type": "database",
+      "label": "content.topics",
+      "sublabel": "scored, status 'new'"
+    },
+    {
+      "id": "decide",
+      "lane": "ops",
+      "col": 2,
+      "type": "frontend",
+      "label": "Select / drop",
+      "sublabel": "PATCH {decision}",
+      "tag": "decideTopic"
+    },
+    {
+      "id": "angles",
+      "lane": "engine",
+      "col": 3,
+      "type": "cloud",
+      "label": "Find 5 angles",
+      "sublabel": "buildAnglePrompt",
+      "tag": "audienceBeliefs"
+    },
+    {
+      "id": "pick",
+      "lane": "ops",
+      "col": 4,
+      "type": "frontend",
+      "label": "Pick angle",
+      "sublabel": "PATCH {angle: 0-4}",
+      "tag": "pickAngle"
+    },
+    {
+      "id": "draft",
+      "lane": "engine",
+      "col": 4,
+      "type": "backend",
+      "label": "draftTopic",
+      "sublabel": "chosenAngle",
+      "tag": "buildDraftPrompt"
+    },
+    {
+      "id": "items",
+      "lane": "db",
+      "col": 5,
+      "type": "database",
+      "label": "content_items",
+      "sublabel": "+ claims, topic 'used'"
+    }
+  ],
+  "edges": [
+    {
+      "from": "capture",
+      "to": "inputs",
+      "label": "insert"
+    },
+    {
+      "from": "inputs",
+      "to": "research",
+      "label": "next run"
+    },
+    {
+      "from": "research",
+      "to": "topics",
+      "label": "topic + score"
+    },
+    {
+      "from": "topics",
+      "to": "decide",
+      "label": "review"
+    },
+    {
+      "from": "decide",
+      "to": "angles",
+      "label": "POST /topics/[id]"
+    },
+    {
+      "from": "angles",
+      "to": "pick",
+      "label": "topics.angles"
+    },
+    {
+      "from": "pick",
+      "to": "draft",
+      "label": "angle_idx"
+    },
+    {
+      "from": "draft",
+      "to": "items",
+      "label": "createDraftSet"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Angles",
+      "items": [
+        "Belief (from Brand Kit audienceBeliefs) → our truth, strength 1-10",
+        "No pick → strongest; an angle failure never blocks the draft"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Topics",
+      "items": [
+        "PATCH {decision} or {angle: 0-4|null}; POST finds 5 angles",
+        "decideTopic refuses a topic already 'used'"
+      ]
+    }
+  ]
+}

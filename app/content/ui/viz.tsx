@@ -29,7 +29,7 @@ export function PageHead({ crumb, title, sub, children }: { crumb: string; title
 }
 
 // ---- KPI strip: joined cells, first = ink (the live count), last = lime (money/outcome) --
-export interface KpiCell { label: string; value: number | string | null; denom?: string; unit?: string; sub?: ReactNode; href?: string; money?: boolean }
+interface KpiCell { label: string; value: number | string | null; denom?: string; unit?: string; sub?: ReactNode; href?: string; money?: boolean }
 
 export function KpiStrip({ items }: { items: KpiCell[] }) {
   return (
@@ -69,7 +69,7 @@ export function Section({ eyebrow, title, meta, children, id }: { eyebrow: strin
 // ---- pane (old name Tile: a paper-2 box with a hairline and a micro-label head) --
 export function Tile({ title, hint, link, span, tall, children }: {
   title?: string; hint?: ReactNode; link?: { href: string; label: string };
-  span?: 2 | 3 | 4; tall?: boolean; children: ReactNode;
+  span?: 2 | 4; tall?: boolean; children: ReactNode;
 }) {
   const cls = ['tile', span ? `span-${span}` : '', tall ? 'row-2' : ''].filter(Boolean).join(' ');
   return (
@@ -131,29 +131,6 @@ export function Ring({ value, max, size = 92, color = 'var(--ink)', label }: {
         strokeDasharray={`${frac * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       <text x="50%" y="56%" textAnchor="middle" fill="var(--ink)" fontSize={size / 4.2} fontWeight={500}
         fontFamily="var(--font-ui)">{label ?? `${value}/${max}`}</text>
-    </svg>
-  );
-}
-
-// ---- donut -----------------------------------------------------------------
-export function Donut({ segments, center, sub, size = 128 }: {
-  segments: { label: string; value: number; color: string }[]; center: ReactNode; sub: string; size?: number;
-}) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  const r = size / 2 - 10, c = 2 * Math.PI * r;
-  let off = 0;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={sub}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--rule)" strokeWidth={12} />
-      {segments.map((s, i) => {
-        const d = (s.value / total) * c;
-        const el = <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={12}
-          strokeDasharray={`${d} ${c - d}`} strokeDashoffset={-off} transform={`rotate(-90 ${size / 2} ${size / 2})`} />;
-        off += d;
-        return el;
-      })}
-      <text x="50%" y="50%" textAnchor="middle" fill="var(--ink)" fontSize={24} fontWeight={500} fontFamily="var(--font-ui)">{center}</text>
-      <text x="50%" y="64%" textAnchor="middle" fill="var(--faint)" fontSize={9.5} letterSpacing={1.2} fontFamily="var(--font-mono)">{sub.toUpperCase()}</text>
     </svg>
   );
 }
@@ -240,20 +217,6 @@ export function BarList({ rows, color = 'var(--ink)' }: {
         );
         return r.href ? <Link key={i} href={r.href} style={{ textDecoration: 'none' }}>{inner}</Link> : <div key={i}>{inner}</div>;
       })}
-    </div>
-  );
-}
-
-export function Legend({ items }: { items: { label: string; color: string; value?: ReactNode }[] }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {items.map((it, i) => (
-        <div key={i} className="mono" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5 }}>
-          <span style={{ width: 8, height: 8, background: it.color }} />
-          <span className="muted" style={{ flex: 1 }}>{it.label}</span>
-          {it.value != null && <span>{it.value}</span>}
-        </div>
-      ))}
     </div>
   );
 }

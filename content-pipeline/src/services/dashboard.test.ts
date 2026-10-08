@@ -26,9 +26,14 @@ async function draftSet(claims: string[] = []): Promise<string[]> {
   return items.createDraftSet(t.rows[0]!.id, [piece('blog', 'article'), piece('linkedin', 'founder_post'), piece('x', 'thread')], claims);
 }
 
+async function approve(id: string) {
+  await items.transition(id, { event: 'submit', lane: 'review' });
+  await items.transition(id, { event: 'approve' });
+}
+
 test('board: one card per idea, sitting at its least-advanced piece', async () => {
   const [anchor, li, x] = await draftSet();
-  await items.transition(li!, { event: 'auto_approve' });
+  await approve(li!);
   await items.transition(x!, { event: 'reject' });
   const board = await getIdeaBoard(ctx);
   const card = board.ideas.find((i) => i.id === anchor)!;
@@ -37,14 +42,14 @@ test('board: one card per idea, sitting at its least-advanced piece', async () =
   assert.ok(board.columns.find((c) => c.status === 'draft')!.ideas.includes(card));
   const detail = await getItemDetail(ctx, li!);
   assert.equal(detail!.pieces.length, 3);
-  assert.equal(detail!.approvals[0]!.decision, 'not_required');
+  assert.equal(detail!.approvals[0]!.decision, 'approved');
 });
 
 test('copy edits allowed before approval, refused after', async () => {
   const [a, b] = await draftSet();
   assert.equal((await editItemCopy(ctx, a!, { body: 'new body' })).ok, true);
   assert.equal((await repo.getItem(a!))!.body, 'new body');
-  await items.transition(b!, { event: 'auto_approve' });
+  await approve(b!);
   assert.equal((await editItemCopy(ctx, b!, { body: 'sneaky' })).ok, false);
   assert.equal((await editItemCopy(ctx, a!, { body: 42 })).ok, false, 'non-text refused');
 });
@@ -53,7 +58,7 @@ test('planning a time: only approved + not yet in Postiz, only in the future', a
   const [a, b] = await draftSet();
   const future = new Date(Date.now() + 3 * 86_400_000).toISOString();
   assert.equal((await planItem(ctx, a!, future)).ok, false, 'draft refused');
-  await items.transition(b!, { event: 'auto_approve' });
+  await approve(b!);
   assert.equal((await planItem(ctx, b!, new Date(Date.now() - 1000).toISOString())).ok, false, 'past refused');
   assert.equal((await planItem(ctx, b!, future)).ok, true);
   await items.transition(b!, { event: 'schedule', postizId: 'p', utmUrl: 'u', scheduledAt: future });
@@ -62,7 +67,7 @@ test('planning a time: only approved + not yet in Postiz, only in the future', a
 
 test('today: unproven claim on an approved item is blocked; mix counts ideas not copies', async () => {
   const ids = await draftSet(['saved 10 hours a week']);
-  for (const id of ids) await items.transition(id, { event: 'auto_approve' });
+  for (const id of ids) await approve(id);
   const today = await getToday(ctx, health);
   const blocked = today.actions.filter((a) => a.kind === 'blocked' && ids.includes(a.itemId!));
   assert.equal(blocked.length, 3);
@@ -85,7 +90,7 @@ test('week starts Monday UTC; runway is days of content at target pace', () => {
 test('metrics: only for live items, whole numbers; analytics picks them up', async () => {
   const [a] = await draftSet();
   assert.equal((await recordMetrics(ctx, a!, { reach: 10 })).ok, false, 'draft refused');
-  await items.transition(a!, { event: 'auto_approve' });
+  await approve(a!);
   await items.transition(a!, { event: 'schedule', postizId: 'p', utmUrl: 'u', scheduledAt: new Date(Date.now() - 60_000).toISOString() });
   await items.goLiveDue();
   assert.equal((await recordMetrics(ctx, a!, { reach: -1 })).ok, false);
@@ -105,4 +110,13 @@ test('activity merges approvals and runs newest first', async () => {
   const feed = await repo.activity(50);
   assert.deepEqual(new Set(feed.map((f) => f.kind)), new Set(['approval', 'run']));
   assert.ok(feed.every((f, i) => i === 0 || feed[i - 1]!.at >= f.at));
+});
+
+test('client actions: logged newest first; a failed write never throws', async () => {
+  const { logAction, getActions } = await import('./health-service.ts');
+  await logAction(ctx, { role: 'client', method: 'LOGIN', path: '/content/login' });
+  await logAction(ctx, { role: 'client', method: 'PATCH', path: '/content/api/items/x' });
+  const rows = await getActions(ctx, 10);
+  assert.deepEqual(rows.slice(0, 2).map((r) => r.method).sort(), ['LOGIN', 'PATCH']);
+  await logAction({ db: { query: () => Promise.reject(new Error('down')) } } as unknown as ModuleContext, { role: 'client', method: 'POST', path: '/p' });
 });

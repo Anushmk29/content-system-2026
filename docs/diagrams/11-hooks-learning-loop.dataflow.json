@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Hook learning loop: results to next draft",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      1080,
+      500
+    ]
+  },
+  "stages": [
+    {
+      "label": "Results in"
+    },
+    {
+      "label": "Stored"
+    },
+    {
+      "label": "Learned (views)"
+    },
+    {
+      "label": "Draft inputs"
+    },
+    {
+      "label": "Draft out"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "own",
+      "type": "external",
+      "label": "Own Results",
+      "sublabel": "weekly self-scrape",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "manual",
+      "type": "frontend",
+      "label": "POST /api/metrics",
+      "sublabel": "hand-entered",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "metrics",
+      "type": "database",
+      "label": "content.metrics",
+      "sublabel": "per capture",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "baseline",
+      "type": "database",
+      "label": "v_own_baseline",
+      "sublabel": "median_reactions",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "perf",
+      "type": "database",
+      "label": "v_content_performance",
+      "sublabel": "vs_usual = likes / median",
+      "stage": 2,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "weights",
+      "type": "database",
+      "label": "v_hook_pattern_weights",
+      "sublabel": "avg ln(vs_usual) · n/(n+5)",
+      "stage": 2,
+      "row": 2,
+      "width": 150
+    },
+    {
+      "id": "proven",
+      "type": "backend",
+      "label": "provenHooks",
+      "sublabel": "lift × (1 + weight)",
+      "stage": 3,
+      "row": 0
+    },
+    {
+      "id": "advice",
+      "type": "backend",
+      "label": "patternAdvice",
+      "sublabel": "work for you / avoid",
+      "stage": 3,
+      "row": 2
+    },
+    {
+      "id": "prompt",
+      "type": "cloud",
+      "label": "buildDraftPrompt",
+      "sublabel": "draftTopic",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "items",
+      "type": "database",
+      "label": "content_items",
+      "sublabel": "hook_pattern",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "from": "own",
+      "to": "metrics",
+      "label": "syncOwnMetrics"
+    },
+    {
+      "from": "manual",
+      "to": "metrics",
+      "label": "insertMetrics",
+      "route": "straight"
+    },
+    {
+      "from": "own",
+      "to": "baseline",
+      "label": "is_self posts",
+      "route": "straight",
+      "labelDy": 30
+    },
+    {
+      "from": "metrics",
+      "to": "perf",
+      "label": "latest row",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "baseline",
+      "to": "perf",
+      "label": "median"
+    },
+    {
+      "from": "perf",
+      "to": "weights",
+      "label": "vs_usual",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "from": "weights",
+      "to": "proven",
+      "label": "rerank"
+    },
+    {
+      "from": "weights",
+      "to": "advice",
+      "label": "|w| > 0.05",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": 30
+    },
+    {
+      "from": "proven",
+      "to": "prompt",
+      "label": "top 10 hooks",
+      "route": "straight"
+    },
+    {
+      "from": "advice",
+      "to": "prompt",
+      "label": "advice"
+    },
+    {
+      "from": "prompt",
+      "to": "items",
+      "label": "hookPattern",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "from": "items",
+      "to": "weights",
+      "label": "published · 90d",
+      "variant": "dashed",
+      "route": "bottom-channel"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "The loop",
+      "items": [
+        "Published content_items carry hook_pattern; their latest metrics give vs_usual",
+        "Weight = mean ln(vs_usual) over 90 days, shrunk by n/(n+5) so one lucky post can't dominate",
+        "Next draft: winners rerank, advice names patterns to use / avoid"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Also uses the weight",
+      "items": [
+        "scoreHookOptions: 0.4·contrast + 0.35·pattern_strength + 0.25·platform_fit + 10 × weight",
+        "Picks each draft's opening and the drawer's rewrite options",
+        "patternAdvice is null until results exist"
+      ]
+    }
+  ]
+}

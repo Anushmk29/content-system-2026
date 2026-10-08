@@ -136,7 +136,6 @@ create table if not exists content.content_items (
   approval_lane   content.approval_lane,
   approval_status content.approval_status not null default 'not_required',
   owner           text,
-  draft_url       text,
   asset_url       text,
   postiz_id       text,
   published_url   text,
@@ -198,6 +197,7 @@ create index if not exists idx_metrics_item on content.metrics(content_item_id);
 
 -- Leads were removed (2026-10): success is engagement + reach, not an inbox. Drop the old table
 -- (and the view that read it) on databases created before that.
+drop view if exists content.v_hook_pattern_weights; -- depends on v_content_performance (recreated at the end)
 drop view if exists content.v_content_performance;
 drop table if exists content.leads cascade;
 
@@ -379,7 +379,6 @@ create table if not exists content.style_refs (
   source_png      bytea not null,
   plate_png       bytea,                             -- null when the plate call failed; analysis still saved
   analysis_cost_usd numeric(10,4) not null default 0,
-  use_count       int not null default 0,
   created_at      timestamptz not null default now()
 );
 alter table content.style_refs enable row level security;
@@ -461,6 +460,7 @@ do $$ begin
     drop view if exists content.v_approval_queue;
     drop view if exists content.v_publish_ready;
     drop view if exists content.v_topic_queue;
+    drop view if exists content.v_hook_pattern_weights;
     drop view if exists content.v_content_performance;
     alter table content.topics alter column pillar type text;
     alter table content.content_items alter column pillar type text;
@@ -497,15 +497,6 @@ alter table content.content_items add column if not exists hook_ref uuid referen
 -- ===========================================================================
 -- VIEWS
 -- ===========================================================================
-create or replace view content.v_approval_queue as
-select ci.id, ci.title, ci.platform, ci.format, ci.pillar,
-       ci.risk_level, ci.approval_lane, ci.approval_status, ci.scheduled_at,
-       (select count(*) from content.claims c
-         where c.content_item_id = ci.id and c.proof_url is null) as unproven_claims
-from content.content_items ci
-where ci.approval_status = 'pending'
-order by ci.created_at;
-
 create or replace view content.v_publish_ready as
 select ci.*
 from content.content_items ci
@@ -541,6 +532,7 @@ create or replace function content.norm_url(u text) returns text language sql im
 $$;
 
 -- "Your usual": median reactions per platform in the latest scrape of the client's own accounts.
+drop view if exists content.v_hook_pattern_weights;
 drop view if exists content.v_content_performance;
 create or replace view content.v_own_baseline as
 select p.platform, percentile_cont(0.5) within group (order by p.reactions)::float8 as median_reactions, count(*)::int as posts
@@ -571,3 +563,94 @@ left join lateral (
   order by mm.captured_at desc limit 1
 ) m on true
 left join content.v_own_baseline b on b.platform = ci.platform::text;
+
+-- Cost ledger: one row per paid call (LLM, image, Apify run, Jev decision), written by the
+-- adapters themselves so no call path can skip it. `feature` says what the money was for
+-- ('untagged' = a call path nobody wrapped in withCostScope — the Costs page shows it red).
+create table if not exists content.cost_events (
+  id            bigserial primary key,
+  at            timestamptz not null default now(),
+  provider      text not null,               -- openrouter | anthropic | apify | jev
+  kind          text not null,               -- llm | image | scrape | decision
+  feature       text not null default 'untagged',
+  model         text,
+  ref_type      text,                        -- decode_run | content_item | style_ref | …
+  ref_id        text,
+  input_tokens  int,
+  output_tokens int,
+  units         int,                         -- Apify results, images
+  cost_usd      numeric(10,6) not null default 0,
+  ok            boolean not null default true,
+  error         text,
+  meta          jsonb
+);
+create index if not exists cost_events_at_idx on content.cost_events (at desc);
+create index if not exists cost_events_feature_idx on content.cost_events (feature, at desc);
+
+-- What the client did: logins + every write request (app/content/api/guard.ts). The admin
+-- login is view-only, so only client rows land here. Read on the admin System page.
+create table if not exists content.audit_log (
+  id     bigserial primary key,
+  at     timestamptz not null default now(),
+  role   text not null,
+  method text not null,               -- LOGIN | POST | PATCH | DELETE
+  path   text not null
+);
+create index if not exists audit_log_at_idx on content.audit_log (at desc);
+alter table content.audit_log enable row level security;
+
+-- ===========================================================================
+-- HUNT + VIRAL (docs/breezy-tinkering-catmull.md phases 1-6)
+-- ===========================================================================
+-- Phase 1: local transcripts (yt-dlp + faster-whisper), cached by post URL so a rerun or our
+-- own posts never transcribe twice.
+create table if not exists content.transcripts (
+  norm_url        text primary key,                  -- content.norm_url(post url)
+  text            text not null,
+  segments        jsonb not null default '[]',       -- [{ start, end, text }]
+  lang            text,
+  duration_s      int,
+  created_at      timestamptz not null default now()
+);
+alter table content.transcripts enable row level security;
+
+-- Phase 3: hunt scoring. jev = the raw Jev answers; demand/fit 0-1; hunt_score 0-100.
+alter table content.decoded_posts add column if not exists jev jsonb;
+alter table content.decoded_posts add column if not exists lane text;
+alter table content.decoded_posts add column if not exists hook_type text;
+alter table content.decoded_posts add column if not exists demand real;
+alter table content.decoded_posts add column if not exists fit real;
+alter table content.decoded_posts add column if not exists hunt_score real;
+alter table content.decoded_posts add column if not exists paid boolean not null default false;
+alter table content.decode_runs add column if not exists jev_health real;    -- pilot's mean weakest-answer confidence
+alter table content.decode_runs add column if not exists cost_jev_usd numeric(10,4) not null default 0;
+
+-- Phase 4: skeletons. Per post: how the value is delivered + the CTA kind; per format: templates.
+alter table content.decoded_posts add column if not exists value_structure text;
+alter table content.decoded_posts add column if not exists cta_type text;
+alter table content.decode_formats add column if not exists hook_template text;
+alter table content.decode_formats add column if not exists value_template text;
+alter table content.decode_formats add column if not exists cta_template text;
+
+-- Phase 5: angles (Contrast Formula) per topic; angle_idx = the one the draft uses.
+alter table content.topics add column if not exists angles jsonb;
+alter table content.topics add column if not exists angle_idx smallint;
+-- The Brand Kit's audience beliefs (myths the audience holds) — angles flip these first.
+alter table content.brand_kit add column if not exists audience_beliefs jsonb not null default '[]';
+
+-- Phase 6: which hook pattern a draft used, and what each pattern earns on OUR posts:
+-- mean ln(vs_usual) over 90 days, shrunk toward 0 by n/(n+5) so 1 lucky post can't dominate.
+alter table content.content_items add column if not exists hook_pattern text;
+-- Scripts tab: when the founder filmed a Short script (null = still to film).
+alter table content.content_items add column if not exists filmed_at timestamptz;
+-- Videos tab: why a video's transcription failed (null = fine or not tried).
+alter table content.decoded_posts add column if not exists transcript_error text;
+create or replace view content.v_hook_pattern_weights as
+select ci.hook_pattern as pattern,
+       count(*)::int as posts,
+       (avg(ln(greatest(p.vs_usual, 0.01))) * count(*) / (count(*) + 5))::float8 as weight
+from content.content_items ci
+join content.v_content_performance p on p.id = ci.id
+where ci.hook_pattern is not null and p.vs_usual is not null
+  and ci.published_at > now() - interval '90 days'
+group by ci.hook_pattern;

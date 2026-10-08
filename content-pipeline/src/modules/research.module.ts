@@ -18,7 +18,7 @@ const YEAR_MINUTES = 365 * 24 * 60;
  * Web check from free TinyFish Search (last 12 months) + Fetch of the top 3 pages; our own LLM
  * writes the check from that text, so every cited URL is one we actually loaded. null = no results.
  */
-export async function tinyfishMarketCheck(ctx: ModuleContext, signal: string): Promise<string | null> {
+async function tinyfishMarketCheck(ctx: ModuleContext, signal: string): Promise<string | null> {
   const tf = ctx.adapters.tinyfish;
   // ponytail: the signal's first line is the query (titles/questions search well); an LLM-written
   // query would cost one more call per topic.

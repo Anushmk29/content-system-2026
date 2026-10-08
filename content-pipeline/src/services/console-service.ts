@@ -12,7 +12,7 @@ import {
 } from '../db/repo.ts';
 
 /** A draft awaiting approval, bundled with the claims a reviewer must check (§10.3). */
-export interface ApprovalQueueItem {
+interface ApprovalQueueItem {
   item: ContentItemRow;
   claims: ClaimRow[];
 }
@@ -45,7 +45,7 @@ export async function getOperatorConsole(ctx: ModuleContext): Promise<OperatorCo
   return { signals, reviewTopics, selectedTopics, approvalQueue };
 }
 
-export interface AddSignalInput {
+interface AddSignalInput {
   rawText: string;
   channel?: string | null;
   sourceUrl?: string | null;

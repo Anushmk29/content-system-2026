@@ -1,21 +1,25 @@
 // Apify adapter — scrapes competitors' PUBLIC posts for Decode. One public actor per
 // platform, none of which needs a login cookie (public-pages-only rule). Each actor's
-// output is normalised into one ScrapedPost shape; the run's real USD cost is returned
-// so the dashboard can show Apify spend next to AI spend.
+// output is normalised into one ScrapedPost shape; the run's real USD cost (runCostUsd) is
+// returned and reported to the cost ledger.
 //
 // Actor ids are the common public ones but were NOT verified against a live token when
 // this was written — override any of them with CONTENT_APIFY_ACTOR_<X|INSTAGRAM|LINKEDIN|FACEBOOK>.
 // The normaliser reads several known field spellings per value for the same reason.
-import type { Adapter } from './adapter.ts';
+import { fetchJson, type Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
+import type { OnCost } from '../cost-ledger.ts';
 
 const API = 'https://api.apify.com/v2';
 
-export const DECODE_PLATFORMS = ['x', 'instagram', 'linkedin', 'facebook'] as const;
+/** Platforms Apify scrapes; YouTube goes through the free Data API instead (adapters/youtube.ts). */
+export const APIFY_PLATFORMS = ['x', 'instagram', 'linkedin', 'facebook'] as const;
+export type ApifyPlatform = (typeof APIFY_PLATFORMS)[number];
+export const DECODE_PLATFORMS = [...APIFY_PLATFORMS, 'youtube'] as const;
 export type DecodePlatform = (typeof DECODE_PLATFORMS)[number];
 
-export const DEFAULT_ACTORS: Record<DecodePlatform, string> = {
+const DEFAULT_ACTORS: Record<ApifyPlatform, string> = {
   x: 'apidojo~tweet-scraper',
   instagram: 'apify~instagram-post-scraper',
   linkedin: 'harvestapi~linkedin-company-posts',
@@ -39,21 +43,17 @@ export interface ScrapedPost {
 
 export interface ApifyAdapter extends Adapter {
   /** Scrape one account's recent public posts. `handle` is a handle or a profile/page URL. */
-  scrape(platform: DecodePlatform, handle: string, opts: { since: Date; limit: number }): Promise<{ posts: ScrapedPost[]; costUsd: number }>;
+  scrape(platform: ApifyPlatform, handle: string, opts: { since: Date; limit: number }): Promise<{ posts: ScrapedPost[]; costUsd: number }>;
 }
 
-export function createApify(token: string | undefined, actors: Partial<Record<DecodePlatform, string>> = {}): ApifyAdapter {
-  const actorFor = (p: DecodePlatform) => (actors[p] ?? DEFAULT_ACTORS[p]).replace('/', '~');
+export function createApify(token: string | undefined, actors: Partial<Record<ApifyPlatform, string>> = {}, onCost?: OnCost): ApifyAdapter {
+  const actorFor = (p: ApifyPlatform) => (actors[p] ?? DEFAULT_ACTORS[p]).replace('/', '~');
 
-  async function call<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${API}${path}`, {
-      ...init,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(90_000),
-    });
-    if (!res.ok) throw new Error(`Apify ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    return (await res.json()) as T;
-  }
+  const call = <T>(path: string, init?: RequestInit) => fetchJson<T>(`${API}${path}`, {
+    ...init,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(90_000),
+  }, 'Apify');
 
   return {
     id: 'apify',
@@ -61,31 +61,64 @@ export function createApify(token: string | undefined, actors: Partial<Record<De
 
     async scrape(platform, handle, { since, limit }) {
       if (!token) throw new Error('Apify not configured (set CONTENT_APIFY_TOKEN)');
-      type Run = { id: string; status: string; defaultDatasetId: string; usageTotalUsd?: number; statusMessage?: string };
-      let run = (await call<{ data: Run }>(`/acts/${actorFor(platform)}/runs?waitForFinish=60`, {
-        method: 'POST', body: JSON.stringify(actorInput(platform, handle, since, limit)),
-      })).data;
-      // ponytail: polls up to ~10 min per account; a longer actor run fails this account only.
-      for (let i = 0; i < 10 && ['READY', 'RUNNING'].includes(run.status); i++) {
-        run = (await call<{ data: Run }>(`/actor-runs/${run.id}?waitForFinish=60`)).data;
+      type Run = ApifyRun & { id: string; status: string; defaultDatasetId: string; statusMessage?: string };
+      const actor = actorFor(platform);
+      const log = (r: Run | undefined, items: number, error?: string) => {
+        const costUsd = r ? runCostUsd(r, items) : 0;
+        onCost?.({ provider: 'apify', kind: 'scrape', model: actor, units: items, costUsd, ok: !error, error, meta: { runId: r?.id, platform, handle } });
+        return costUsd;
+      };
+      let run: Run | undefined;
+      try {
+        run = (await call<{ data: Run }>(`/acts/${actor}/runs?waitForFinish=60`, {
+          method: 'POST', body: JSON.stringify(actorInput(platform, handle, since, limit)),
+        })).data;
+        // ponytail: polls up to ~10 min per account; a longer actor run fails this account only.
+        for (let i = 0; i < 10 && ['READY', 'RUNNING'].includes(run.status); i++) {
+          run = (await call<{ data: Run }>(`/actor-runs/${run.id}?waitForFinish=60`)).data;
+        }
+        if (run.status !== 'SUCCEEDED') throw new Error(`Apify ${platform} run ${run.status}${run.statusMessage ? `: ${run.statusMessage}` : ''}`);
+        const items = await call<Record<string, unknown>[]>(`/datasets/${run.defaultDatasetId}/items?clean=true&limit=${limit}`);
+        const posts = items.map((it) => normalise(platform, it)).filter((p): p is ScrapedPost => !!p)
+          .filter((p) => !p.postedAt || new Date(p.postedAt) >= since);
+        return { posts, costUsd: log(run, items.length) };
+      } catch (e) {
+        log(run, 0, (e as Error).message); // a failed run still bills its start + compute
+        throw e;
       }
-      if (run.status !== 'SUCCEEDED') throw new Error(`Apify ${platform} run ${run.status}${run.statusMessage ? `: ${run.statusMessage}` : ''}`);
-      const items = await call<Record<string, unknown>[]>(`/datasets/${run.defaultDatasetId}/items?clean=true&limit=${limit}`);
-      const posts = items.map((it) => normalise(platform, it)).filter((p): p is ScrapedPost => !!p)
-        .filter((p) => !p.postedAt || new Date(p.postedAt) >= since);
-      return { posts, costUsd: Number(run.usageTotalUsd ?? 0) };
     },
 
     async healthCheck(): Promise<HealthReport> {
       if (!token) return report('apify', 'unconfigured', 'no CONTENT_APIFY_TOKEN — Decode can’t scrape until it’s set');
       try {
         const me = await call<{ data: { username?: string } }>('/users/me');
-        return report('apify', 'ok', `connected as ${me.data.username ?? 'unknown'}`, { actors: DECODE_PLATFORMS.map(actorFor) });
+        return report('apify', 'ok', `connected as ${me.data.username ?? 'unknown'}`, { actors: APIFY_PLATFORMS.map(actorFor) });
       } catch (e) {
         return report('apify', 'error', (e as Error).message);
       }
     },
   };
+}
+
+export interface ApifyRun {
+  usageTotalUsd?: number;
+  chargedEventCounts?: Record<string, number>;
+  pricingInfo?: {
+    pricingModel?: string;
+    pricePerUnitUsd?: number;
+    pricingPerEvent?: { actorChargeEvents?: Record<string, { eventPriceUsd?: number }> };
+  };
+}
+
+/** What a run really bills. `usageTotalUsd` is right once Apify settles, but read the moment a
+ *  run finishes it can still be ~$0 (Decode logged $0.0001 for $0.15 of runs on 2026-10-06), so
+ *  also price the charged events / results ourselves and take the larger. */
+export function runCostUsd(run: ApifyRun, items: number): number {
+  const p = run.pricingInfo;
+  const events = Object.entries(run.chargedEventCounts ?? {})
+    .reduce((s, [k, n]) => s + n * (p?.pricingPerEvent?.actorChargeEvents?.[k]?.eventPriceUsd ?? 0), 0);
+  const perResult = p?.pricingModel === 'PRICE_PER_DATASET_ITEM' ? (p.pricePerUnitUsd ?? 0) * items : 0;
+  return Math.max(Number(run.usageTotalUsd ?? 0), events + perResult);
 }
 
 /** "@acme", "acme" or a profile URL → the bare handle. */
@@ -99,7 +132,7 @@ function pageUrl(platform: 'linkedin' | 'facebook', h: string): string {
   return platform === 'linkedin' ? `https://www.linkedin.com/company/${bareHandle(h)}/` : `https://www.facebook.com/${bareHandle(h)}`;
 }
 
-function actorInput(platform: DecodePlatform, handle: string, since: Date, limit: number): Record<string, unknown> {
+function actorInput(platform: ApifyPlatform, handle: string, since: Date, limit: number): Record<string, unknown> {
   const day = since.toISOString().slice(0, 10);
   switch (platform) {
     case 'x': return { twitterHandles: [bareHandle(handle)], maxItems: limit, sort: 'Latest', start: day };
@@ -127,7 +160,7 @@ function date(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-export function normalise(platform: DecodePlatform, it: Record<string, unknown>): ScrapedPost | null {
+export function normalise(platform: ApifyPlatform, it: Record<string, unknown>): ScrapedPost | null {
   const url = str(pick(it, 'url', 'postUrl', 'post_url', 'linkedinUrl', 'twitterUrl', 'topLevelUrl', 'link'));
   if (!url) return null;
   const caption = str(pick(it, 'caption', 'text', 'fullText', 'full_text', 'content', 'commentary', 'message')) ?? '';

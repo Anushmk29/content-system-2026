@@ -38,12 +38,13 @@ Each decision is defined once in [decision-tasks.ts](../content-pipeline/src/mod
    ```bash
    psql "$CONTENT_DATABASE_URL" -f db/schema.sql
    ```
-2. Add the Jev settings to `.env`:
+2. Jev runs through OpenRouter (`typesafe/jev-1.13` on `/api/alpha/decisions`) using the same `CONTENT_OPENROUTER_API_KEY` as the LLM. There is no separate key. Optional settings:
    ```
-   CONTENT_TYPESAFE_API_KEY=your-key
-   CONTENT_JEV_MODE=shadow
+   CONTENT_JEV_MODE=shadow            # off | shadow (default) | primary
    CONTENT_JEV_MIN_CONFIDENCE=0.8
+   CONTENT_JEV_MODEL=typesafe/jev-1.13
    ```
+   Each decision costs about $0.00001 and is logged in the cost ledger (`/content/costs`, feature = the module that asked).
 3. Restart the app. The health panel shows a `jev` row with the current mode.
 4. Leave it in `shadow` for about two weeks before considering `primary` (see section 7).
 

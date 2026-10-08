@@ -1,0 +1,215 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Today page, todos, metrics and health",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "ui",
+      "label": "/content (Today)"
+    },
+    {
+      "id": "api",
+      "label": "API routes"
+    },
+    {
+      "id": "svc",
+      "label": "Services"
+    },
+    {
+      "id": "data",
+      "label": "Adapters and Postgres"
+    }
+  ],
+  "mainPath": [
+    "page",
+    "today",
+    "repo"
+  ],
+  "nodes": [
+    {
+      "id": "page",
+      "lane": "ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Today page",
+      "sublabel": "TodoTracker, ItemDrawer",
+      "width": 170
+    },
+    {
+      "id": "healthApi",
+      "lane": "api",
+      "col": 0,
+      "type": "backend",
+      "label": "GET /content/api/health",
+      "sublabel": "200 always",
+      "width": 190
+    },
+    {
+      "id": "todosApi",
+      "lane": "api",
+      "col": 2,
+      "type": "backend",
+      "label": "/content/api/todos",
+      "sublabel": "POST; PATCH, DELETE [id]",
+      "width": 190
+    },
+    {
+      "id": "metricsApi",
+      "lane": "api",
+      "col": 3,
+      "type": "backend",
+      "label": "POST /content/api/metrics",
+      "sublabel": "{ itemId, numbers }",
+      "width": 190
+    },
+    {
+      "id": "health",
+      "lane": "svc",
+      "col": 0,
+      "type": "backend",
+      "label": "getSystemHealth()",
+      "sublabel": "rollup, 60s probe cache",
+      "width": 170
+    },
+    {
+      "id": "today",
+      "lane": "svc",
+      "col": 1,
+      "type": "backend",
+      "label": "getToday()",
+      "sublabel": "actions, upNext, kpis",
+      "width": 170
+    },
+    {
+      "id": "todoSvc",
+      "lane": "svc",
+      "col": 2,
+      "type": "backend",
+      "label": "todo-service.ts",
+      "sublabel": "createTodo, updateTodo",
+      "width": 170
+    },
+    {
+      "id": "record",
+      "lane": "svc",
+      "col": 3,
+      "type": "backend",
+      "label": "recordMetrics()",
+      "sublabel": "live items only",
+      "width": 170
+    },
+    {
+      "id": "adapters",
+      "lane": "data",
+      "col": 0,
+      "type": "external",
+      "label": "healthCheck()",
+      "sublabel": "claude, postiz, jev, apify",
+      "width": 170
+    },
+    {
+      "id": "repo",
+      "lane": "data",
+      "col": 1,
+      "type": "database",
+      "label": "createRepo(ctx.db)",
+      "sublabel": "items, topics, runs",
+      "width": 170
+    },
+    {
+      "id": "todos",
+      "lane": "data",
+      "col": 2,
+      "type": "database",
+      "label": "content.todos",
+      "sublabel": "priority 1-5, status",
+      "width": 170
+    },
+    {
+      "id": "metrics",
+      "lane": "data",
+      "col": 3,
+      "type": "database",
+      "label": "content.metrics",
+      "sublabel": "insertMetrics",
+      "width": 170
+    }
+  ],
+  "edges": [
+    {
+      "from": "page",
+      "to": "today",
+      "label": "getToday()"
+    },
+    {
+      "from": "healthApi",
+      "to": "health"
+    },
+    {
+      "from": "health",
+      "to": "adapters",
+      "label": "probe"
+    },
+    {
+      "from": "health",
+      "to": "today",
+      "label": "loadHealth()"
+    },
+    {
+      "from": "today",
+      "to": "repo",
+      "label": "11 repo reads"
+    },
+    {
+      "from": "page",
+      "to": "todosApi",
+      "label": "add, status, delete"
+    },
+    {
+      "from": "todosApi",
+      "to": "todoSvc"
+    },
+    {
+      "from": "todoSvc",
+      "to": "todos"
+    },
+    {
+      "from": "page",
+      "to": "metricsApi",
+      "label": "MetricsForm"
+    },
+    {
+      "from": "metricsApi",
+      "to": "record"
+    },
+    {
+      "from": "record",
+      "to": "metrics"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "getToday() actions, in order",
+      "items": [
+        "fix (broken adapter or module), blocked, approve (oldest first)",
+        "topic, draft, signal, Shorts to film, todos with priority 1-2"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "KPIs and lists",
+      "items": [
+        "publishedThisWeek vs WEEKLY_POST_TARGET, runwayDays, reach7d, best7d",
+        "upNext: next 7 days plus approved items with no time"
+      ]
+    }
+  ]
+}

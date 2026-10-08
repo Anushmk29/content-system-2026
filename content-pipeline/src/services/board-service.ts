@@ -7,7 +7,7 @@ import {
 } from '../db/repo.ts';
 import { CONTENT_STATUSES } from '../../core/src/index.ts';
 
-export interface IdeaPiece {
+interface IdeaPiece {
   id: string;
   platform: string;
   status: string;
@@ -36,11 +36,7 @@ const rank = (s: string) => CONTENT_STATUSES.indexOf(s as (typeof CONTENT_STATUS
 
 /** Group items into idea cards, newest activity first. Pure, so it's unit-tested directly. */
 export function groupIdeas(items: ContentItemRow[]): IdeaCard[] {
-  const groups = new Map<string, ContentItemRow[]>();
-  for (const it of items) {
-    const key = it.anchor_id ?? it.id;
-    groups.set(key, [...(groups.get(key) ?? []), it]);
-  }
+  const groups = Map.groupBy(items, (it) => it.anchor_id ?? it.id);
   const cards: IdeaCard[] = [];
   for (const [id, rows] of groups) {
     const anchor = rows.find((r) => r.id === id) ?? rows[0]!;
@@ -70,7 +66,7 @@ export async function getIdeaBoard(ctx: ModuleContext): Promise<IdeaBoard> {
   return { ideas, columns: CONTENT_STATUSES.map((status) => ({ status, ideas: ideas.filter((i) => i.stage === status) })) };
 }
 
-export interface ItemDetail {
+interface ItemDetail {
   item: ContentItemRow;
   pieces: ContentItemRow[];
   claims: ClaimRow[];

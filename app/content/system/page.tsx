@@ -1,14 +1,11 @@
 // System — connections hub + every pipeline step's health, run history and the full
 // activity log. Anything broken says what's wrong and exactly how to fix it.
 import Link from 'next/link';
-import { getContext, getRunHistory, getActivity, type HealthReport } from '@pratapai/content-pipeline';
+import { getContext, getRunHistory, getActivity, getActions, type HealthReport } from '@pratapai/content-pipeline';
 import { loadHealth } from '../data';
 import { PageHead, KpiStrip, Tile, Dot, Chip } from '../ui/viz';
 import { RunModuleButton } from '../ui/actions';
 import { ago, when, HEALTH_COLOR, RUN_COLOR, healthIssue } from '../ui/format';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const CONNECTIONS: Record<string, { name: string; role: string; env: string[]; fix: string }> = {
   database: { name: 'Database', role: 'Postgres — every item, decision and run', env: ['CONTENT_DATABASE_URL'], fix: 'Point CONTENT_DATABASE_URL at Postgres and run db/schema.sql.' },
@@ -16,13 +13,17 @@ const CONNECTIONS: Record<string, { name: string; role: string; env: string[]; f
   postiz: { name: 'Postiz', role: 'Schedules posts to LinkedIn, X, Instagram…', env: ['CONTENT_POSTIZ_API_URL', 'CONTENT_POSTIZ_API_KEY'], fix: '404 → the URL path is wrong: self-hosted Postiz usually serves the public API under /api (e.g. https://postiz.example.com/api). 401/403 → wrong API key. Once it answers, connect each channel (LinkedIn, X) inside Postiz.' },
   apify: { name: 'Apify (Decode)', role: 'Scrapes competitors’ public posts on X, Instagram, LinkedIn, Facebook', env: ['CONTENT_APIFY_TOKEN', 'CONTENT_APIFY_ACTOR_X', 'CONTENT_APIFY_ACTOR_INSTAGRAM', 'CONTENT_APIFY_ACTOR_LINKEDIN', 'CONTENT_APIFY_ACTOR_FACEBOOK'], fix: 'Optional. Set CONTENT_APIFY_TOKEN (console.apify.com → Settings → Integrations). Actor overrides only if a default actor changes.' },
   tinyfish: { name: 'TinyFish (free web search)', role: 'Research web check + news and competitor-page signals (Search + Fetch, free)', env: ['CONTENT_TINYFISH_API_KEY', 'CONTENT_RESEARCH_MODEL', 'CONTENT_TINYFISH_QUERIES', 'CONTENT_TINYFISH_WATCH'], fix: 'Optional. Set CONTENT_TINYFISH_API_KEY (agent.tinyfish.ai/api-keys). CONTENT_RESEARCH_MODEL=tinyfish switches the Research web check to it; CONTENT_TINYFISH_QUERIES / CONTENT_TINYFISH_WATCH feed Market Signals.' },
-  jev: { name: 'Jev (optional)', role: 'In-house model that shadows the LLM to learn your calls', env: ['CONTENT_TYPESAFE_API_KEY', 'CONTENT_JEV_MODE'], fix: 'Optional. Set CONTENT_TYPESAFE_API_KEY to start shadow mode.' },
+  youtube: { name: 'YouTube (Decode)', role: 'Competitors’ and your own YouTube videos, via the free Data API', env: ['CONTENT_YOUTUBE_API_KEY'], fix: 'Optional. Create a YouTube Data API v3 key (console.cloud.google.com → APIs → YouTube Data API v3 → Credentials) and set CONTENT_YOUTUBE_API_KEY.' },
+  transcriber: { name: 'Transcriber (Decode)', role: 'Reads what competitor videos actually say (local yt-dlp + faster-whisper)', env: ['CONTENT_YTDLP', 'CONTENT_PYTHON', 'CONTENT_WHISPER_MODEL', 'CONTENT_TRANSCRIBE_CAP'], fix: 'Optional. On the server: pip install yt-dlp faster-whisper. Point CONTENT_PYTHON / CONTENT_YTDLP at them if they are not on PATH. Needs a real server, not serverless.' },
+  jev: { name: 'Jev (optional)', role: 'In-house model that shadows the LLM to learn your calls', env: ['CONTENT_OPENROUTER_API_KEY', 'CONTENT_JEV_MODE'], fix: 'Runs on the OpenRouter key (shadow mode by default). CONTENT_JEV_MODE=off turns it off.' },
 };
 
 export default async function SystemPage() {
   const ctx = getContext();
   const health = await loadHealth();
-  const [runs, activity] = await Promise.all([getRunHistory(ctx, 60).catch(() => []), getActivity(ctx, 60).catch(() => [])]);
+  const [runs, activity, actions] = await Promise.all([
+    getRunHistory(ctx, 60).catch(() => []), getActivity(ctx, 60).catch(() => []), getActions(ctx, 100).catch(() => null),
+  ]);
   const title = new Map(health.modules.map((m) => [m.id, m.title]));
   const modules = [...health.modules].sort((a, b) => rank(a.lastStatus) - rank(b.lastStatus));
 
@@ -91,6 +92,29 @@ export default async function SystemPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </Tile>
+        <Tile span={4} title="Client actions" hint="logins and every change they made">
+          {actions == null ? <p className="empty">Not tracked yet: apply db/schema.sql (adds content.audit_log).</p>
+            : actions.length === 0 ? <p className="empty">No client actions yet.</p> : (
+            <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+              <table className="table">
+                <tbody>
+                  {actions.map((a, i) => {
+                    const item = a.path.match(/\/api\/items\/([0-9a-f-]{36})/)?.[1];
+                    return (
+                      <tr key={i}>
+                        <td className="mono" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{a.method}</td>
+                        <td className="mono" style={{ fontSize: 12.5 }}>
+                          {item ? <Link href={`/content/board?item=${item}`}>{a.path.replace('/content', '')}</Link> : a.path.replace('/content', '')}
+                        </td>
+                        <td className="faint mono" style={{ whiteSpace: 'nowrap', fontSize: 11.5 }} title={when(a.at)}>{ago(a.at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </Tile>
       </div>
