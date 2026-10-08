@@ -6,6 +6,7 @@ import {
   createRepo, type ContentItemRow, type ClaimRow, type ApprovalLogRow, type PerformanceRow,
 } from '../db/repo.ts';
 import { CONTENT_STATUSES } from '../../core/src/index.ts';
+import { syncPlanned } from './calendar-sync-service.ts';
 
 interface IdeaPiece {
   id: string;
@@ -108,9 +109,10 @@ export async function planItem(ctx: ModuleContext, id: string, at: unknown): Pro
   if (!when || Number.isNaN(when.getTime())) return { ok: false, message: 'Invalid date.' };
   if (when.getTime() < Date.now()) return { ok: false, message: 'Pick a time in the future.' };
   const done = await createRepo(ctx.db).planItem(id, when.toISOString());
-  return done
-    ? { ok: true, message: `Planned for ${when.toISOString()}` }
-    : { ok: false, message: 'Only approved items not yet sent to Postiz can be rescheduled here.' };
+  // With CONTENT_POSTIZ_SYNC the calendar is live: book it in Postiz now, or move it there.
+  const synced = await syncPlanned(ctx, id, when);
+  if (done) return synced ? { ok: true, message: synced.ok ? synced.message : `Planned. ${synced.message}` } : { ok: true, message: `Planned for ${when.toISOString()}` };
+  return synced ?? { ok: false, message: 'Only approved items not yet sent to Postiz can be rescheduled here.' };
 }
 
 export interface CalendarData {

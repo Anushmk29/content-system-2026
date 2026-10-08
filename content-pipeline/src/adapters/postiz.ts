@@ -1,7 +1,7 @@
 // Postiz adapter — the single publishing rail (Bible §12). Self-hosted, public API v1
 // (docs.postiz.com/public-api): posts go to a connected channel (integration) by id, with
 // per-platform settings; media is uploaded first and referenced by {id, path}.
-import { fetchJson, type Adapter } from './adapter.ts';
+import { fetchJson, redact, type Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
 
@@ -23,6 +23,8 @@ export interface PostizAdapter extends Adapter {
   schedule(input: ScheduleInput): Promise<ScheduleResult>;
   /** Live numbers for one published post, read through the channel Postiz posted it on. */
   postStats(postizId: string): Promise<{ metrics: PostMetrics; raw: unknown }>;
+  /** Delete a scheduled post (the calendar moved it). Postiz public API: DELETE /posts/:id. */
+  remove(postizId: string): Promise<void>;
 }
 
 type MetricField = 'impressions' | 'reach' | 'likes' | 'comments' | 'shares' | 'saves' | 'clicks';
@@ -124,6 +126,15 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
       const postizId = created[0]?.postId;
       if (!postizId) throw new Error('Postiz response missing postId');
       return { postizId };
+    },
+
+    async remove(postizId) {
+      if (!configured) throw new Error('Postiz not configured (CONTENT_POSTIZ_API_URL / _API_KEY)');
+      // Not fetchJson: a delete may answer with an empty body.
+      const res = await fetch(`${base}/posts/${encodeURIComponent(postizId)}`, {
+        method: 'DELETE', headers: { authorization: apiKey! }, signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new Error(`Postiz delete ${res.status}: ${redact((await res.text()).slice(0, 200))}`);
     },
 
     async postStats(postizId) {

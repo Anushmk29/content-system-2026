@@ -4,10 +4,8 @@ import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
 import { createRepo } from '../db/repo.ts';
 import { createContentItems } from '../db/content-items.ts';
-import { buildUtmUrl, type Platform } from '../../core/src/index.ts';
-import { renderSlides, splitSlides } from '../slides.ts';
-import { itemMedia } from '../services/asset-service.ts';
-import { offerFor } from '../brand.ts';
+import { splitSlides } from '../slides.ts';
+import { scheduleItem } from '../services/calendar-sync-service.ts';
 import { isManual } from '../prompts/platform-playbooks.ts';
 
 /** Posting time: one post per platform per day at `hourUtc`, the earliest day that is
@@ -67,23 +65,9 @@ export const publisherModule: Module = {
       try {
         if (item.postiz_id) continue; // idempotent: already scheduled
         if (isManual(item)) continue; // Short scripts are filmed, Reddit posts are posted by hand
-        // No offer saved → the post goes out without a link.
-        const offer = offerFor(item.offer_idx);
-        const utm = offer ? buildUtmUrl(offer.url, {
-          source: item.platform as Platform,
-          campaign: ctx.env.defaultUtmCampaign,
-          content: item.id,
-        }) : '';
-        const parts = postParts(item, utm);
-        // The creative saved on the post, on every platform. Instagram can't post without one,
-        // so a post with none falls back to plain text slides.
-        let media = await itemMedia(ctx, item.id);
-        if (!media.length && item.platform === 'instagram') {
-          media = (await renderSlides(item.body ?? '')).map((buf, i) => ({ buf, mime: 'image/png' as const, name: `slide-${i + 1}.png` }));
-        }
         const planned = item.scheduled_at ? new Date(item.scheduled_at) : null;
         const slot = pickSlot(now, planned, last.get(item.platform), ctx.env.postHourUtc);
-        const { postizId } = await ctx.adapters.postiz.schedule({ parts, platform: item.platform, scheduledAt: slot.toISOString(), media, title: item.title });
+        const { postizId, utm } = await scheduleItem(ctx, item, slot);
         await items.transition(item.id, { event: 'schedule', postizId, utmUrl: utm, scheduledAt: slot.toISOString() });
         const prev = last.get(item.platform);
         if (!prev || slot > prev) last.set(item.platform, slot);

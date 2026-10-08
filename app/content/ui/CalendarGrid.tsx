@@ -51,7 +51,7 @@ export function CalendarGrid({ view, anchor, items, unplanned }: {
     <Link href={href({ item: it.id })} scroll={false} className="cal-ev" draggable={it.movable}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', it.id); e.dataTransfer.effectAllowed = 'move'; }}
       style={{ '--c': STATUS_COLOR[it.status] ?? 'var(--faint)' } as React.CSSProperties}
-      title={`${it.title} · ${PLATFORM[it.platform]?.label ?? it.platform} · ${STATUS_LABEL[it.status] ?? it.status}${it.at ? ` · ${new Date(it.at).toLocaleString()}` : ''}${it.movable ? ' · drag to reschedule' : it.status === 'queued' ? ' · already in Postiz, reschedule there' : ''}`}>
+      title={`${it.title} · ${PLATFORM[it.platform]?.label ?? it.platform} · ${STATUS_LABEL[it.status] ?? it.status}${it.at ? ` · ${new Date(it.at).toLocaleString()}` : ''}${it.movable ? ' · drag to reschedule' : it.status === 'queued' ? ' · already in Postiz' : ''}`}>
       <span className="plat" style={{ '--c': PLATFORM[it.platform]?.color ?? 'var(--faint)', fontSize: 10 } as React.CSSProperties}>{PLATFORM[it.platform]?.glyph ?? '?'}</span>
       {it.at && <span className="mono faint">{new Date(it.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>}
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>

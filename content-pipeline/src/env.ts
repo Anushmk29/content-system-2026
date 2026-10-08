@@ -52,6 +52,9 @@ export interface ContentEnv {
   // CONTENT_REVISE_ON_CHANGES=1: "Request changes" rewrites the post with the feedback right away.
   // Off = the post goes back to draft for a hand edit (the original behaviour).
   reviseOnChanges: boolean;
+  // CONTENT_POSTIZ_SYNC=1: planning or moving a post on the Content Calendar books (or moves) it
+  // in Postiz right away. Off = Postiz gets it on the next publish run (the original behaviour).
+  postizSync: boolean;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
 }
@@ -94,6 +97,7 @@ export function loadEnv(): ContentEnv {
     autoSelectTopics: clampInt(read('CONTENT_AUTO_SELECT_TOPICS'), 0, 0, 10),
     platformFit: /^(1|true|on|yes)$/i.test(read('CONTENT_PLATFORM_FIT') ?? ''),
     reviseOnChanges: /^(1|true|on|yes)$/i.test(read('CONTENT_REVISE_ON_CHANGES') ?? ''),
+    postizSync: /^(1|true|on|yes)$/i.test(read('CONTENT_POSTIZ_SYNC') ?? ''),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
   };
 }

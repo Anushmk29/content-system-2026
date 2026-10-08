@@ -1,5 +1,7 @@
 // Calendar — what goes out when. Planned, scheduled and published posts by day; drag an
-// approved post onto a day to plan it (the scheduler honours that time).
+// approved post onto a day to plan it (the scheduler honours that time). With
+// CONTENT_POSTIZ_SYNC=1 this calendar drives Postiz directly: a planned post is booked there at
+// once, and a post already in Postiz can be dragged to move it there too.
 import { getContext, getCalendar, type CalendarData, type ContentItemRow } from '@pratapai/content-pipeline';
 import { params, type SearchParams } from '../data';
 import { PageHead, KpiStrip, NeedsDb } from '../ui/viz';
@@ -23,9 +25,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   try { data = await getCalendar(getContext(), from, to); } catch (e) { error = (e as Error).message; }
   if (!data) return (<><PageHead crumb="calendar" title="What goes out, and when." /><NeedsDb error={error} /></>);
 
+  const sync = getContext().env.postizSync;
   const toCal = (i: ContentItemRow, at: string | null): CalItem => ({
     id: i.id, title: i.title, platform: i.platform, status: i.status, at,
-    movable: i.status === 'approved' && !i.postiz_id,
+    movable: (i.status === 'approved' && !i.postiz_id)
+      || (sync && i.status === 'queued' && !!i.postiz_id && !!at && new Date(at).getTime() > Date.now()),
   });
   const itemHref = (id: string) => withParams('/content/calendar', sp, { item: id });
   const now = Date.now();
