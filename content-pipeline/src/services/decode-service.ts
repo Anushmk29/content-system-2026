@@ -24,7 +24,8 @@ import { qcItem } from '../modules/qc-gate.module.ts';
 import { saveItemCreative } from './asset-service.ts';
 import { withCostScope } from '../cost-ledger.ts';
 import { applyRules } from '../adapters/jev.ts';
-import { competitorPostQuestions, competitorState, COMPETITOR_RULES, minConfidence } from '../modules/decision-tasks.ts';
+import { competitorPostQuestions, competitorState, COMPETITOR_RULES, minConfidence, skeletonQuestions, skeletonFromJev } from '../modules/decision-tasks.ts';
+import { mapLimit } from '../map-limit.ts';
 import { huntScores, type HuntInput } from './hunt-score.ts';
 import { isHookPattern, type HookPattern } from '../hook-patterns.ts';
 
@@ -422,19 +423,28 @@ async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
 
 /** Breaks down the next batch (best performers first). Returns how many posts it finished. */
 async function decodeBatch(ctx: ModuleContext, runId: string): Promise<number> {
-  const posts = (await ctx.db.query<{ id: string; platform: string; post_type: string; caption: string; transcript: string | null }>(
-    `select p.id, p.platform, p.post_type, left(p.caption, 1500) as caption, left(tr.text, 2500) as transcript
+  const posts = (await ctx.db.query<{ id: string; platform: string; post_type: string; duration_s: number | null; caption: string; transcript: string | null }>(
+    `select p.id, p.platform, p.post_type, p.duration_s, left(p.caption, 1500) as caption, left(tr.text, 2500) as transcript
      from content.decoded_posts p ${TRANSCRIPT_JOIN}
      where p.run_id = $1 and p.seq is null order by p.hunt_score desc nulls last, p.vs_own_median desc nulls last, p.reactions desc limit ${BATCH}`, [runId])).rows;
   if (!posts.length) return 0;
   const formats = await formatsOf(ctx, runId);
   let parsed: Map<number, Breakdown> = new Map();
+  // Jev decides format / value structure / CTA alongside; the LLM still quotes the hook and writes the beats.
+  const jevPicks = jevSkeletons(ctx, posts, formats);
   try {
     const raw = await ctx.adapters.claude.complete(buildBreakdownPrompt(formats, posts), { system: decodeSystem(), maxTokens: 8000 });
     parsed = parseBreakdowns(raw, formats.length);
   } catch (e) {
     // One bad batch must not stall the run: its posts land as "no clear format".
     await ctx.db.query(`update content.decode_runs set message = $2 where id = $1`, [runId, `a batch failed to decode: ${(e as Error).message}`.slice(0, 500)]);
+  }
+  const jev = await jevPicks;
+  for (const [i, p] of posts.entries()) {
+    const j = jev.get(p.id);
+    if (!j) continue;
+    const llm = parsed.get(i + 1) ?? { format: null, hook: null, beats: [], hookTechnique: null, valueStructure: null, ctaType: null };
+    parsed.set(i + 1, { ...llm, ...j } as Breakdown);
   }
   await ctx.db.tx(async (db) => {
     const base = (await db.query<{ decoded: number }>(`select decoded from content.decode_runs where id = $1 for update`, [runId])).rows[0]!.decoded;
@@ -450,6 +460,34 @@ async function decodeBatch(ctx: ModuleContext, runId: string): Promise<number> {
     await db.query(`update content.decode_runs set decoded = $2 where id = $1`, [runId, base + posts.length]);
   });
   return posts.length;
+}
+
+/** Jev's confident skeleton picks per post id (logged as `decode_skeleton`). Empty when Jev is off or fails. */
+async function jevSkeletons(
+  ctx: ModuleContext,
+  posts: Array<{ id: string; platform: string; post_type: string; duration_s: number | null; caption: string; transcript: string | null }>,
+  formats: Array<{ name: string; description: string }>,
+): Promise<Map<string, ReturnType<typeof skeletonFromJev>>> {
+  const out = new Map<string, ReturnType<typeof skeletonFromJev>>();
+  const jev = ctx.adapters.jev;
+  if (!jev?.configured) return out;
+  const questions = skeletonQuestions(formats);
+  const repo = createRepo(ctx.db);
+  await mapLimit(posts, JUDGE_CONCURRENCY, async (p) => {
+    const state = competitorState(p);
+    const t0 = Date.now();
+    try {
+      const r = await jev.decide(state, questions);
+      const picks = skeletonFromJev(r.answers, jev.minConfidence);
+      out.set(p.id, picks);
+      await repo.logDecision({ task: 'decode_skeleton', subjectId: p.id, state, source: 'jev', model: r.model,
+        answer: r.answers, used: Object.keys(picks).length > 0, latencyMs: Date.now() - t0, confidence: minConfidence(r.answers) })
+        .catch((e: Error) => ctx.logger.warn(`decision log failed: ${e.message}`));
+    } catch (e) {
+      ctx.logger.warn(`jev decode_skeleton ${p.id}: ${(e as Error).message}`);
+    }
+  });
+  return out;
 }
 
 // ---- LLM parsing (pure) --------------------------------------------------------

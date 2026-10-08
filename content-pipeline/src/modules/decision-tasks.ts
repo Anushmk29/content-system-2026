@@ -11,6 +11,7 @@ import { brand, pillarSlugs } from '../brand.ts';
 import { parseTopicScore, type ParsedTopicScore } from './score-parse.ts';
 import { QC_SIGNAL_KEYS, parseQcSignals, type QcSignals } from './qc-parse.ts';
 import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt } from '../prompts/decisions.ts';
+import { VALUE_STRUCTURES, CTA_TYPES } from '../prompts/decode.ts';
 
 export type DecisionTask = 'topic_score' | 'qc_signals';
 
@@ -87,10 +88,15 @@ export const qcSignalsFromJev = (a: Record<string, JevAnswer>): QcSignals =>
 /** Jev score answers are a 0-based fractional level index; our scales are 1-5. */
 const level = (a: JevAnswer | undefined) => clamp1to5(1 + Math.round(a?.score ?? 0));
 
+/** One answer's confidence: the reported one, else how far a yes/no leans, else the top probability. */
+const answerConfidence = (a: JevAnswer): number =>
+  a.confidence
+  ?? (a.noul !== undefined ? Math.max(a.noul, 1 - a.noul)
+    : a.probabilities ? Math.max(0, ...Object.values(a.probabilities)) : 0);
+
 /** Weakest answer's confidence — one shaky answer means the whole decision is shaky. */
 export function minConfidence(answers: Record<string, JevAnswer>): number {
-  const cs = Object.values(answers).map((a) =>
-    a.confidence ?? (a.noul !== undefined ? Math.max(a.noul, 1 - a.noul) : 0));
+  const cs = Object.values(answers).map(answerConfidence);
   return cs.length ? Math.min(...cs) : 0;
 }
 
@@ -175,3 +181,44 @@ export const competitorState = (p: { platform: string; post_type: string; durati
    `CAPTION:\n${p.caption.slice(0, 3000)}`,
    p.transcript && `TRANSCRIPT (start):\n${p.transcript.slice(0, 1500)}`,
    `OUR PROFILE: ${brand().name}${brand().tagline ? ` — ${brand().tagline}` : ''}. ${audience()}`].filter(Boolean).join('\n');
+
+// ---- Decode skeleton (Jev decides; the LLM still writes the hook quote and the beats) ----
+
+const VALUE_STRUCTURE_CRITERIA = {
+  steps: 'Numbered or ordered steps the reader can follow',
+  single_insight: 'One idea or lesson, explained',
+  framework: 'A named model, matrix or mental framework',
+  story: 'A personal or client story with a turn',
+  listicle: 'A list of tips, tools or examples',
+  transformation: 'Before and after: where someone was, what changed, where they are now',
+} satisfies Record<(typeof VALUE_STRUCTURES)[number], string>;
+
+const CTA_CRITERIA = {
+  follow: 'Asks the reader to follow the account',
+  comment: 'Asks for a comment or a reply',
+  dm: 'Asks the reader to send a direct message',
+  link: 'Points to a link (bio, site, article)',
+  lead_magnet: 'Offers a free resource in exchange for a comment, DM or sign-up',
+  none: 'No call to action',
+} satisfies Record<(typeof CTA_TYPES)[number], string>;
+
+/** One run's formats (f1, f2 … in list order) plus value structure and CTA. */
+export const skeletonQuestions = (formats: Array<{ name: string; description: string }>): Record<string, JevQuestion> => ({
+  ...(formats.length ? { format: {
+    type: 'choice', instructions: 'Which recurring content format does this post follow?',
+    criteria: { ...Object.fromEntries(formats.map((f, i) => [`f${i + 1}`, `${f.name}: ${f.description}`])), none: 'None of these formats' },
+  } satisfies JevQuestion } : {}),
+  value_structure: { type: 'choice', instructions: 'How does this post deliver its value?', criteria: VALUE_STRUCTURE_CRITERIA },
+  cta_type: { type: 'choice', instructions: 'What does the end of this post ask the reader to do?', criteria: CTA_CRITERIA },
+});
+
+/** Jev's confident skeleton answers; a field is absent when Jev was unsure (the LLM's pick stays). */
+export function skeletonFromJev(a: Record<string, JevAnswer>, minConf: number): { format?: number | null; valueStructure?: string; ctaType?: string } {
+  const sure = (k: string) => a[k]?.choice && minConfidence({ [k]: a[k]! }) >= minConf ? a[k]!.choice! : undefined;
+  const f = sure('format');
+  return {
+    ...(f !== undefined ? { format: f === 'none' ? null : Number(f.slice(1)) || null } : {}),
+    ...(sure('value_structure') ? { valueStructure: sure('value_structure') } : {}),
+    ...(sure('cta_type') ? { ctaType: sure('cta_type') } : {}),
+  };
+}

@@ -9,13 +9,14 @@ export interface ContentEnv {
   openrouterMgmtKey: string | undefined;
   anthropicApiKey: string | undefined;
   llmModel: string | undefined;
-  // OpenRouter model for the typed decisions (topic score, QC); defaults to llmModel.
-  decisionModel: string | undefined;
   // TypeSafe Jev decision model (typed classify/score decisions), served through OpenRouter on the
   // same key. CONTENT_JEV_MODE=off turns it off; CONTENT_JEV_MODEL pins another version.
   jevModel: string | undefined;
   jevMode: 'off' | 'shadow' | 'primary' | undefined;
   jevMinConfidence: number | undefined;
+  // Tasks Jev decides first even in shadow mode (e.g. "topic_score,qc_signals"), switched on one at a
+  // time once the Training page shows Jev agrees with the LLM often enough.
+  jevPrimaryTasks: string[];
   // Market signals: public RSS/Atom feeds ("competitor=url" or bare url) and Reddit search terms.
   marketFeeds: string | undefined;
   redditQueries: string | undefined;
@@ -61,9 +62,9 @@ export function loadEnv(): ContentEnv {
     openrouterMgmtKey: read('CONTENT_OPENROUTER_MGMT_KEY'),
     anthropicApiKey: read('CONTENT_ANTHROPIC_API_KEY'),
     llmModel: read('CONTENT_LLM_MODEL'),
-    decisionModel: read('CONTENT_DECISION_MODEL'),
     jevModel: read('CONTENT_JEV_MODEL'),
     jevMode: jevMode(read('CONTENT_JEV_MODE')),
+    jevPrimaryTasks: (read('CONTENT_JEV_PRIMARY_TASKS') ?? '').split(',').map((t) => t.trim()).filter(Boolean),
     jevMinConfidence: read('CONTENT_JEV_MIN_CONFIDENCE') ? Number(read('CONTENT_JEV_MIN_CONFIDENCE')) : undefined,
     marketFeeds: read('CONTENT_MARKET_FEEDS'),
     redditQueries: read('CONTENT_REDDIT_QUERIES'),

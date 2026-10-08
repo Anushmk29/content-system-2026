@@ -5,8 +5,9 @@
 // Who decides, in order:
 //   0. Nobody: this subject was already decided on exactly this input text (e.g. QC on a
 //      draft that came back unchanged) — the applied answer is reused, no model is called.
-//   1. Jev, in primary mode, when its weakest answer >= minConfidence.
-//   2. The LLM, when configured (in shadow mode Jev runs alongside and is only logged).
+//   1. Jev, when this task runs Jev-primary (CONTENT_JEV_MODE=primary, or the task is in
+//      CONTENT_JEV_PRIMARY_TASKS) and its weakest answer >= minConfidence.
+//   2. The LLM, when configured (otherwise Jev runs alongside and is only logged).
 //   3. With no LLM: Jev at any confidence, else it throws.
 import type { ModuleContext } from './module.ts';
 import type { JevResult } from '../adapters/jev.ts';
@@ -16,6 +17,11 @@ import { minConfidence, type DecisionTaskDef } from './decision-tasks.ts';
 /** False when nothing could answer (no LLM, no Jev): skip it quietly. */
 export const canDecide = (ctx: ModuleContext) =>
   ctx.adapters.claude.configured || ctx.adapters.jev.configured;
+
+/** Jev answers first for this task: globally (mode primary) or switched on per task once
+ *  the Training page shows Jev agrees with the LLM often enough. */
+const jevFirst = (ctx: ModuleContext, task: string) =>
+  ctx.adapters.jev.mode === 'primary' || (ctx.adapters.jev.configured && (ctx.env?.jevPrimaryTasks ?? []).includes(task));
 
 export async function decide<S, T>(ctx: ModuleContext, def: DecisionTaskDef<S, T>, subjectId: string, subject: S): Promise<T> {
   const { jev, claude } = ctx.adapters;
@@ -40,7 +46,7 @@ export async function decide<S, T>(ctx: ModuleContext, def: DecisionTaskDef<S, T
         (e: Error) => { ctx.logger.warn(`jev ${def.task} ${subjectId}: ${e.message}`); return null; })
     : Promise.resolve(null);
 
-  if (jev.mode === 'primary') {
+  if (jevFirst(ctx, def.task)) {
     const r = await jevRun;
     if (r && minConfidence(r.answers) >= jev.minConfidence) return useJev(r);
   }
@@ -51,14 +57,24 @@ export async function decide<S, T>(ctx: ModuleContext, def: DecisionTaskDef<S, T
     throw new Error(`${def.task}: nothing to decide with (no LLM, Jev unavailable)`);
   }
 
-  // Teacher decides; Jev (if any) runs alongside for comparison.
-  // CONTENT_DECISION_MODEL (e.g. typesafe/jev-router) answers decisions; drafting keeps the main model.
-  const model = ctx.env?.decisionModel;
+  // Teacher decides; Jev (if any) runs alongside for comparison. allSettled: a failed LLM call
+  // must not throw away a finished Jev answer — it is still logged for the dataset.
   const t1 = Date.now();
-  const teach = claude.complete(def.prompt(state), { system: def.system, model }).then((raw) => ({ raw, ms: Date.now() - t1 }));
-  const [{ raw, ms }, r] = await Promise.all([teach, jevRun]);
-  const value = def.parse(raw, subject);
-  await log('claude', model ?? claude.model, value, true, ms);
+  const [teach, jevDone] = await Promise.allSettled([
+    claude.complete(def.prompt(state), { system: def.system }).then((raw) => ({ raw, ms: Date.now() - t1 })),
+    jevRun,
+  ]);
+  const r = jevDone.status === 'fulfilled' ? jevDone.value : null;
+  if (teach.status === 'rejected') {
+    if (r) {
+      // The LLM is down but Jev answered: use it rather than fail the item.
+      ctx.logger.warn(`${def.task} ${subjectId}: LLM failed (${(teach.reason as Error).message}); using Jev`);
+      return useJev(r);
+    }
+    throw teach.reason;
+  }
+  const value = def.parse(teach.value.raw, subject);
+  await log('claude', claude.model, value, true, teach.value.ms);
   if (r) await log('jev', r.model, def.fromJev(r.answers), false, r.ms, minConfidence(r.answers));
   return value;
 }

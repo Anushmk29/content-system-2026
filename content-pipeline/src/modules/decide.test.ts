@@ -148,3 +148,37 @@ test('same subject, same text: the applied answer is reused, no model is called,
   await decide(edited.ctx, QC_SIGNALS, id, { ...DRAFT, body: 'Rewritten without the number.' });
   assert.equal(edited.prompts.length, 1, 'changed text is decided again');
 });
+
+test('shadow + LLM down: the finished Jev answer is used and logged instead of failing', async () => {
+  const id = randomUUID();
+  const { ctx } = ctxWith({ llm: true, jev: JEV_HIGH });
+  (ctx.adapters.claude as { complete: unknown }).complete = async () => { throw new Error('LLM 503'); };
+  const value = await decide(ctx, QC_SIGNALS, id, DRAFT);
+  assert.equal(value.hasMetric, true);
+  const rows = (await db.query<{ source: string; used: boolean }>(`select source, used from content.decisions where subject_id = $1`, [id])).rows;
+  assert.deepEqual(rows.map((r) => `${r.source}:${r.used}`), ['jev:true']);
+});
+
+test('CONTENT_JEV_PRIMARY_TASKS: Jev decides that task first while the mode stays shadow', async () => {
+  const { ctx, prompts } = ctxWith({ llm: true, jev: JEV_HIGH });
+  (ctx as { env: unknown }).env = { jevPrimaryTasks: ['qc_signals'] };
+  const value = await decide(ctx, QC_SIGNALS, randomUUID(), DRAFT);
+  assert.equal(value.hasMetric, true);
+  assert.equal(prompts.length, 0);
+});
+
+test('minConfidence: a choice/score answer without `confidence` uses its top probability', () => {
+  assert.equal(minConfidence({ pillar: { type: 'choice', choice: 'a', probabilities: { a: 0.85, b: 0.15 } } }), 0.85);
+  assert.equal(minConfidence({ x: { type: 'score', score: 2 } }), 0);
+});
+
+test('decode skeleton: confident Jev picks override, unsure ones leave the LLM pick', async () => {
+  const { skeletonFromJev, skeletonQuestions } = await import('./decision-tasks.ts');
+  const q = skeletonQuestions([{ name: 'tool list', description: 'tools' }, { name: 'story', description: 's' }]);
+  assert.deepEqual(Object.keys((q.format as { criteria: object }).criteria), ['f1', 'f2', 'none']);
+  assert.equal('format' in skeletonQuestions([]), false);
+  const ch = (choice: string, p: number): JevAnswer => ({ type: 'choice', choice, probabilities: { [choice]: p } });
+  assert.deepEqual(skeletonFromJev({ format: ch('f2', 0.9), value_structure: ch('steps', 0.5), cta_type: ch('dm', 0.95) }, 0.8),
+    { format: 2, ctaType: 'dm' });
+  assert.deepEqual(skeletonFromJev({ format: ch('none', 0.9) }, 0.8), { format: null });
+});

@@ -103,6 +103,8 @@ export function createJev(cfg: JevConfig = {}): JevAdapter {
             signal: AbortSignal.timeout(60_000),
           });
         } catch (e) {
+          // Network blips (reset, DNS, timeout) get the same retries as a 503.
+          if (attempt < 2) { await sleep(1000 * 2 ** attempt); continue; }
           log({ ok: false, error: (e as Error).message });
           throw e;
         }
