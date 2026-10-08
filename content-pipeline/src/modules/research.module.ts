@@ -8,7 +8,7 @@ import { createRepo } from '../db/repo.ts';
 import {
   researchSystem, buildResearchPrompt, MARKET_CHECK_SYSTEM, buildMarketCheckPrompt,
   MARKET_CHECK_SOURCES_SYSTEM, buildMarketCheckFromSources,
-} from '../prompts/brand-brain.ts';
+} from '../prompts/decisions.ts';
 import { parseExtractedTopic } from './topic-extract.ts';
 
 const DEFAULT_RESEARCH_MODEL = 'perplexity/sonar';

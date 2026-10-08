@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
 import { parseJsonObject, str } from '../modules/llm-json.ts';
 import { PLACEMENTS, renderCreative, toSlides, type Placement, type SlideText } from '../creative.ts';
-import { brandSystem } from '../prompts/brand-brain.ts';
+import { brandSystem } from '../prompts/brand-context.ts';
 import { brandLook, loadBrand } from './brand-service.ts';
 import { describeClash, parseTemplateReply, renderTemplate, splitItems, textClashes, type Template } from '../template.ts';
 

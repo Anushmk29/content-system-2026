@@ -3,14 +3,14 @@
 // parser, and an optional no-model rule. decide.ts routes between them; modules and the
 // dataset service only ever pass a definition + a subject.
 // The Jev question wording mirrors scoringSystem / qcSystem in
-// prompts/brand-brain.ts; keep them in sync or the shadow comparison stops being apples-to-apples.
+// prompts/decisions.ts; keep them in sync or the shadow comparison stops being apples-to-apples.
 import type { JevAnswer, JevQuestion, JevRule } from '../adapters/jev.ts';
 import { HOOK_PATTERNS } from '../hook-patterns.ts';
 import { isFunnelStage, clamp1to5, type FunnelStage } from '../../core/src/index.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { parseTopicScore, type ParsedTopicScore } from './score-parse.ts';
 import { QC_SIGNAL_KEYS, parseQcSignals, type QcSignals } from './qc-parse.ts';
-import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt } from '../prompts/brand-brain.ts';
+import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt } from '../prompts/decisions.ts';
 
 export type DecisionTask = 'topic_score' | 'qc_signals';
 
@@ -69,7 +69,7 @@ const yesNo = (instructions: string): JevQuestion => ({
   instructions: `${instructions} When in doubt, answer yes: a false alarm only costs a founder review.`,
 });
 
-// Same seven signals and wording as qcSystem / buildQcPrompt in brand-brain.ts.
+// Same seven signals and wording as qcSystem / buildQcPrompt in prompts/decisions.ts.
 const QC_QUESTIONS: Record<(typeof QC_SIGNAL_KEYS)[number], JevQuestion> = {
   hasClientClaim: yesNo("Does the draft name or describe a specific client's results or story?"),
   hasMetric: yesNo('Does it state a number, percentage, revenue, time saved or other metric?'),

@@ -5,7 +5,7 @@
 import { FUNNEL_STAGES, isFunnelStage, type FunnelStage } from '../../core/src/index.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { parseJsonObject } from './llm-json.ts';
-import { DEFAULT_DRAFT_PLATFORMS, type DraftPlatform } from '../prompts/brand-brain.ts';
+import { DEFAULT_DRAFT_PLATFORMS, type DraftPlatform } from '../prompts/platform-playbooks.ts';
 import { isHookPattern, type HookPattern } from '../hook-patterns.ts';
 
 export interface DraftPiece {

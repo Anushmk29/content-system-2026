@@ -17,9 +17,8 @@ import { DECODE_PLATFORMS, type DecodePlatform } from '../adapters/apify.ts';
 import { parseJsonObject } from '../modules/llm-json.ts';
 import { addSignal } from './console-service.ts';
 import { loadBrand } from './brand-service.ts';
-import { brand } from '../brand.ts';
 import { createRepo } from '../db/repo.ts';
-import { DRAFT_PLATFORMS } from '../prompts/brand-brain.ts';
+import { DRAFT_PLATFORMS } from '../prompts/platform-playbooks.ts';
 import { draftTopic } from '../modules/draft-generator.module.ts';
 import { qcItem } from '../modules/qc-gate.module.ts';
 import { saveItemCreative } from './asset-service.ts';
@@ -27,13 +26,15 @@ import { withCostScope } from '../cost-ledger.ts';
 import { applyRules } from '../adapters/jev.ts';
 import { competitorPostQuestions, competitorState, COMPETITOR_RULES, minConfidence } from '../modules/decision-tasks.ts';
 import { huntScores, type HuntInput } from './hunt-score.ts';
-import { HOOK_PATTERN_KEYS, isHookPattern, type HookPattern } from '../hook-patterns.ts';
+import { isHookPattern, type HookPattern } from '../hook-patterns.ts';
 
-const BEAT_TAGS = ['hook', 'setup', 'proof', 'offer', 'method', 'benefit', 'other', 'cta'] as const;
-type BeatTag = (typeof BEAT_TAGS)[number];
+import {
+  BEAT_TAGS, VALUE_STRUCTURES, CTA_TYPES, type BeatTag, decodeSystem, buildFormatsPrompt, buildBreakdownPrompt,
+  counterAngleSystem, buildCounterAnglePrompt,
+} from '../prompts/decode.ts';
+
+export { VALUE_STRUCTURES, CTA_TYPES };
 export interface Beat { at: string; tag: BeatTag; text: string }
-export const VALUE_STRUCTURES = ['steps', 'single_insight', 'framework', 'story', 'listicle', 'transformation'] as const;
-export const CTA_TYPES = ['follow', 'comment', 'dm', 'link', 'lead_magnet', 'none'] as const;
 
 export interface CompetitorRow {
   id: string; name: string; active: boolean; created_at: string; is_self?: boolean;
@@ -397,8 +398,6 @@ async function scoreHunt(ctx: ModuleContext, runId: string): Promise<void> {
     [JSON.stringify(scores)]);
 }
 
-const system = () => `You analyse social media posts for ${brand().name}${brand().tagline ? ` (${brand().tagline})` : ''}. Reply with JSON only.`;
-
 async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
   const sample = (await ctx.db.query<{ platform: string; post_type: string; caption: string }>(
     `select p.platform, p.post_type, left(coalesce('SPOKEN: ' || left(tr.text, 300) || ' | CAPTION: ', '') || p.caption, 500) as caption
@@ -407,19 +406,7 @@ async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
      order by p.hunt_score desc nulls last, p.vs_own_median desc nulls last limit 80`, [runId])).rows;
   const ours = (await ctx.db.query<{ t: string }>(
     `select coalesce(hook, title) as t from content.content_items where status <> 'archived' order by created_at desc limit 40`)).rows;
-  const raw = await ctx.adapters.claude.complete(
-    `Competitor posts (best performers first):\n${sample.map((p, i) => `${i + 1}. [${p.platform} ${p.post_type}] ${p.caption.replace(/\s+/g, ' ')}`).join('\n')}
-
-Our own recent posts:\n${ours.map((o) => `- ${o.t}`).join('\n') || '(none yet)'}
-
-Group the competitor posts into at most 10 recurring content FORMATS (a repeatable structure, e.g. "client before/after story", "tool list", "contrarian take"), not topics.
-For each format count how many of OUR posts already use it, and write its SKELETON as fill-in templates with [brackets] for the parts that change:
-- hook_template: the opening line's pattern, e.g. "I [did X] for [time]. Here's what nobody tells you:"
-- value_template: how the value is delivered, e.g. "[3-5 numbered steps], each one line + one proof"
-- cta_template: how it ends, e.g. "Comment [word] and I'll send [resource]"
-Templates copy STRUCTURE, never their words or topics.
-Return {"formats":[{"name":"short lowercase name","description":"one plain sentence","our_posts":0,"hook_template":"…","value_template":"…","cta_template":"…"}]}`,
-    { system: system(), maxTokens: 2000 });
+  const raw = await ctx.adapters.claude.complete(buildFormatsPrompt(sample, ours), { system: decodeSystem(), maxTokens: 2000 });
   const formats = parseFormats(raw);
   if (!formats.length) throw new Error('LLM returned no formats');
   await ctx.db.tx(async (db) => {
@@ -443,19 +430,7 @@ async function decodeBatch(ctx: ModuleContext, runId: string): Promise<number> {
   const formats = await formatsOf(ctx, runId);
   let parsed: Map<number, Breakdown> = new Map();
   try {
-    const raw = await ctx.adapters.claude.complete(
-      `Formats:\n${formats.map((f, i) => `${i + 1}. ${f.name} — ${f.description}`).join('\n')}
-
-Posts:\n${posts.map((p, i) => `### ${i + 1} [${p.platform} ${p.post_type}]\n${p.transcript ? `SPOKEN (transcript):\n${p.transcript}\nCAPTION:\n` : ''}${p.caption || '(no text)'}`).join('\n\n')}
-
-For each post: pick the format number (null if none fits), quote its hook (the opening line; for a video with a transcript, its first spoken line), and split it into beats in order.
-Beat "at" is the paragraph number ("¶1", "¶2"…), "slide N" for carousels, or "0:12" for spoken video. Beat tags: ${BEAT_TAGS.join(', ')} ("offer" = the moment they pitch their own product).
-Also classify its skeleton:
-- hook_technique: one of ${HOOK_PATTERN_KEYS.join(', ')}
-- value_structure: one of ${VALUE_STRUCTURES.join(', ')}
-- cta_type: one of ${CTA_TYPES.join(', ')}
-Return {"posts":[{"n":1,"format":2,"hook":"…","hook_technique":"how_to","value_structure":"steps","cta_type":"comment","beats":[{"at":"¶1","tag":"hook","text":"short paraphrase"}]}]}`,
-      { system: system(), maxTokens: 8000 });
+    const raw = await ctx.adapters.claude.complete(buildBreakdownPrompt(formats, posts), { system: decodeSystem(), maxTokens: 8000 });
     parsed = parseBreakdowns(raw, formats.length);
   } catch (e) {
     // One bad batch must not stall the run: its posts land as "no clear format".
@@ -547,9 +522,8 @@ export async function useDecode(ctx: ModuleContext, input: { formatId?: string; 
     rawText = `[Decode] Use ${fmt}. It works for competitors: ${proof}. Their hook: "${post.hook ?? post.caption.slice(0, 120)}".${anatomy ? ` Structure: ${anatomy}.` : ''} Write ${b.name}'s own version for its audience.`;
   } else {
     if (!ctx.adapters.claude.configured) throw new Error('No LLM configured');
-    const angle = (await ctx.adapters.claude.complete(
-      `A competitor post that performed well (${proof}):\n"""${post.caption.slice(0, 2000)}"""\n\nIn 2–3 sentences, give ${b.name}'s counter-angle: what this post leaves out, gets wrong, or where we would disagree. Our audience: ${b.audience.split('\n')[0]}. Plain text, no preamble.`,
-      { system: `You are ${b.name}’s content strategist.`, maxTokens: 400 })).trim();
+    const angle = (await ctx.adapters.claude.complete(buildCounterAnglePrompt(b, proof, post.caption),
+      { system: counterAngleSystem(b), maxTokens: 400 })).trim();
     rawText = `[Decode counter-angle] On ${fmt} (${proof}): ${angle}`;
   }
   const row = await addSignal(ctx, { rawText, channel: 'decode', sourceUrl: post.url });

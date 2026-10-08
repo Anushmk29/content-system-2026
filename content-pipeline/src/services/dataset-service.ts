@@ -10,7 +10,7 @@ import { createRepo, type DatasetRow } from '../db/repo.ts';
 import { toQcSignals } from '../modules/qc-parse.ts';
 import { randomUUID } from 'node:crypto';
 import { parseJsonObject, str } from '../modules/llm-json.ts';
-import { seedQcSystem, buildSeedQcPrompt } from '../prompts/brand-brain.ts';
+import { seedQcSystem, buildSeedQcPrompt } from '../prompts/decisions.ts';
 import { loadBrand } from './brand-service.ts';
 import { DECISION_TASKS, QC_SIGNALS, minConfidence, type DecisionTask } from '../modules/decision-tasks.ts';
 import { performanceSignal } from '../../core/src/index.ts';

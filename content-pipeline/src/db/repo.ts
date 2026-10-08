@@ -59,7 +59,7 @@ export interface ModuleHealthRow {
   error: string | null;
 }
 
-/** One Contrast-Formula angle (prompts/brand-brain.ts buildAnglePrompt). */
+/** One Contrast-Formula angle (prompts/draft.ts buildAnglePrompt). */
 export interface Angle { belief: string; truth: string; strength: number; proof_method: string }
 
 export interface TopicRow {

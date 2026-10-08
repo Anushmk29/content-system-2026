@@ -5,7 +5,7 @@
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded, skipped } from './module.ts';
 import { createRepo, type PerformanceRow } from '../db/repo.ts';
-import { reviewSystem, buildReviewPrompt } from '../prompts/brand-brain.ts';
+import { reviewSystem, buildReviewPrompt } from '../prompts/review.ts';
 import { parseReview } from './review-parse.ts';
 import { performanceSignal, LIVE_STATUSES } from '../../core/src/index.ts';
 
