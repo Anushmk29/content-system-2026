@@ -224,7 +224,7 @@ export function createRepo(db: Db) {
                 priority_band, score_total, status, created_at,
                 score_lead_intent, score_reach, score_brand_fit, score_proof, score_repurpose,
                 to_jsonb(t) -> 'platform_fit' as platform_fit, to_jsonb(t) -> 'platforms' as platforms,
-                to_jsonb(t) -> 'frameworks' as frameworks, -- to_jsonb: still loads before the migration adds them
+                to_jsonb(t) -> 'frameworks' as frameworks -- to_jsonb: still loads before the migration adds them
            from content.topics t
           where status = 'new' and score_lead_intent is not null
           order by score_total desc, created_at`,
@@ -236,7 +236,7 @@ export function createRepo(db: Db) {
         `select id, title, pillar, funnel_stage, source, source_detail, customer_language, market_context,
                 priority_band, score_total, status,
                 to_jsonb(t) -> 'platform_fit' as platform_fit, to_jsonb(t) -> 'platforms' as platforms,
-                to_jsonb(t) -> 'frameworks' as frameworks, -- to_jsonb: still loads before the migration adds them
+                to_jsonb(t) -> 'frameworks' as frameworks -- to_jsonb: still loads before the migration adds them
            from content.topics t where status = 'selected'
           order by score_total desc, created_at`,
       ).then((r) => r.rows),
