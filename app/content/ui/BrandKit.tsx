@@ -390,6 +390,30 @@ export function BrandProof({ kit, fonts = [] }: { kit: Brand; fonts?: FontRow[] 
   );
 }
 
+/** Rules the system learned from review notes. Shown so the founder can see (and veto) what it learned. */
+export function LearnedSection({ kit }: { kit: Brand }) {
+  const a = useAction();
+  const rules = kit.learnedRules ?? [];
+  return (
+    <Card title="Learned from your feedback" hint="Every time you ask for changes or reject a post, your note is remembered. Every few notes they become standing rules that every new draft follows.">
+      {rules.length === 0
+        ? <p className="bk-note">Nothing learned yet. Use the reason chips when you ask for changes on a post; after a few notes the rules show up here.</p>
+        : (
+          <ul className="row-list bk-rows">
+            {rules.map((r, i) => (
+              <li key={i} className="row">
+                <span className="grow t" style={{ whiteSpace: 'normal' }}>{r}</span>
+                <button type="button" className="btn btn-sm" disabled={a.pending} aria-label={`Forget: ${r}`}
+                  onClick={() => save(a, { learnedRules: rules.filter((_, j) => j !== i) })}>Forget</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      {a.feedback}
+    </Card>
+  );
+}
+
 /** The whole kit on one page (/content/brand). */
 export function BrandKit({ kit, fonts, curated }: { kit: Brand; fonts: FontRow[]; curated: readonly string[] }) {
   return (
@@ -401,6 +425,7 @@ export function BrandKit({ kit, fonts, curated }: { kit: Brand; fonts: FontRow[]
         <OffersSection kit={kit} />
         <LookSection kit={kit} fonts={fonts} curated={curated} />
         <AccountsSection kit={kit} />
+        <LearnedSection kit={kit} />
       </div>
       <BrandProof kit={kit} fonts={fonts} />
     </div>

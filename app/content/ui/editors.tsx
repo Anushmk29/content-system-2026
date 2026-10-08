@@ -5,15 +5,17 @@ import { useState } from 'react';
 import { useAction } from './actions';
 
 // ---- approve / changes / reject ---------------------------------------------
-export function ApprovalActions({ itemId, unproven = 0 }: { itemId: string; unproven?: number }) {
+export function ApprovalActions({ itemId, unproven = 0, reasons = [] }: { itemId: string; unproven?: number; reasons?: string[] }) {
   const a = useAction();
   const [note, setNote] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
   const [warn, setWarn] = useState<string | null>(null);
   function decide(action: 'approve' | 'changes' | 'reject') {
-    if (action !== 'approve' && !note.trim()) { setWarn('Add a note so the rewrite/rejection has context.'); document.getElementById('approval-note')?.focus(); return; }
+    if (action !== 'approve' && !note.trim() && !picked.length) { setWarn('Pick a reason or add a note, so the rewrite knows what to fix.'); return; }
     setWarn(null);
-    a.call(action, 'PATCH', `/content/api/approvals/${itemId}`, { action, note: note || null });
+    a.call(action, 'PATCH', `/content/api/approvals/${itemId}`, { action, note: note || null, reasons: action === 'approve' ? [] : picked });
   }
+  const toggle = (r: string) => setPicked(picked.includes(r) ? picked.filter((x) => x !== r) : [...picked, r]);
   return (
     <div>
       {unproven > 0 && (
@@ -21,7 +23,12 @@ export function ApprovalActions({ itemId, unproven = 0 }: { itemId: string; unpr
           {unproven} claim(s) without proof — approving is allowed, but it won&apos;t publish until each has a proof link.
         </p>
       )}
-      <textarea id="approval-note" className="input" placeholder="Note (required to request changes or reject)…"
+      {reasons.length > 0 && (
+        <div className="chips" role="group" aria-label="What to fix" style={{ marginBottom: 8 }}>
+          {reasons.map((r) => <button key={r} type="button" className="chip" aria-pressed={picked.includes(r)} onClick={() => toggle(r)}>{r}</button>)}
+        </div>
+      )}
+      <textarea id="approval-note" className="input" placeholder="Anything else? (optional when you picked a reason above)"
         value={note} onChange={(e) => setNote(e.target.value)} style={{ minHeight: 52 }} />
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button type="button" data-key="approve" className="btn btn-ink" disabled={a.pending} onClick={() => decide('approve')}>{a.busy === 'approve' ? '…' : 'Approve'} <kbd>A</kbd></button>

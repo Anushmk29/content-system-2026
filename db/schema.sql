@@ -644,6 +644,9 @@ alter table content.topics add column if not exists platforms jsonb;
 alter table content.topics add column if not exists frameworks jsonb;
 -- What the brand stands for; read by every prompt (prompts/brand-context.ts).
 alter table content.brand_kit add column if not exists brand_values jsonb not null default '[]';
+-- Standing rules learned from review notes (services/feedback-service.ts); every draft follows them.
+alter table content.brand_kit add column if not exists learned_rules jsonb not null default '[]';
+alter table content.brand_kit add column if not exists learned_at timestamptz;
 
 -- Phase 6: which hook pattern a draft used, and what each pattern earns on OUR posts:
 -- mean ln(vs_usual) over 90 days, shrunk toward 0 by n/(n+5) so 1 lucky post can't dominate.

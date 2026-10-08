@@ -18,6 +18,8 @@ export interface Brand {
   voiceSamples: string[];
   /** What the brand stands for (short lines). Every draft and decision is checked against these. */
   values: string[];
+  /** Rules learned from the founder's review notes (feedback-service.ts); deletable on the Brand page. */
+  learnedRules: string[];
   pillars: BrandPillar[];
   offers: BrandOffer[];
   palette: string[];
@@ -48,6 +50,7 @@ don't know where to start. Never adopt enterprise/procurement language.`,
 - Simple language: avoid jargon unless it improves clarity.`,
   voiceSamples: [],
   values: [],
+  learnedRules: [],
   pillars: [
     { slug: 'practical_ai_for_operators', label: 'Practical AI for operators', description: 'How-to, practical AI use for running a business', target: 35 },
     { slug: 'proof_and_use_cases', label: 'Proof and use cases', description: 'Case studies, results, real client examples', target: 25 },

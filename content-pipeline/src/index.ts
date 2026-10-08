@@ -13,6 +13,8 @@ export { getSystemHealth, getRunHistory, getActivity, getActions, logAction } fr
 export { getPipelineBoard } from './services/pipeline-service.ts';
 export { listTodos, createTodo, updateTodo, deleteTodo } from './services/todo-service.ts';
 export { applyApprovalDecision } from './services/approval-service.ts';
+export { CHANGE_REASONS } from './prompts/feedback.ts';
+export { refreshLessons } from './services/feedback-service.ts';
 export {
   exportDataset, recordHumanLabel, getTrainingOverview,
   type TrainingExample, type TrainingOverview,

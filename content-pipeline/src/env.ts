@@ -49,6 +49,9 @@ export interface ContentEnv {
   // CONTENT_PLATFORM_FIT=1: Jev picks which platforms each scored idea suits; drafting follows
   // its picks unless the operator chose platforms on the idea card. Off = the default five.
   platformFit: boolean;
+  // CONTENT_REVISE_ON_CHANGES=1: "Request changes" rewrites the post with the feedback right away.
+  // Off = the post goes back to draft for a hand edit (the original behaviour).
+  reviseOnChanges: boolean;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
 }
@@ -90,6 +93,7 @@ export function loadEnv(): ContentEnv {
     postHourUtc: clampInt(read('CONTENT_POST_HOUR_UTC'), 4, 0, 23),
     autoSelectTopics: clampInt(read('CONTENT_AUTO_SELECT_TOPICS'), 0, 0, 10),
     platformFit: /^(1|true|on|yes)$/i.test(read('CONTENT_PLATFORM_FIT') ?? ''),
+    reviseOnChanges: /^(1|true|on|yes)$/i.test(read('CONTENT_REVISE_ON_CHANGES') ?? ''),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
   };
 }

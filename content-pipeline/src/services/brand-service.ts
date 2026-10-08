@@ -11,7 +11,7 @@ import type { Look } from '../creative.ts';
 interface KitRow {
   name: string; tagline: string; audience: string; audience_beliefs: string[]; voice_prompt: string; voice_samples: string[];
   pillars: BrandPillar[]; offers: BrandOffer[]; palette: string[]; heading_font: string | null; body_font: string | null;
-  has_logo: boolean; logo_corner: LogoCorner; own_handles: Brand['ownHandles']; onboarded_at: string | null; brand_values: string[] | null;
+  has_logo: boolean; logo_corner: LogoCorner; own_handles: Brand['ownHandles']; onboarded_at: string | null; brand_values: string[] | null; learned_rules: string[] | null;
 }
 const KIT_COLS = `name, tagline, audience, audience_beliefs, voice_prompt, voice_samples, pillars, offers, palette, heading_font, body_font,
   logo_png is not null as has_logo, logo_corner, own_handles, onboarded_at`;
@@ -22,7 +22,7 @@ export const EMPTY_BRAND: Brand = {
 };
 
 const toBrand = (r: KitRow): Brand => ({
-  name: r.name, tagline: r.tagline, audience: r.audience, audienceBeliefs: r.audience_beliefs ?? [], voice: r.voice_prompt, voiceSamples: r.voice_samples ?? [], values: r.brand_values ?? [],
+  name: r.name, tagline: r.tagline, audience: r.audience, audienceBeliefs: r.audience_beliefs ?? [], voice: r.voice_prompt, voiceSamples: r.voice_samples ?? [], values: r.brand_values ?? [], learnedRules: r.learned_rules ?? [],
   pillars: r.pillars ?? [], offers: r.offers ?? [], palette: r.palette ?? [],
   headingFont: r.heading_font, bodyFont: r.body_font, hasLogo: r.has_logo, logoCorner: r.logo_corner,
   ownHandles: r.own_handles ?? {}, onboardedAt: r.onboarded_at, saved: true,
@@ -31,8 +31,8 @@ const toBrand = (r: KitRow): Brand => ({
 /** Read the saved kit and make it the active brand (the default when nothing is saved). Throws on a DB error. */
 export async function readBrand(ctx: ModuleContext): Promise<Brand> {
   // A DB not yet migrated for brand_values (42703 = undefined column) still loads the rest of the kit.
-  const r = (await ctx.db.query<KitRow>(`select ${KIT_COLS}, brand_values from content.brand_kit where id`).catch((e: { code?: string }) =>
-    e.code === '42703' ? ctx.db.query<KitRow>(`select ${KIT_COLS}, null as brand_values from content.brand_kit where id`) : Promise.reject(e))).rows[0];
+  const r = (await ctx.db.query<KitRow>(`select ${KIT_COLS}, brand_values, learned_rules from content.brand_kit where id`).catch((e: { code?: string }) =>
+    e.code === '42703' ? ctx.db.query<KitRow>(`select ${KIT_COLS}, null as brand_values, null as learned_rules from content.brand_kit where id`) : Promise.reject(e))).rows[0];
   setBrand(r ? toBrand(r) : DEFAULT_BRAND);
   return brand();
 }
@@ -51,7 +51,7 @@ export async function loadBrand(ctx: ModuleContext): Promise<Brand> {
 }
 
 export interface BrandPatch {
-  name?: string; tagline?: string; audience?: string; audienceBeliefs?: string[]; voice?: string; voiceSamples?: string[]; values?: string[];
+  name?: string; tagline?: string; audience?: string; audienceBeliefs?: string[]; voice?: string; voiceSamples?: string[]; values?: string[]; learnedRules?: string[];
   pillars?: Partial<BrandPillar>[]; offers?: Partial<BrandOffer>[]; palette?: string[];
   headingFont?: string | null; bodyFont?: string | null; logoCorner?: LogoCorner;
   ownHandles?: Record<string, unknown>; onboarded?: boolean;
@@ -67,6 +67,7 @@ export function cleanPatch(p: BrandPatch): BrandPatch {
   if (p.audience !== undefined) out.audience = text(p.audience, 2000);
   if (p.audienceBeliefs !== undefined) out.audienceBeliefs = (p.audienceBeliefs ?? []).map((s) => text(s, 240)).filter(Boolean).slice(0, 10);
   if (p.voice !== undefined) out.voice = text(p.voice, 4000);
+  if (p.learnedRules !== undefined) out.learnedRules = (p.learnedRules ?? []).map((s) => text(s, 160)).filter(Boolean).slice(0, 10);
   if (p.values !== undefined) out.values = (p.values ?? []).map((s) => text(s, 160)).filter(Boolean).slice(0, 8);
   if (p.voiceSamples !== undefined) out.voiceSamples = (p.voiceSamples ?? []).map((s) => text(s, 3000)).filter(Boolean).slice(0, 10);
   if (p.pillars !== undefined) {
@@ -123,6 +124,7 @@ export async function saveBrand(ctx: ModuleContext, patch: BrandPatch): Promise<
      JSON.stringify(b.audienceBeliefs)]);
   // Separate write: only touches the column when values were edited (older DBs without it keep saving).
   if (p.values !== undefined) await ctx.db.query(`update content.brand_kit set brand_values = $1 where id`, [JSON.stringify(b.values)]);
+  if (p.learnedRules !== undefined) await ctx.db.query(`update content.brand_kit set learned_rules = $1 where id`, [JSON.stringify(b.learnedRules)]);
   return loadBrand(ctx);
 }
 

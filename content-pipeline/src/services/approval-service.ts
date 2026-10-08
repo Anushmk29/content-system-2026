@@ -5,12 +5,15 @@ import type { ModuleContext } from '../modules/module.ts';
 import { createRepo } from '../db/repo.ts';
 import { createContentItems, IllegalTransition } from '../db/content-items.ts';
 import { effectOfDecision, type ApprovalAction } from '../../core/src/index.ts';
+import { feedbackText, reviseItem, refreshLessons } from './feedback-service.ts';
 
 interface ApplyDecisionInput {
   itemId: string;
   action: ApprovalAction;
   decidedBy?: string | null;
   note?: string | null;
+  /** One-click reasons (prompts/feedback.ts CHANGE_REASONS); joined with the note. */
+  reasons?: unknown;
 }
 
 interface ApplyDecisionResult {
@@ -28,6 +31,7 @@ export async function applyApprovalDecision(
   const item = await repo.getItem(input.itemId);
   if (!item) return { ok: false, message: `Item ${input.itemId} not found.` };
 
+  const feedback = feedbackText(input.reasons, input.note);
   const effect = effectOfDecision(input.action);
   if (!effect) return { ok: false, message: `Unknown action "${input.action}".`, itemTitle: item.title };
 
@@ -38,16 +42,26 @@ export async function applyApprovalDecision(
 
   try {
     await createContentItems(ctx.db).transition(item.id, {
-      event: input.action, decidedBy: input.decidedBy ?? null, note: input.note ?? null,
+      event: input.action, decidedBy: input.decidedBy ?? null, note: feedback || null,
     });
   } catch (e) {
     if (e instanceof IllegalTransition) return { ok: false, message: `${e.message}: ${item.title}`, itemTitle: item.title };
     throw e;
   }
 
+  // Changes: rewrite this one post from the feedback (flagged). A failed rewrite keeps the old
+  // text in draft for a hand edit, as before.
+  let revised = '';
+  if (input.action === 'changes' && feedback && ctx.env?.reviseOnChanges) {
+    try { await reviseItem(ctx, item, feedback); revised = ' — rewritten with your feedback'; }
+    catch (e) { revised = ` — couldn't rewrite (${(e as Error).message}); edit it by hand`; }
+  }
+  // Every note teaches the next drafts (re-learned every few notes; never blocks the decision).
+  if (input.action !== 'approve' && feedback) void refreshLessons(ctx);
+
   const verb =
     input.action === 'approve' ? '✅ Approved'
     : input.action === 'reject' ? '❌ Rejected'
     : '✏️ Changes requested';
-  return { ok: true, message: `${verb}: ${item.title}`, itemTitle: item.title };
+  return { ok: true, message: `${verb}: ${item.title}${revised}`, itemTitle: item.title };
 }

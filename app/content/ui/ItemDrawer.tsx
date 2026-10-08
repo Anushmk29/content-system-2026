@@ -1,7 +1,7 @@
 // Post detail drawer (?item=<id> on any page): platform tabs, live preview, copy editing
 // before approval, claims, approve/changes/reject, posting time, metrics and history.
 import Link from 'next/link';
-import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks } from '@pratapai/content-pipeline';
+import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS } from '@pratapai/content-pipeline';
 import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
 import { ApprovalActions, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
@@ -115,7 +115,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
         )}
 
         {item.status === 'needs_approval' && (
-          <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} /></section>
+          <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} reasons={[...CHANGE_REASONS]} /></section>
         )}
 
         <section>
