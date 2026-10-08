@@ -7,7 +7,7 @@ import { groupIdeas } from './board-service.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { getOwnResults, type OwnResults } from './analytics-service.ts';
 import { CONTENT_STATUSES, WEEKLY_POST_TARGET } from '../../core/src/index.ts';
-import { isManual } from '../prompts/platform-playbooks.ts';
+import { isManual, MANUAL_PLATFORMS, SCRIPT_FORMATS } from '../prompts/platform-playbooks.ts';
 
 interface PillarMix {
   pillar: string;
@@ -159,11 +159,15 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   }
 
   // 4 · work the pipeline can do next if you press run
-  const scripts = await ctx.db.query<{ to_film: string; filmed: string }>(
-    `select count(*) filter (where filmed_at is null) as to_film, count(*) filter (where filmed_at is not null) as filmed
-     from content.content_items where platform = 'youtube' and status = 'approved'`).then((r) => r.rows[0]);
-  if (Number(scripts?.to_film)) actions.push({ kind: 'task', tone: 'brand', title: `${scripts!.to_film} Short script(s) to film`, detail: 'Approved filming cards waiting for you; mark each filmed once recorded.', href: '/content/scripts' });
-  if (Number(scripts?.filmed)) actions.push({ kind: 'task', tone: 'info', title: `${scripts!.filmed} filmed Short(s) not uploaded yet`, detail: 'Upload to YouTube, then paste the link so its views get tracked.', href: '/content/scripts' });
+  const scripts = await ctx.db.query<{ to_film: string; filmed: string; to_post: string }>(
+    `select count(*) filter (where filmed_at is null and (platform = 'youtube' or format::text = any($1))) as to_film,
+            count(*) filter (where filmed_at is not null) as filmed,
+            count(*) filter (where platform = 'reddit' and format::text <> all($1)) as to_post
+     from content.content_items where status = 'approved' and (platform::text = any($2) or format::text = any($1))`,
+    [SCRIPT_FORMATS, MANUAL_PLATFORMS]).then((r) => r.rows[0]);
+  if (Number(scripts?.to_film)) actions.push({ kind: 'task', tone: 'brand', title: `${scripts!.to_film} video script(s) to film`, detail: 'Approved filming cards waiting for you; mark each filmed once recorded.', href: '/content/scripts' });
+  if (Number(scripts?.filmed)) actions.push({ kind: 'task', tone: 'info', title: `${scripts!.filmed} filmed video(s) not posted yet`, detail: 'Post it, then paste the link so its views get tracked.', href: '/content/scripts' });
+  if (Number(scripts?.to_post)) actions.push({ kind: 'task', tone: 'brand', title: `${scripts!.to_post} Reddit post(s) to post`, detail: 'Post it in the right subreddit by hand, then paste the link.', href: '/content/scripts' });
   const noAngle = selected.filter((t) => !t.angles?.length).length;
   if (noAngle) actions.push({ kind: 'topic', tone: 'info', title: `${noAngle} selected topic(s) without an angle`, detail: 'Pick the belief each post flips (Ideas → Find angles), or drafting uses the strongest one it finds.', href: '/content/ideas' });
   if (selected.length) actions.push({ kind: 'draft', tone: 'info', title: `${selected.length} selected topic(s) waiting to be drafted`, detail: 'Run Draft Generator, then QC Gate.', moduleId: 'draft_generator' });

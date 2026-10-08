@@ -10,7 +10,8 @@ import { suggestedPlatforms } from './decision-tasks.ts';
 import { createContentItems } from '../db/content-items.ts';
 import { brandSystem } from '../prompts/brand-context.ts';
 import { buildDraftPrompt, buildAnglePrompt } from '../prompts/draft.ts';
-import { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, type DraftPlatform } from '../prompts/platform-playbooks.ts';
+import { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, SCRIPT_TARGETS, isScriptTarget, type DraftPlatform, type ScriptTarget } from '../prompts/platform-playbooks.ts';
+import { buildScriptPrompt } from '../prompts/scripts.ts';
 import { parseDraftResponse, type DraftSet, type DraftPiece } from './draft-parse.ts';
 import { provenHooks, patternAdvice, hookPatternWeights, scoreHookOptions } from '../services/hook-service.ts';
 import { parseJsonObject } from './llm-json.ts';
@@ -47,7 +48,9 @@ export const draftGeneratorModule: Module = {
 
     for (const topic of topics) {
       try {
-        itemsCreated += (await draftTopic(ctx, topic, { platforms: platformsFor(topic, ctx.env.platformFit), frameworks: topic.frameworks ?? undefined })).length;
+        itemsCreated += (await draftTopic(ctx, topic, {
+          platforms: platformsFor(topic, ctx.env.platformFit), frameworks: topic.frameworks ?? undefined, scripts: scriptsFor(topic),
+        })).length;
         drafted++;
       } catch (e) {
         // Per-topic isolation: one bad topic never blocks the rest of the batch.
@@ -66,6 +69,32 @@ export const draftGeneratorModule: Module = {
     };
   },
 };
+
+/** One call: a filming card per script target, in the brand voice, from the same angle as the posts. */
+async function draftScripts(
+  ctx: ModuleContext, topic: TopicRow, targets: readonly ScriptTarget[], angle: Angle | null, anchor: string | null,
+): Promise<{ pieces: Omit<NewContentItem, 'pillar' | 'funnelStage'>[]; claims: string[] }> {
+  const raw = await ctx.adapters.claude.complete(
+    buildScriptPrompt({ topicTitle: topic.title, customerLanguage: topic.customer_language, angle, anchor, targets }),
+    { system: brandSystem(), maxTokens: 4000 });
+  const o = parseJsonObject(raw);
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const pieces = targets.flatMap((t) => {
+    const s = (o[t] ?? {}) as Record<string, unknown>;
+    const body = str(s.body);
+    if (!body) return [];
+    const { platform, format, name } = SCRIPT_TARGETS[t];
+    return [{
+      title: str(s.title) ?? `${name}: ${topic.title}`, platform, format, hook: str(s.hook), cta: str(s.cta), body,
+      sourceMaterial: topic.customer_language ?? topic.source_detail ?? topic.title, riskLevel: 'medium', hookRef: null, hookPattern: null,
+    }];
+  });
+  const claims = Array.isArray(o.claims) ? o.claims.filter((c): c is string => typeof c === 'string' && !!c.trim()) : [];
+  return { pieces, claims };
+}
+
+/** The script targets ticked on the idea card. */
+export const scriptsFor = (topic: Pick<TopicRow, 'platforms'>): ScriptTarget[] => (topic.platforms ?? []).filter(isScriptTarget);
 
 /** Where a topic is drafted: the operator's pick on the idea card, else Jev's (when platform fit is on),
  *  else undefined = the default set. Unknown names are dropped. */
@@ -121,7 +150,7 @@ export const chosenAngle = (angles: Angle[], idx: number | null | undefined): An
  *  anchor); `steal` is a competitor post whose structure the set copies (Decode). */
 export async function draftTopic(
   ctx: ModuleContext, topic: TopicRow,
-  opts: { platforms?: readonly DraftPlatform[]; steal?: string; frameworks?: Partial<Record<DraftPlatform, string>> } = {},
+  opts: { platforms?: readonly DraftPlatform[]; steal?: string; frameworks?: Partial<Record<DraftPlatform, string>>; scripts?: readonly ScriptTarget[] } = {},
 ): Promise<string[]> {
   const platforms = opts.platforms?.length ? DRAFT_PLATFORMS.filter((p) => opts.platforms!.includes(p)) : DEFAULT_DRAFT_PLATFORMS;
   // A steal already carries its hook pattern; otherwise offer the library's winners.
@@ -153,7 +182,17 @@ export async function draftTopic(
   );
   const set = parseDraftResponse(raw, platforms);
   const weights = new Map((await hookPatternWeights(ctx).catch(() => [])).map((x) => [x.pattern, x.weight]));
-  return createContentItems(ctx.db).createDraftSet(topic.id, draftPieces(topic, set, platforms, hooks?.ids ?? [], weights), set.claims);
+  const pieces = draftPieces(topic, set, platforms, hooks?.ids ?? [], weights);
+  // Video scripts in their own call; a failure never loses the written posts.
+  const scripts = opts.scripts?.length
+    ? await draftScripts(ctx, topic, opts.scripts, angle, pieces[0]?.body ?? null).catch((e: Error) => {
+        ctx.logger.warn(`scripts for ${topic.id}: ${e.message}`);
+        return { pieces: [], claims: [] };
+      })
+    : { pieces: [], claims: [] };
+  for (const p of scripts.pieces) pieces.push({ ...p, pillar: set.pillar, funnelStage: set.funnelStage, offerIdx: set.offer ?? null });
+  const claims = [...new Set([...set.claims, ...scripts.claims])];
+  return createContentItems(ctx.db).createDraftSet(topic.id, pieces.map((p) => ({ ...p, riskLevel: claims.length ? 'high' : p.riskLevel })), claims);
 }
 
 /** Anchor first (children link to it), then the repurposed children. Every claim is stored

@@ -10,7 +10,7 @@ import {
   type TopicRow,
   type ResearchInputRow,
 } from '../db/repo.ts';
-import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS } from '../prompts/platform-playbooks.ts';
+import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS } from '../prompts/platform-playbooks.ts';
 
 /** A draft awaiting approval, bundled with the claims a reviewer must check (§10.3). */
 interface ApprovalQueueItem {
@@ -87,8 +87,9 @@ export async function setTopicPlan(
   const plan: { platforms?: string[] | null; frameworks?: Record<string, string> | null } = {};
   if (input.platforms !== undefined) {
     if (input.platforms !== null && !Array.isArray(input.platforms)) return { ok: false, message: 'platforms must be a list' };
-    const list = input.platforms === null ? null : DRAFT_PLATFORMS.filter((p) => (input.platforms as unknown[]).includes(p));
-    if (list && !list.length) return { ok: false, message: 'Pick at least one platform.' };
+    const known: string[] = [...DRAFT_PLATFORMS, ...Object.keys(SCRIPT_TARGETS)]; // posts, then video scripts
+    const list = input.platforms === null ? null : known.filter((p) => (input.platforms as unknown[]).includes(p));
+    if (list && !list.some((p) => (DRAFT_PLATFORMS as readonly string[]).includes(p))) return { ok: false, message: 'Pick at least one platform to post on.' };
     plan.platforms = list;
   }
   if (input.frameworks !== undefined) {

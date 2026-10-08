@@ -103,3 +103,19 @@ export const frameworkBlock = (platforms: readonly DraftPlatform[], chosen: Part
     const f = frameworkFor(p, chosen[p]);
     return `- ${p} (${f.name}): ${f.steps}`;
   }).join('\n')}`;
+
+// ---- Video scripts beyond YouTube ---------------------------------------------------
+// Picked on the idea card next to the platforms; written in their own call (prompts/scripts.ts)
+// and filmed by a person (the Scripts desk), never auto-posted. YouTube Shorts stay a draft
+// platform above.
+
+export const SCRIPT_TARGETS = {
+  instagram_reel: { platform: 'instagram', format: 'reel_script', name: 'Instagram Reel script',
+    steps: '20-45 seconds. A spoken hook in the first 1.5 seconds with matching on-screen text (a pattern interrupt: a bold claim, a surprising visual or a "stop doing X"). 3-4 fast beats, one idea each, with [B-ROLL: …] cues. End on a line that loops back to the hook, and a CTA to save, share or comment a keyword. Captions carry the point with the sound off.' },
+  linkedin_video: { platform: 'linkedin', format: 'short_script', name: 'LinkedIn video script',
+    steps: '45-90 seconds. Subtitles-first: most watch with the sound off, so on-screen text carries every point. Open with why to listen (who you are and the problem) in under 5 seconds. Three beats: the problem, the insight, how to apply it. A calm, credible delivery. CTA: comment with their take, or follow for the next one.' },
+  facebook_reel: { platform: 'facebook', format: 'reel_script', name: 'Facebook Reel script',
+    steps: '30-60 seconds. Open with a relatable moment or story ("Last week a customer asked me…"). Conversational, warm, one main point. 3 beats with on-screen text. End with a simple question people can answer from their own life, to drive comments.' },
+} as const;
+export type ScriptTarget = keyof typeof SCRIPT_TARGETS;
+export const isScriptTarget = (v: unknown): v is ScriptTarget => typeof v === 'string' && Object.hasOwn(SCRIPT_TARGETS, v);

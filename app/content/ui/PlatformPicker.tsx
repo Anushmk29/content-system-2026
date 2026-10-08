@@ -7,9 +7,11 @@ import { useAction } from './actions';
 
 export interface PlatformOption { id: string; label: string; frameworks: { id: string; name: string }[] }
 
-export function PlatformPicker({ topicId, options, fit, chosen, defaults, frameworks }: {
+export function PlatformPicker({ topicId, options, scripts = [], fit, chosen, defaults, frameworks }: {
   topicId: string;
   options: PlatformOption[];
+  /** Video scripts filmed by a person (Instagram Reel, LinkedIn video, Facebook Reel). */
+  scripts?: { id: string; label: string }[];
   /** Jev's probability per platform; null when platform fit hasn't run for this idea. */
   fit: Record<string, number> | null;
   /** The operator's own pick; null = follow Jev (or the default set). */
@@ -23,9 +25,10 @@ export function PlatformPicker({ topicId, options, fit, chosen, defaults, framew
   const [fw, setFw] = useState<Record<string, string>>(frameworks ?? {});
   const path = `/content/api/topics/${topicId}`;
 
+  const order = [...options.map((o) => o.id), ...scripts.map((s) => s.id)];
   const toggle = (p: string) => {
-    const next = picked.includes(p) ? picked.filter((x) => x !== p) : options.map((o) => o.id).filter((x) => x === p || picked.includes(x));
-    if (!next.length) return; // at least one platform
+    const next = picked.includes(p) ? picked.filter((x) => x !== p) : order.filter((x) => x === p || picked.includes(x));
+    if (!next.some((x) => options.some((o) => o.id === x))) return; // at least one platform to post on
     setPicked(next);
     void a.call('pick', 'PATCH', path, { platforms: next });
   };
@@ -51,6 +54,14 @@ export function PlatformPicker({ topicId, options, fit, chosen, defaults, framew
           </button>
         ))}
       </div>
+      {scripts.length > 0 && (<>
+        <span className="bk-lab">Also write video scripts <span className="faint">(you film them)</span></span>
+        <div className="chips" role="group" aria-label="Video scripts">
+          {scripts.map((s) => (
+            <button key={s.id} type="button" className="chip" aria-pressed={picked.includes(s.id)} disabled={a.pending} onClick={() => toggle(s.id)}>{s.label}</button>
+          ))}
+        </div>
+      </>)}
       {options.some((o) => picked.includes(o.id) && o.frameworks.length > 1) && (
         <details className="pp-fw">
           <summary>Writing structure per platform</summary>

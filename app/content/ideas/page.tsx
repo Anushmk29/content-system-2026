@@ -1,7 +1,7 @@
 // Ideas & signals — the top of the funnel. Capture raw signals, then decide which scored
 // topics get drafted. Scores are shown per dimension so the call is an informed one.
 import {
-  getContext, getOperatorConsole, loadBrand, pillarSlugs, DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS,
+  getContext, getOperatorConsole, loadBrand, pillarSlugs, DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS,
   type OperatorConsole, type TopicRow,
 } from '@pratapai/content-pipeline';
 import { PlatformPicker, type PlatformOption } from '../ui/PlatformPicker';
@@ -15,8 +15,10 @@ const OPTIONS: PlatformOption[] = DRAFT_PLATFORMS.map((p) => ({
   frameworks: PLATFORM_FRAMEWORKS[p].map(({ id, name }) => ({ id, name })),
 }));
 
+const SCRIPTS = Object.entries(SCRIPT_TARGETS).map(([id, s]) => ({ id, label: s.name.replace(' script', '') }));
+
 function Picker({ t }: { t: TopicRow }) {
-  return <PlatformPicker topicId={t.id} options={OPTIONS} fit={t.platform_fit ?? null} chosen={t.platforms ?? null}
+  return <PlatformPicker topicId={t.id} options={OPTIONS} scripts={SCRIPTS} fit={t.platform_fit ?? null} chosen={t.platforms ?? null}
     defaults={[...DEFAULT_DRAFT_PLATFORMS]} frameworks={t.frameworks ?? null} />;
 }
 
