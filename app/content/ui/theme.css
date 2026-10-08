@@ -20,6 +20,14 @@
   --info: #2f5fb3;
   --violet: #7c3aed;
   --teal: #0e7490;
+  /* Blue pencil: the editor's mark. Used ONLY for what the user has to act on (primary buttons,
+     cards that need them, nav counts), so blue always means "your move". */
+  --act: #2346c4;
+  --act-hover: #1b38a0;
+  --act-tint: #e9eefc;
+  --warn-tint: #fbf0dc;
+  --danger-tint: #fdeae2;
+  --ok-tint: #e4f2e8;
   --radius: 4px;
   --ease: cubic-bezier(.2, .8, .2, 1);
   --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -61,7 +69,7 @@ a { color: inherit; }
 .nav-ico { width: 16px; text-align: center; font-family: var(--font-mono); font-size: 12px; }
 .nav-badge {
   margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; text-align: center;
-  font: 500 10.5px/18px var(--font-mono); background: var(--ink); color: var(--paper);
+  font: 600 10.5px/18px var(--font-mono); background: var(--act); color: #fff;
 }
 .nav-badge[data-tone='danger'] { background: var(--danger); }
 .side-foot { margin-top: auto; padding: 10px 12px; font: 11px var(--font-mono); color: var(--faint); }
@@ -157,6 +165,13 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
 .btn:disabled { opacity: .5; cursor: default; }
 .btn-ink, .btn-brand { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .btn-ink:hover, .btn-brand:hover { background: var(--ink-2); }
+/* The one action that moves the work forward on a screen: bigger, blue pencil. */
+.btn-primary {
+  background: var(--act); color: #fff; border-color: var(--act);
+  font-size: 14.5px; font-weight: 600; padding: 9px 18px; min-height: 40px;
+}
+.btn-primary:hover { background: var(--act-hover); border-color: var(--act-hover); }
+.btn-primary.btn-sm { font-size: 13px; padding: 6px 14px; min-height: 32px; }
 .btn-lime { background: var(--lime); color: var(--lime-ink); border-color: var(--lime-ink); }
 .btn-ok { color: var(--ok); border-color: var(--ok); }
 .btn-danger { color: var(--danger); border-color: var(--danger); }
@@ -559,3 +574,42 @@ textarea.input { resize: vertical; min-height: 64px; line-height: 1.5; }
 .pp-row > span { width: 90px; color: var(--ink-2); }
 .pp-row select { flex: 1; min-width: 0; padding: 4px 8px; }
 .linkish { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--ink); text-decoration: underline; cursor: pointer; }
+
+/* ---- needs-you cards (Today, and anything waiting on the user) ----------- */
+.attention {
+  position: relative; border: 1px solid var(--rule); border-left: 3px solid var(--act);
+  background: var(--act-tint); border-radius: var(--radius); padding: 12px 14px;
+}
+.attention[data-tone='danger'] { border-left-color: var(--danger); background: var(--danger-tint); }
+.attention[data-tone='warn'] { border-left-color: var(--warn); background: var(--warn-tint); }
+.attention[data-tone='info'] { border-left-color: var(--rule-2); background: var(--paper-2); }
+.needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.needs .attention { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.needs .what { flex: 1 1 320px; min-width: 0; }
+.needs .what b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -0.1px; }
+.needs .what span { display: block; margin-top: 2px; font-size: 13px; color: var(--ink-2); }
+.needs .acts { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.today-date { font-size: 13px; color: var(--muted); margin: -6px 0 18px; }
+.quiet-kpis { display: flex; gap: 28px; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 8px 0 32px; }
+.quiet-kpis a, .quiet-kpis div { text-decoration: none; color: var(--ink-2); font-size: 13px; }
+.quiet-kpis b { font-size: 20px; font-weight: 600; color: var(--ink); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.more { margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.more > summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---- Brand Studio as cards ----------------------------------------------- */
+.bk-sheet { display: grid; gap: 14px; align-content: start; }
+.bk-sheet > .bk-sec {
+  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px; padding: 22px 24px;
+}
+.bk-sheet > .bk-sec:first-child, .bk-sheet > .bk-sec:last-child { border-color: var(--rule); }
+.bk-sheet > .bk-sec[data-todo] { border-left: 3px solid var(--act); }
+.bk-sec { scroll-margin-top: 72px; }
+.kit-meter { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 6px; }
+.kit-meter p { flex: 1 1 280px; font-size: 13px; color: var(--ink-2); }
+.kit-bar { display: flex; gap: 3px; }
+.kit-bar span { width: 18px; height: 8px; border-radius: 2px; background: var(--rule-2); }
+.kit-bar span[data-done] { background: var(--ok); }
+@media (max-width: 720px) { .bk-sheet > .bk-sec { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px 16px; } .bk-head { position: static; } }
+.voice-rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.voice-rules li { padding: 8px 12px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13.5px; line-height: 1.5; }

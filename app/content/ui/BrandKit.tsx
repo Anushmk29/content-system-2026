@@ -20,9 +20,11 @@ export const kitDone = (k: Brand) => ({
   accounts: Object.values(k.ownHandles).some((h) => h?.trim()),
 });
 
+const anchor = (t: string) => t.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+
 export function Card({ title, hint, done, children }: { title: string; hint?: ReactNode; done?: boolean; children: ReactNode }) {
   return (
-    <section className="bk-sec">
+    <section className="bk-sec" id={anchor(title)} data-todo={done === false || undefined}>
       <header className="bk-head">
         <h2>{title}</h2>
         {hint && <p>{hint}</p>}
@@ -36,7 +38,7 @@ export function Card({ title, hint, done, children }: { title: string; hint?: Re
 function SaveRow({ a, onClick, label = 'Save', disabled }: { a: ReturnType<typeof useAction>; onClick: () => void; label?: string; disabled?: boolean }) {
   return (
     <span className="bk-save">
-      <button type="button" className="btn btn-ink" disabled={a.pending || disabled} onClick={onClick}>{a.busy === 'save' ? 'Saving…' : label}</button>
+      <button type="button" className="btn btn-primary" disabled={a.pending || disabled} onClick={onClick}>{a.busy === 'save' ? 'Saving…' : label}</button>
       {a.feedback}
     </span>
   );
@@ -89,6 +91,8 @@ export function VoiceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Save
   const a = useAction();
   const [tab, setTab] = useState<'write' | 'samples' | 'import'>('write');
   const [voice, setVoice] = useState(kit.voice);
+  const [editing, setEditing] = useState(!kit.voice.trim());
+  const rules = voice.split('\n').map((l) => l.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
   const [samples, setSamples] = useState(kit.voiceSamples.join('\n---\n'));
   const [platform, setPlatform] = useState('linkedin');
   const [handle, setHandle] = useState(kit.ownHandles.linkedin ?? '');
@@ -100,7 +104,14 @@ export function VoiceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Save
           <button key={k} type="button" role="tab" aria-selected={tab === k} aria-current={tab === k ? 'page' : undefined} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
-      {tab === 'write' && (
+      {tab === 'write' && !editing && (
+        <div className="bk-field">
+          <span className="bk-lab">Voice guide <span className="faint">({rules.length} rules every draft follows)</span></span>
+          <ul className="voice-rules">{rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+          <span><button type="button" className="btn btn-sm" onClick={() => setEditing(true)}>Edit the guide</button></span>
+        </div>
+      )}
+      {tab === 'write' && editing && (
         <label className="bk-field"><span className="bk-lab">Voice guide</span>
           <textarea className="input bk-voice" rows={9} value={voice} onChange={(e) => setVoice(e.target.value)}
             placeholder={'- Warm and plain, like talking to a friend over coffee.\n- Short sentences. One idea per paragraph.\n- Open with a real situation, never a question.\n- No hype words: “game-changer”, “unlock”, “revolutionise”.'} /></label>
@@ -110,7 +121,7 @@ export function VoiceSection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Save
           <textarea className="input" rows={10} value={samples} onChange={(e) => setSamples(e.target.value)} placeholder={'First post…\n---\nSecond post…\n---\nThird post…'} /></label>
         <span className="bk-save">
           <button type="button" className="btn" disabled={a.pending || posts.length < 3}
-            onClick={async () => { const r = await a.call('voice', 'POST', '/content/api/brand/voice', { samples: posts }); if (r?.voice) { setVoice(r.voice); setTab('write'); } }}>
+            onClick={async () => { const r = await a.call('voice', 'POST', '/content/api/brand/voice', { samples: posts }); if (r?.voice) { setVoice(r.voice); setEditing(true); setTab('write'); } }}>
             {a.busy === 'voice' ? 'Reading your posts…' : `Write my voice guide from ${posts.length} post${posts.length === 1 ? '' : 's'}`}
           </button>
           <span className="bk-note">About 1¢</span>
@@ -414,11 +425,33 @@ export function LearnedSection({ kit }: { kit: Brand }) {
   );
 }
 
+const PARTS: [keyof ReturnType<typeof kitDone>, string][] = [
+  ['identity', 'Who you are'], ['voice', 'Your voice'], ['audience', 'Audience and themes'],
+  ['offers', 'Offers'], ['look', 'Look'], ['accounts', 'Your accounts'],
+];
+
+/** How much of the kit is set, and a jump to the next part to fill. Every draft and decision reads the kit. */
+function KitMeter({ kit }: { kit: Brand }) {
+  const done = kitDone(kit);
+  const left = PARTS.filter(([k]) => !done[k]);
+  return (
+    <div className={left.length ? 'attention kit-meter' : 'kit-meter'}>
+      <div className="kit-bar" aria-hidden>{PARTS.map(([k]) => <span key={k} data-done={done[k] || undefined} />)}</div>
+      <p style={{ margin: 0 }}>
+        <b>{PARTS.length - left.length} of {PARTS.length} parts set.</b>{' '}
+        Every draft, script and decision is written from this kit{left.length ? ', so the gaps show up in the posts.' : '.'}
+      </p>
+      {left.length > 0 && <a href={`#${anchor(left[0]![1])}`} className="btn btn-primary btn-sm">Fill in: {left[0]![1]}</a>}
+    </div>
+  );
+}
+
 /** The whole kit on one page (/content/brand). */
 export function BrandKit({ kit, fonts, curated }: { kit: Brand; fonts: FontRow[]; curated: readonly string[] }) {
   return (
     <div className="bk-page">
       <div className="bk-sheet">
+        <KitMeter kit={kit} />
         <IdentitySection kit={kit} />
         <VoiceSection kit={kit} />
         <AudienceSection kit={kit} />

@@ -7,18 +7,22 @@ export interface NavBadges { approvals: number; ideas: number; training: number;
 
 /** The one page list: the sidebar and the ⌘K palette both read it. */
 export const GROUPS: { label: string; admin?: boolean; links: { href: string; label: string; ico: string; badge?: keyof NavBadges; danger?: boolean }[] }[] = [
-  { label: 'Workspace', links: [
+  { label: 'Your day', links: [
     { href: '/content', label: 'Today', ico: '01' },
-    { href: '/content/board', label: 'Board', ico: '02' },
-    { href: '/content/calendar', label: 'Calendar', ico: '03' },
-    { href: '/content/approvals', label: 'Approvals', ico: '04', badge: 'approvals' },
-    { href: '/content/ideas', label: 'Ideas & signals', ico: '05', badge: 'ideas' },
-    { href: '/content/decode', label: 'Decode', ico: '06' },
-    { href: '/content/videos', label: 'Videos', ico: '07' },
-    { href: '/content/scripts', label: 'Scripts', ico: '08', badge: 'scripts' },
+    { href: '/content/ideas', label: 'Ideas', ico: '02', badge: 'ideas' },
+    { href: '/content/approvals', label: 'Approvals', ico: '03', badge: 'approvals' },
+    { href: '/content/calendar', label: 'Calendar', ico: '04' },
+    { href: '/content/scripts', label: 'Film & post', ico: '05', badge: 'scripts' },
+    { href: '/content/board', label: 'Board', ico: '06' },
+  ] },
+  { label: 'Research', links: [
+    { href: '/content/decode', label: 'Decode', ico: '07' },
+    { href: '/content/videos', label: 'Videos', ico: '08' },
     { href: '/content/hooks', label: 'Hooks', ico: '09' },
-    { href: '/content/styles', label: 'Styles', ico: '10' },
-    { href: '/content/brand', label: 'Brand kit', ico: '11' },
+  ] },
+  { label: 'Brand', links: [
+    { href: '/content/brand', label: 'Brand kit', ico: '10' },
+    { href: '/content/styles', label: 'Styles', ico: '11' },
   ] },
   { label: 'Growth', links: [
     { href: '/content/analytics', label: 'Analytics', ico: '12' },

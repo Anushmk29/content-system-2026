@@ -67,7 +67,7 @@ export default async function IdeasPage() {
                 ))}
               </ul>
               {data.signals.length > 5 && <p className="faint" style={{ fontSize: 12 }}>+{data.signals.length - 5} more</p>}
-              <RunModuleButton id="research" label="Turn into topics (Research)" className="btn" />
+              <RunModuleButton id="research" label="Turn into topics" className="btn btn-primary" />
             </>
           )}
         </Tile>
@@ -97,7 +97,7 @@ export default async function IdeasPage() {
                   </li>
                 ))}
               </ul>
-              <RunModuleButton id="draft_generator" label="Draft them now" className="btn btn-ink" />
+              <RunModuleButton id="draft_generator" label="Draft them now" className="btn btn-primary" />
             </>
           )}
         </Tile>
@@ -157,7 +157,7 @@ function TopicCard({ t, pillars }: { t: TopicRow; pillars: string[] }) {
       {t.customer_language && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 10px', fontStyle: 'italic' }}>“{t.customer_language}”</p>}
       <Picker t={t} />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'selected' }} label="Select to draft" className="btn btn-ink" />
+        <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'selected' }} label="Draft this idea" className="btn btn-primary" />
         <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn" />
         {t.created_at && <span className="faint" style={{ fontSize: 11.5, marginLeft: 'auto' }}>{t.source ?? 'research'} · {ago(t.created_at)}</span>}
       </div>

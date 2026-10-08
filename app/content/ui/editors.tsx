@@ -31,7 +31,7 @@ export function ApprovalActions({ itemId, unproven = 0, reasons = [] }: { itemId
       <textarea id="approval-note" className="input" placeholder="Anything else? (optional when you picked a reason above)"
         value={note} onChange={(e) => setNote(e.target.value)} style={{ minHeight: 52 }} />
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button type="button" data-key="approve" className="btn btn-ink" disabled={a.pending} onClick={() => decide('approve')}>{a.busy === 'approve' ? '…' : 'Approve'} <kbd>A</kbd></button>
+        <button type="button" data-key="approve" className="btn btn-primary" disabled={a.pending} onClick={() => decide('approve')}>{a.busy === 'approve' ? '…' : 'Approve'} <kbd>A</kbd></button>
         <button type="button" data-key="changes" className="btn" disabled={a.pending} onClick={() => decide('changes')}>{a.busy === 'changes' ? '…' : 'Request changes'} <kbd>C</kbd></button>
         <button type="button" data-key="reject" className="btn btn-danger" disabled={a.pending} onClick={() => decide('reject')}>{a.busy === 'reject' ? '…' : 'Reject'} <kbd>R</kbd></button>
         {warn ? <span style={{ fontSize: 12.5, color: 'var(--warn)' }}>{warn}</span> : a.feedback}
@@ -188,7 +188,7 @@ export function AddSignal({ pillars = [] }: { pillars?: { slug: string; label: s
         <span className="chips" role="group" aria-label="Where it came from">
           {CHANNELS.map((c) => <button key={c} type="button" className="chip" aria-pressed={channel === c} onClick={() => setChannel(channel === c ? '' : c)}>{c}</button>)}
         </span>
-        <button type="submit" className="btn btn-brand" disabled={!text.trim() || a.pending}>{a.busy ? '…' : '+ Capture signal'}</button>
+        <button type="submit" className="btn btn-primary" disabled={!text.trim() || a.pending}>{a.busy ? '…' : '+ Capture signal'}</button>
         {a.feedback}
       </div>
     </form>
