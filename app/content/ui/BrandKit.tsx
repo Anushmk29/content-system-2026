@@ -245,7 +245,7 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
           </div>
           <span className="bk-line">
             <label className="btn btn-sm">{hasLogo ? 'Replace logo' : 'Upload logo'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => upload('/content/api/brand/logo', 'logo', e.target.files)} /></label>
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => upload('/content/api/brand/logo', 'logo', e.target.files)} /></label>
             {hasLogo && <button type="button" className="btn btn-sm" onClick={async () => { await up.call('rm', 'DELETE', '/content/api/brand/logo'); setLogoV(0); }}>Remove</button>}
           </span>
           <span className="bk-note">A PNG with a transparent background looks best.</span>

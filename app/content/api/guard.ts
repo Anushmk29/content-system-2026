@@ -23,7 +23,12 @@ export function deniedAdmin(req: Request): NextResponse | null {
   return roleOf(req) === 'admin' ? null : NextResponse.json({ ok: false, error: 'admin only' }, { status: 403 });
 }
 
-/** A route handler behind denied() (or deniedAdmin with `admin`); a throw becomes a 400 `{ ok: false, [key]: message }`. */
+/** Postgres errors carry `severity` + a 5-char SQLSTATE `code`; their text names tables and columns. */
+const isDbError = (e: unknown) =>
+  !!e && typeof e === 'object' && 'severity' in e && typeof (e as { code?: unknown }).code === 'string';
+
+/** A route handler behind denied() (or deniedAdmin with `admin`); a throw becomes a 400 `{ ok: false, [key]: message }`.
+ *  Database errors are logged and replaced by a generic message so schema details never reach the browser. */
 export function handle<A extends unknown[]>(
   fn: (req: Request, ...rest: A) => Promise<Response>,
   opts: { admin?: boolean; key?: 'error' | 'message' } = {},
@@ -34,6 +39,10 @@ export function handle<A extends unknown[]>(
     try {
       return await fn(req, ...rest);
     } catch (e) {
+      if (isDbError(e)) {
+        console.error(`[content] ${req.method} ${new URL(req.url).pathname}:`, e);
+        return NextResponse.json({ ok: false, [opts.key ?? 'error']: 'Something went wrong saving that. It has been logged.' }, { status: 500 });
+      }
       return NextResponse.json({ ok: false, [opts.key ?? 'error']: (e as Error).message }, { status: 400 });
     }
   };

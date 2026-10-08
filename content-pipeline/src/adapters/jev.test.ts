@@ -37,3 +37,10 @@ test('applyRules: thresholds set fields, later rules win', () => {
     { when: { question: 'lane', choice: 'off_niche' }, set: { skip: true } },
   ]), { paid: true, skip: true });
 });
+
+test('redact: upstream error bodies lose keys and tokens', async () => {
+  const { redact } = await import('./adapter.ts');
+  const out = redact('{"error":"bad","api_key":"abc123","auth":"Bearer sk-or-v1-0123456789abcdef"} ?token=zzz');
+  assert.ok(!out.includes('abc123') && !out.includes('0123456789abcdef') && !out.includes('zzz'), out);
+  assert.ok(out.includes('"error":"bad"'));
+});

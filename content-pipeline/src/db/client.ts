@@ -2,6 +2,7 @@
 // imported dynamically so pure-logic code can run/test without the driver, and
 // every connection sets search_path to the `content` schema so we never read or
 // write the host app's tables by accident.
+import { readFileSync } from 'node:fs';
 import type { Pool, PoolClient } from 'pg';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
@@ -28,9 +29,13 @@ const run = async <T>(c: Pool | PoolClient, text: string, params?: unknown[]): P
 // "no encryption" or "self-signed certificate in certificate chain". We enable TLS for
 // any non-local host (without forcing the operator to append ?sslmode=require), and skip
 // it for localhost. Override with CONTENT_DATABASE_SSL = require | no-verify | disable.
-function sslFor(url: string): false | { rejectUnauthorized: boolean } {
+// CONTENT_DATABASE_CA = path to the provider's CA cert (Supabase: Database settings → SSL
+// certificate) turns full verification on for remote hosts.
+function sslFor(url: string): false | { rejectUnauthorized: boolean; ca?: string } {
   const mode = (process.env.CONTENT_DATABASE_SSL ?? '').trim().toLowerCase();
   if (mode === 'disable') return false;
+  const caPath = process.env.CONTENT_DATABASE_CA?.trim();
+  if (caPath) return { rejectUnauthorized: true, ca: readFileSync(caPath, 'utf8') };
   if (mode === 'require') return { rejectUnauthorized: true };
   if (mode === 'no-verify') return { rejectUnauthorized: false };
   const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url) || /\bhost=localhost\b/.test(url);

@@ -30,6 +30,8 @@ exactly what to expect.
 | 5 | **Telegram bot + chat** | optional | `CONTENT_TELEGRAM_BOT_TOKEN` + `_CHAT_ID` | The approval queue. Without it, approval degrades. |
 | 6 | Telegram webhook secret | optional | `CONTENT_TELEGRAM_WEBHOOK_SECRET` | Protects the approve/reject webhook. |
 | 7 | **Client password** | **required in production** | `CONTENT_RUN_SECRET` | The client's login for the whole dashboard; also the `x-content-secret` header for cron. Production refuses to serve without it. Blank in dev = open. |
+| 7a | Cron secret | recommended | `CONTENT_CRON_SECRET` | Send as `x-content-secret` from cron. Opens only `/content/api/run` and `/content/api/modules/*/run`, so the client's login password no longer has to live in the cron config. |
+| 7c | Database CA cert | recommended | `CONTENT_DATABASE_CA` | Path to Supabase's SSL certificate (Database settings → SSL). Turns on full TLS verification; without it the connection is encrypted but the server cert isn't verified. |
 | 7b | Admin password | optional | `CONTENT_ADMIN_SECRET` | Your login: also opens System + Training. Changing either password logs everyone out. |
 | 8 | A Next.js host app | optional | — | Only needed for the **dashboard + HTTP routes**. The pipeline itself runs headless via `npm run pipeline`. |
 | 9 | Jev (decision model) | automatic | `CONTENT_OPENROUTER_API_KEY` (+ optional `CONTENT_JEV_MODE`, `CONTENT_JEV_MODEL`) | Runs through OpenRouter on the same key, shadow mode by default. About $0.00001 a decision. `CONTENT_JEV_MODE=off` turns it off. |

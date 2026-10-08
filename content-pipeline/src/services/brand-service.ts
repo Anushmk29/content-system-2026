@@ -202,6 +202,8 @@ export async function deleteFont(ctx: ModuleContext, family: string): Promise<vo
 
 /** Any image → a PNG at most 1000px on its long side; null removes the logo. */
 export async function setLogo(ctx: ModuleContext, image: Buffer | null): Promise<void> {
+  // SVG can reference external files and runs through librsvg; logos are raster only.
+  if (image && /<svg[\s>]/i.test(image.subarray(0, 2048).toString('utf8'))) throw new Error('Upload the logo as PNG, JPG or WebP (not SVG).');
   const png = image && await sharp(image).resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
   const r = await ctx.db.query(`update content.brand_kit set logo_png = $1 where id`, [png]);
   if (!r.rowCount) throw new Error('Save your brand name first.');

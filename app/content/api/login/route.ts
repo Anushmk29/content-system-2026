@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getContext, logAction } from '@pratapai/content-pipeline';
 import { SESSION_COOKIE, SESSION_DAYS, roleForPassword, signSession } from '../../auth';
+import { clientIp, limited } from '../../rate-limit';
 
 const cookie = (req: Request) => ({
   httpOnly: true, sameSite: 'lax' as const, path: '/content',
@@ -9,6 +10,9 @@ const cookie = (req: Request) => ({
 
 // POST /content/api/login { password } → session cookie. DELETE → log out.
 export async function POST(req: Request) {
+  if (limited(`login:${clientIp(req)}`, 10)) {
+    return NextResponse.json({ ok: false, error: 'Too many tries — wait a minute.' }, { status: 429 });
+  }
   const { password } = (await req.json().catch(() => ({}))) as { password?: string };
   const role = roleForPassword(typeof password === 'string' ? password : null);
   if (!role) return NextResponse.json({ ok: false, error: 'Wrong password.' }, { status: 401 });
