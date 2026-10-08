@@ -637,6 +637,8 @@ alter table content.topics add column if not exists angles jsonb;
 alter table content.topics add column if not exists angle_idx smallint;
 -- The Brand Kit's audience beliefs (myths the audience holds) — angles flip these first.
 alter table content.brand_kit add column if not exists audience_beliefs jsonb not null default '[]';
+-- What the brand stands for; read by every prompt (prompts/brand-context.ts).
+alter table content.brand_kit add column if not exists brand_values jsonb not null default '[]';
 
 -- Phase 6: which hook pattern a draft used, and what each pattern earns on OUR posts:
 -- mean ln(vs_usual) over 90 days, shrunk toward 0 by n/(n+5) so 1 lucky post can't dominate.

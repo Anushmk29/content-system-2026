@@ -2,12 +2,12 @@
 // The Jev questions in modules/decision-tasks.ts mirror scoringSystem / qcSystem — keep them in sync.
 import { FUNNEL_STAGES } from '../../core/src/index.ts';
 import { brand, pillarSlugs, type Brand } from '../brand.ts';
-import { who, pillarLines, teamLine } from './brand-context.ts';
+import { who, teamLine, brandBrief } from './brand-context.ts';
 
 // === Topic Scorer (Bible §7) ================================================
 export const scoringSystem = (b: Brand = brand()) => `You score content topics for ${who(b)} on five
 1-5 factors (Bible §7). Be honest and conservative — never inflate a score.
-AUDIENCE: ${b.audience}
+${brandBrief(b)}
 - leadIntent: is this close to a problem people pay to solve?
 - reach: is there real demand, and is it not already flooded with near-identical takes?
 - brandFit: does it fit our voice and our audience?
@@ -79,9 +79,7 @@ question, a community pain point, a competitor angle, an internal note) into ONE
 content topic for ${who(b)}. Stay grounded in the signal — do NOT invent a topic that isn't
 supported by it. Prefer the customer's own words. Frame the title as something useful to
 this audience, not clickbait.
-AUDIENCE: ${b.audience}
-PILLARS:
-${pillarLines(b)}`;
+${brandBrief(b)}`;
 
 export function buildResearchPrompt(input: { rawText: string; channel?: string | null; marketContext?: string | null }): string {
   return `Turn this signal into one topic. Respond with ONLY JSON:

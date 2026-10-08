@@ -46,17 +46,41 @@ const save = async (a: ReturnType<typeof useAction>, body: unknown, onSaved?: Sa
   if (await a.call('save', 'PATCH', SAVE, body)) onSaved?.();
 };
 
+/** Common brand values, offered as one-click chips so most people never type them. */
+const VALUE_SUGGESTIONS = [
+  'Honest numbers only', 'No hype', 'Practical over theoretical', 'Customer first', 'Transparency',
+  'Quality over quantity', 'Plain language', 'Respect the reader’s time', 'Sustainability', 'Inclusive',
+];
+
 export function IdentitySection({ kit, onSaved, cta }: { kit: Brand; onSaved?: Saved; cta?: string }) {
   const a = useAction();
   const [name, setName] = useState(kit.name);
   const [tagline, setTagline] = useState(kit.tagline);
+  const [values, setValues] = useState<string[]>(kit.values ?? []);
+  const [own, setOwn] = useState('');
+  const toggle = (v: string) => setValues(values.includes(v) ? values.filter((x) => x !== v) : [...values, v].slice(0, 8));
+  const addOwn = () => { const v = own.trim(); if (v && !values.includes(v)) setValues([...values, v].slice(0, 8)); setOwn(''); };
   return (
-    <Card title="Who you are" hint="Your name as it appears on posts, and one line on what you do." done={kitDone(kit).identity}>
+    <Card title="Who you are" hint="Your name as it appears on posts, one line on what you do, and what you stand for." done={kitDone(kit).identity}>
       <label className="bk-field"><span className="bk-lab">Brand or your name</span>
         <input className="input bk-big" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Brew & Books" /></label>
       <label className="bk-field"><span className="bk-lab">What you do, in one line</span>
         <input className="input" value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="e.g. bookkeeping for independent cafés" /></label>
-      <SaveRow a={a} label={cta} disabled={!name.trim()} onClick={() => save(a, { name, tagline }, onSaved)} />
+      <div className="bk-field">
+        <span className="bk-lab">What you stand for <span className="faint">(pick up to 8)</span></span>
+        <div className="chips" role="group" aria-label="Brand values">
+          {[...VALUE_SUGGESTIONS, ...values.filter((v) => !VALUE_SUGGESTIONS.includes(v))].map((v) => (
+            <button key={v} type="button" className="chip" aria-pressed={values.includes(v)} onClick={() => toggle(v)}>{v}</button>
+          ))}
+        </div>
+        <span className="bk-line">
+          <input className="input" value={own} onChange={(e) => setOwn(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOwn(); } }}
+            placeholder="Add your own, e.g. Local suppliers first" aria-label="Add your own value" style={{ flex: '1 1 240px' }} />
+          <button type="button" className="btn btn-sm" disabled={!own.trim() || values.length >= 8} onClick={addOwn}>+ Add</button>
+        </span>
+        <span className="bk-note">Every draft, script and decision is checked against these.</span>
+      </div>
+      <SaveRow a={a} label={cta} disabled={!name.trim()} onClick={() => save(a, { name, tagline, values }, onSaved)} />
     </Card>
   );
 }

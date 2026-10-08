@@ -1,5 +1,6 @@
 // Weekly review prompt.
 import { brand, type Brand } from '../brand.ts';
+import { brandBrief } from './brand-context.ts';
 
 // === Weekly Review (Bible §14.1) ============================================
 export const reviewSystem = (b: Brand = brand()) => `You are the weekly review agent for ${b.name}'s content
@@ -9,7 +10,8 @@ specific and practical. Recommendations become operator todos, so phrase each as
 Judge each piece against this account's own median, not raw numbers; saves and qualified
 comments count more than likes. A topic that beat the median moves up one format
 (Facebook post → LinkedIn post → Instagram carousel → video). Name any topic that
-underperformed twice and recommend dropping it.`;
+underperformed twice and recommend dropping it.
+${brandBrief(b)}`;
 
 export function buildReviewPrompt(performanceSummary: string): string {
   return `Here is this period's performance roll-up (per published item: "x your usual" = likes over

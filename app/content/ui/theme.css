@@ -130,6 +130,16 @@ a.row:hover { background: var(--paper); }
   border: 1px solid var(--c, var(--rule-2));
   background: color-mix(in srgb, var(--c, transparent) 8%, transparent);
 }
+/* Choice chips (values, platforms, reasons): pick instead of typing. */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+button.chip {
+  cursor: pointer; font: 500 12.5px/28px var(--font-ui); padding: 0 12px; color: var(--ink-2);
+  border-color: var(--rule-2); background: var(--paper); transition: background .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--ink-2); }
+button.chip[aria-pressed='true'] { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+button.chip[aria-pressed='true']::before { content: '✓'; }
+button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .plat {
   display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
   font: 500 11px var(--font-mono); color: var(--ink-2);

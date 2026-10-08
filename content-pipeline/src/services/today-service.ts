@@ -7,6 +7,7 @@ import { groupIdeas } from './board-service.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { getOwnResults, type OwnResults } from './analytics-service.ts';
 import { CONTENT_STATUSES, WEEKLY_POST_TARGET } from '../../core/src/index.ts';
+import { isManual } from '../prompts/platform-playbooks.ts';
 
 interface PillarMix {
   pillar: string;
@@ -137,7 +138,7 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   const publisherBroken = publisher?.lastStatus === 'error' || publisher?.lastStatus === 'degraded';
   let blocked = 0;
   // A YouTube Short is filmed by hand, never scheduled: it has its own prompts below.
-  for (const it of items.filter((i) => i.status === 'approved' && !i.postiz_id && i.platform !== 'youtube')) {
+  for (const it of items.filter((i) => i.status === 'approved' && !i.postiz_id && !isManual(i))) {
     if (!readyIds.has(it.id)) {
       blocked++;
       actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · approved but a claim has no proof: add a proof link or edit the claim out`, itemId: it.id });
@@ -174,11 +175,11 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   // up next: timed items in the next 7 days + approved ones with no time yet
   const horizon = now.getTime() + 7 * 86_400_000;
   const upNext: UpNextRow[] = items
-    .filter((i) => (i.status === 'approved' || i.status === 'queued') && i.platform !== 'youtube')
+    .filter((i) => (i.status === 'approved' || i.status === 'queued') && !isManual(i))
     .map((i) => ({ id: i.id, title: i.title, platform: i.platform, status: i.status, at: i.scheduled_at ? new Date(i.scheduled_at).toISOString() : null }))
     .filter((r) => r.at === null || (new Date(r.at).getTime() >= now.getTime() - 3_600_000 && new Date(r.at).getTime() <= horizon))
     .sort((a, b) => (a.at ?? '9') < (b.at ?? '9') ? -1 : 1);
-  const runwayCount = items.filter((i) => i.platform !== 'youtube' && (i.status === 'queued' || (i.status === 'approved' && readyIds.has(i.id)))).length;
+  const runwayCount = items.filter((i) => !isManual(i) && (i.status === 'queued' || (i.status === 'approved' && readyIds.has(i.id)))).length;
 
   const oldest = waiting[0];
   const ideas = groupIdeas(items);

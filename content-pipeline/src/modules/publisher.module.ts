@@ -8,6 +8,7 @@ import { buildUtmUrl, type Platform } from '../../core/src/index.ts';
 import { renderSlides, splitSlides } from '../slides.ts';
 import { itemMedia } from '../services/asset-service.ts';
 import { offerFor } from '../brand.ts';
+import { isManual } from '../prompts/platform-playbooks.ts';
 
 /** Posting time: one post per platform per day at `hourUtc`, the earliest day that is
  *  still ahead of `now` and after that platform's last booked slot. */
@@ -65,7 +66,7 @@ export const publisherModule: Module = {
     for (const item of ready) {
       try {
         if (item.postiz_id) continue; // idempotent: already scheduled
-        if (item.platform === 'youtube') continue; // a Short script: the founder films and uploads it
+        if (isManual(item)) continue; // Short scripts are filmed, Reddit posts are posted by hand
         // No offer saved → the post goes out without a link.
         const offer = offerFor(item.offer_idx);
         const utm = offer ? buildUtmUrl(offer.url, {

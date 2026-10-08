@@ -16,6 +16,21 @@ export const pillarLines = (b: Brand) => pillarSlugs(b)
 /** "Acme (bookkeeping for cafés), writing for: <first audience line>" */
 export const teamLine = (b: Brand = brand()) => `${who(b)}, writing for: ${b.audience.split('\n')[0]}`;
 
+/** The VALUES block (empty when none are saved). */
+const valuesBlock = (b: Brand) => b.values.length
+  ? `\nVALUES — what ${b.name} stands for; never write anything that goes against them:\n${b.values.map((v) => `- ${v}`).join('\n')}\n`
+  : '';
+
+/** The short brand block for prompts that judge or plan rather than write in the voice
+ *  (scoring, research, review, Decode): who, audience, values, voice in brief, pillars. */
+export function brandBrief(b: Brand = brand()): string {
+  return `BRAND: ${who(b)}
+AUDIENCE: ${b.audience || "the brand's customers and prospects"}${valuesBlock(b)}
+VOICE (in brief): ${(b.voice || 'Clear, practical and specific. No hype.').slice(0, 600)}
+PILLARS:
+${pillarLines(b)}`;
+}
+
 /** The drafting system prompt for this brand. */
 export function brandSystem(b: Brand = brand()): string {
   const offers = b.offers.length
@@ -29,7 +44,7 @@ ${b.audience || "the brand's customers and prospects"}
 VOICE:
 ${b.voice || 'Clear, practical and specific. No hype.'}
 - Proof-aware: NEVER invent metrics, clients, or results.
-${b.voiceSamples.length ? `
+${valuesBlock(b)}${b.voiceSamples.length ? `
 EXAMPLES OF THE VOICE (match the rhythm and word choice, never copy the content):
 ${b.voiceSamples.slice(0, 5).map((v) => `<example>\n${v.slice(0, 1200)}\n</example>`).join('\n')}
 ` : ''}

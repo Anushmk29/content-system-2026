@@ -22,6 +22,7 @@ const FORMAT: Record<DraftPlatform, string> = {
   x: 'thread',
   instagram: 'carousel',
   facebook: 'founder_post',
+  reddit: 'reddit_answer',
   youtube: 'short_script',
 };
 
@@ -110,7 +111,7 @@ export const chosenAngle = (angles: Angle[], idx: number | null | undefined): An
  *  anchor); `steal` is a competitor post whose structure the set copies (Decode). */
 export async function draftTopic(
   ctx: ModuleContext, topic: TopicRow,
-  opts: { platforms?: readonly DraftPlatform[]; steal?: string } = {},
+  opts: { platforms?: readonly DraftPlatform[]; steal?: string; frameworks?: Partial<Record<DraftPlatform, string>> } = {},
 ): Promise<string[]> {
   const platforms = opts.platforms?.length ? DRAFT_PLATFORMS.filter((p) => opts.platforms!.includes(p)) : DEFAULT_DRAFT_PLATFORMS;
   // A steal already carries its hook pattern; otherwise offer the library's winners.
@@ -132,6 +133,7 @@ export async function draftTopic(
       sourceDetail: topic.source_detail,
       marketContext: topic.market_context,
       platforms,
+      frameworks: opts.frameworks,
       steal: opts.steal,
       hooks: hooks?.text,
       angle,

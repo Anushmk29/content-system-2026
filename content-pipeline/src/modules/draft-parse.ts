@@ -30,6 +30,7 @@ export interface DraftSet {
   x?: DraftPiece;          // body = thread, tweets separated by "---" lines
   instagram?: DraftPiece;  // body = carousel slides separated by "---" lines
   facebook?: DraftPiece;
+  reddit?: DraftPiece;     // posted by hand; body ends with a "TL;DR:" line
   youtube?: DraftPiece;    // body = Short filming card, beats separated by "---" lines
   claims: string[];
   /** index into the brand's offers, when the model picked one */

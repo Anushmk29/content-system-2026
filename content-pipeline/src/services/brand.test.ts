@@ -150,3 +150,23 @@ test('upgrade: a database with the old pillar enum moves to text with its views 
   assert.equal((await pg.query(`select 1 from pg_type where typname = 'pillar'`)).rows.length, 0);
   assert.equal(brand().name, DEFAULT_BRAND.name);
 });
+
+test('values and frameworks reach the prompts; reddit is drafted but posted by hand', async () => {
+  const { brandBrief } = await import('../prompts/brand-context.ts');
+  const { frameworkBlock, frameworkFor, isManual } = await import('../prompts/platform-playbooks.ts');
+  const { setBrand, DEFAULT_BRAND } = await import('../brand.ts');
+  setBrand({ ...DEFAULT_BRAND, values: ['Honest numbers only', 'No fear selling'] });
+  try {
+    assert.match(brandSystem(), /VALUES[\s\S]*- Honest numbers only\n- No fear selling/);
+    assert.match(brandBrief(), /No fear selling/);
+    const p = buildDraftPrompt({ topicTitle: 'T', platforms: ['linkedin', 'reddit'], frameworks: { linkedin: 'pas' } });
+    assert.match(p, /- linkedin \(Problem → Agitate → Solve\)/);
+    assert.match(p, /- reddit \(Value-first answer\)/);          // default framework
+    assert.equal(frameworkFor('x', 'nope').id, 'thread_numbered');
+    assert.doesNotMatch(frameworkBlock(['x']), /linkedin/);
+    assert.ok(isManual({ platform: 'reddit' }) && isManual({ platform: 'instagram', format: 'reel_script' }));
+    assert.ok(!isManual({ platform: 'instagram', format: 'carousel' }));
+  } finally {
+    setBrand(DEFAULT_BRAND);
+  }
+});

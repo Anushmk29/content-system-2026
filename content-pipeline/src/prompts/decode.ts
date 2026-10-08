@@ -2,6 +2,7 @@
 // counter-angle. The tag lists are the taxonomy both the prompts and the parsers use.
 import { brand, type Brand } from '../brand.ts';
 import { HOOK_PATTERN_KEYS } from '../hook-patterns.ts';
+import { brandBrief } from './brand-context.ts';
 
 export const BEAT_TAGS = ['hook', 'setup', 'proof', 'offer', 'method', 'benefit', 'other', 'cta'] as const;
 export type BeatTag = (typeof BEAT_TAGS)[number];
@@ -41,7 +42,8 @@ Also classify its skeleton:
 Return {"posts":[{"n":1,"format":2,"hook":"…","hook_technique":"how_to","value_structure":"steps","cta_type":"comment","beats":[{"at":"¶1","tag":"hook","text":"short paraphrase"}]}]}`;
 }
 
-export const counterAngleSystem = (b: Brand) => `You are ${b.name}’s content strategist.`;
+export const counterAngleSystem = (b: Brand) => `You are ${b.name}’s content strategist.
+${brandBrief(b)}`;
 
 export const buildCounterAnglePrompt = (b: Brand, proof: string, caption: string) =>
   `A competitor post that performed well (${proof}):\n"""${caption.slice(0, 2000)}"""\n\nIn 2–3 sentences, give ${b.name}'s counter-angle: what this post leaves out, gets wrong, or where we would disagree. Our audience: ${b.audience.split('\n')[0]}. Plain text, no preamble.`;
