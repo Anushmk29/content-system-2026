@@ -3,6 +3,8 @@
 // (exact input text, which model, its answer, confidence), later joined with the
 // operator's own choices and real post performance (see services/dataset-service.ts).
 // Who decides, in order:
+//   0. Nobody: this subject was already decided on exactly this input text (e.g. QC on a
+//      draft that came back unchanged) — the applied answer is reused, no model is called.
 //   1. Jev, in primary mode, when its weakest answer >= minConfidence.
 //   2. The LLM, when configured (in shadow mode Jev runs alongside and is only logged).
 //   3. With no LLM: Jev at any confidence, else it throws.
@@ -19,6 +21,8 @@ export async function decide<S, T>(ctx: ModuleContext, def: DecisionTaskDef<S, T
   const { jev, claude } = ctx.adapters;
   const state = def.state(subject);
   const repo = createRepo(ctx.db);
+  const cached = await repo.cachedDecision(def.task, subjectId, state).catch(() => null);
+  if (cached !== null) return cached as T;
   const log = (source: string, model: string, answer: unknown, used: boolean, ms: number, confidence?: number) =>
     repo.logDecision({ task: def.task, subjectId, state, source, model, answer, used, latencyMs: ms, confidence })
       // A logging failure (e.g. schema not migrated yet) must never block the pipeline.

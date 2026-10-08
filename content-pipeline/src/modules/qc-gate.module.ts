@@ -1,6 +1,7 @@
 // QC + Risk Gate (Bible §10) — the critical control. Uses the tested core logic.
 // Honest-numbers: any unproven claim sends the draft back. Then it classifies an
 // escalate-only approval lane and sends the draft to a human.
+import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok } from './module.ts';
 import { createRepo, type ContentItemRow } from '../db/repo.ts';
@@ -19,12 +20,12 @@ export const qcGateModule: Module = {
     const drafts = await createRepo(ctx.db).itemsByStatus('draft');
     let passed = 0, blocked = 0, signalFailures = 0;
 
-    for (const item of drafts) {
+    await mapLimit(drafts, MODEL_CONCURRENCY, async (item) => {
       const r = await qcItem(ctx, item);
       if (r.signalFailed) signalFailures++;
       if (r.outcome === 'blocked') blocked++;
       else passed++;
-    }
+    });
 
     const message =
       `${passed} to approval, ${blocked} blocked for missing proof` +

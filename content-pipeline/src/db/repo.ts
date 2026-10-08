@@ -506,6 +506,13 @@ export function createRepo(db: Db) {
          JSON.stringify(d.answer), d.used, d.latencyMs ?? null, d.confidence ?? null, d.seed ?? false],
       ),
 
+    /** The answer already applied to this subject for exactly this input text, if any (decide()'s cache). */
+    cachedDecision: async (task: string, subjectId: string, state: string): Promise<unknown | null> =>
+      (await db.query<{ answer: unknown }>(
+        `select answer from content.decisions
+          where task = $1 and subject_id = $2 and state = $3 and used and source <> 'human'
+          order by created_at desc limit 1`, [task, subjectId, state])).rows[0]?.answer ?? null,
+
     /** One row per topic/item that went through decide(): input text, every model's
      *  latest answer, the operator's own labels, and real-world outcome. */
     datasetRows: (workspace = 'default') =>

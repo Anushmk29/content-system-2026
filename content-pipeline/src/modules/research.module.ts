@@ -2,6 +2,7 @@
 // research signal in content.research_inputs (a prospect question, a community pain
 // point, a note) into a candidate topic with status 'new', which the Topic Scorer
 // then ranks. Question mining is the unfair advantage: real signals → real topics.
+import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
 import { createRepo } from '../db/repo.ts';
@@ -63,7 +64,7 @@ export const researchModule: Module = {
     let checked = 0;
     const failures: string[] = [];
     const checkFailures: string[] = [];
-    for (const input of inputs) {
+    await mapLimit(inputs, MODEL_CONCURRENCY, async (input) => {
       try {
         // A failed web check never blocks the topic: it falls back to signal-only.
         let marketContext: string | null = null;
@@ -99,7 +100,7 @@ export const researchModule: Module = {
       } catch (e) {
         failures.push(`${input.id}: ${(e as Error).message}`);
       }
-    }
+    });
 
     return {
       status: failures.length + checkFailures.length > 0 ? 'degraded' : 'ok',

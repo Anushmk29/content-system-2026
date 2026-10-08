@@ -3,6 +3,7 @@
 //      (honest-numbers baked in: unprovable topics score low on proof and fall away).
 //   2. Summarize the resulting ranked queue by priority band for the dashboard.
 // The DB derives score_total + priority_band from the five factors (generated columns).
+import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { createRepo } from '../db/repo.ts';
 import { decide, canDecide } from './decide.ts';
@@ -21,7 +22,7 @@ export const scoringModule: Module = {
     const failures: string[] = [];
     if (canDecide(ctx)) {
       const unscored = await repo.unscoredTopics();
-      for (const t of unscored) {
+      await mapLimit(unscored, MODEL_CONCURRENCY, async (t) => {
         try {
           const s = await decide(ctx, TOPIC_SCORE, t.id, t);
           await repo.setTopicScores(t.id, {
@@ -33,7 +34,7 @@ export const scoringModule: Module = {
         } catch (e) {
           failures.push(`${t.id}: ${(e as Error).message}`);
         }
-      }
+      });
     }
 
     // 1b) Opt-in autopilot (CONTENT_AUTO_SELECT_TOPICS): hand the best high-band topics

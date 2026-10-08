@@ -132,3 +132,19 @@ test('seeds: queued for review, never exported for training until a human review
   const reviewed = toExample({ ...seed, human: { hasMetric: false } })!;
   assert.deepEqual([reviewed.needsReview, reviewed.labelSource, reviewed.label], [false, 'human', { hasMetric: false }]);
 });
+
+test('same subject, same text: the applied answer is reused, no model is called, nothing new is logged', async () => {
+  const id = randomUUID();
+  const first = ctxWith({ llm: true, jev: JEV_HIGH });
+  await decide(first.ctx, QC_SIGNALS, id, DRAFT);
+  const again = ctxWith({ llm: true, jev: new Error('must not be called') });
+  const value = await decide(again.ctx, QC_SIGNALS, id, DRAFT);
+  assert.equal(value.hasMetric, false);
+  assert.equal(again.prompts.length, 0);
+  const n = (await db.query(`select 1 from content.decisions where subject_id = $1`, [id])).rowCount;
+  assert.equal(n, 2); // the first run's claude + jev rows only
+
+  const edited = ctxWith({ llm: true, jev: null });
+  await decide(edited.ctx, QC_SIGNALS, id, { ...DRAFT, body: 'Rewritten without the number.' });
+  assert.equal(edited.prompts.length, 1, 'changed text is decided again');
+});

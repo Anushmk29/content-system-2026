@@ -13,7 +13,7 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 // Sensible defaults; override per provider with CONTENT_LLM_MODEL.
 const DEFAULT_OPENROUTER_MODEL = 'anthropic/claude-sonnet-5.5';
-const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5.5';
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5'; // Anthropic ids use hyphens; OpenRouter slugs use dots
 // Image generation ("nano banana"); OpenRouter only.
 const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
 // A hung call fails its one item instead of stalling the module (and, now runs are
@@ -22,6 +22,14 @@ const TIMEOUT_MS = 120_000;
 // USD per million tokens [input, output] for the direct Anthropic path, which reports no cost.
 // ponytail: family-level list prices; the ledger marks these rows estimated.
 const anthropicPrice = (m: string): [number, number] => /haiku/.test(m) ? [1, 5] : /opus/.test(m) ? [5, 25] : [3, 15];
+// Long system prompts (the brand context with voice samples) are marked for Anthropic prompt
+// caching: repeat calls within ~5 minutes (a pipeline run) read that part at ~10% of the price.
+// Shorter prompts are below Anthropic's cache minimum (~1024 tokens) and are sent as plain text.
+const CACHE_MIN_CHARS = 4000;
+const cachedSystem = (m: string, system: string) =>
+  /claude/.test(m) && system.length >= CACHE_MIN_CHARS
+    ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+    : null;
 
 interface LlmConfig {
   openrouterApiKey?: string;
@@ -99,11 +107,12 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
     : prompt;
 
   async function completeOpenRouter(prompt: string, opts?: CompleteOpts): Promise<string> {
+    const m = opts?.model ?? model;
     const messages = [
-      ...(opts?.system ? [{ role: 'system', content: opts.system }] : []),
+      ...(opts?.system ? [{ role: 'system', content: cachedSystem(m, opts.system) ?? opts.system }] : []),
       { role: 'user', content: userContent(prompt, opts?.images) },
     ];
-    const msg = await openRouter({ model: opts?.model ?? model, max_tokens: opts?.maxTokens ?? 2048, messages });
+    const msg = await openRouter({ model: m, max_tokens: opts?.maxTokens ?? 2048, messages });
     return msg.content ?? '';
   }
 
@@ -127,7 +136,7 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
       body: JSON.stringify({
         model: m,
         max_tokens: opts?.maxTokens ?? 2048,
-        system: opts?.system,
+        system: opts?.system ? cachedSystem(m, opts.system) ?? opts.system : undefined,
         messages: [{ role: 'user', content: images.length ? [...images, { type: 'text', text: prompt }] : prompt }],
       }),
     });
@@ -136,9 +145,13 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
       log({ ok: false, error: err.message });
       throw err;
     }
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+    type Usage = { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
+    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }>; usage?: Usage };
     const [inUsd, outUsd] = anthropicPrice(m);
-    const cost = ((data.usage?.input_tokens ?? 0) * inUsd + (data.usage?.output_tokens ?? 0) * outUsd) / 1e6;
+    const u = data.usage ?? {};
+    // Cache writes cost 1.25x input, cache reads 0.1x; input_tokens excludes both.
+    const inputEq = (u.input_tokens ?? 0) + 1.25 * (u.cache_creation_input_tokens ?? 0) + 0.1 * (u.cache_read_input_tokens ?? 0);
+    const cost = (inputEq * inUsd + (u.output_tokens ?? 0) * outUsd) / 1e6;
     spentUsd += cost;
     log({ ok: true, costUsd: cost, inputTokens: data.usage?.input_tokens, outputTokens: data.usage?.output_tokens });
     return (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
