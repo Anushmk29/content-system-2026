@@ -82,6 +82,9 @@ export { applyHookOption, hookPatternWeights, type HookOption, type PatternWeigh
 export { HOOK_PATTERNS, type HookPattern } from './hook-patterns.ts';
 export { listScripts, markFilmed, markUploaded, type ScriptRow, type ScriptStage } from './services/scripts-service.ts';
 export { listVideos, type VideoRow, type TranscriptState } from './services/videos-service.ts';
+export { useVideoIdea, type VideoAnalysis, type VideoIdea } from './services/video-analysis-service.ts';
+import { analyzeVideo as analyze_ } from './services/video-analysis-service.ts';
+export const analyzeVideo = costScoped('video_analysis', analyze_, 'decoded_post');
 import { transcribeVideo as transcribe_ } from './services/videos-service.ts';
 export const transcribeVideo = costScoped('transcribe', transcribe_, 'decoded_post');
 export { withCostScope } from './cost-ledger.ts';

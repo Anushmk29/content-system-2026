@@ -30,6 +30,9 @@ export interface DecisionTaskDef<S, T> {
 }
 
 /** One line on who the brand writes for, so Jev scores fit against the right audience. */
+/** "<brand> writes for: … stands for: …" — the brand line every Jev question starts with. */
+export const brandAudienceLine = () => audience();
+
 const audience = () => {
   const b = brand();
   return `${b.name} writes for: ${b.audience.split('\n')[0]}${b.values.length ? ` ${b.name} stands for: ${b.values.join('; ')}.` : ''}`;

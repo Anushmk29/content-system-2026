@@ -613,6 +613,8 @@ create table if not exists content.transcripts (
   created_at      timestamptz not null default now()
 );
 alter table content.transcripts enable row level security;
+-- Why the video worked + two ideas for us (services/video-analysis-service.ts), once per URL.
+alter table content.transcripts add column if not exists analysis jsonb;
 
 -- Phase 3: hunt scoring. jev = the raw Jev answers; demand/fit 0-1; hunt_score 0-100.
 alter table content.decoded_posts add column if not exists jev jsonb;

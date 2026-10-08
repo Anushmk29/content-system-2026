@@ -26,6 +26,7 @@ import { withCostScope } from '../cost-ledger.ts';
 import { applyRules } from '../adapters/jev.ts';
 import { competitorPostQuestions, competitorState, COMPETITOR_RULES, minConfidence, skeletonQuestions, skeletonFromJev } from '../modules/decision-tasks.ts';
 import { mapLimit } from '../map-limit.ts';
+import { analyzeRunVideos } from './video-analysis-service.ts';
 import { huntScores, type HuntInput } from './hunt-score.ts';
 import { isHookPattern, type HookPattern } from '../hook-patterns.ts';
 
@@ -329,6 +330,8 @@ async function transcribeVideos(ctx: ModuleContext, runId: string, stopped: () =
     await ctx.db.query(`update content.decode_runs set message = $2 where id = $1`,
       [runId, `${failed.length} video(s) not transcribed: ${failed[0]}`.slice(0, 500)]);
   }
+  // Beyond the words: why the best ones worked, and two ideas each (capped; never blocks the run).
+  if (!(await stopped())) await analyzeRunVideos(ctx, runId).catch((e: Error) => ctx.logger.warn(`video analysis: ${e.message}`));
   return true;
 }
 

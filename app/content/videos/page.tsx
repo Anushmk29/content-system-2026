@@ -69,6 +69,12 @@ export default async function VideosPage({ searchParams }: { searchParams: Searc
                         <p className="pre" style={{ fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{v.transcript}</p>
                       </details>
                     )}
+                    {v.analysis ? <Analysis v={v} /> : v.transcript && (
+                      <div style={{ marginTop: 8 }}>
+                        <ApiButton path={`/content/api/videos/${v.id}`} body={{ analyze: true }} label="Why did it work? + 2 ideas for us"
+                          busyLabel="analysing…" className="btn btn-sm btn-ink" />
+                      </div>
+                    )}
                     {v.state === 'failed' && v.error && <div className="mono" style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{v.error}</div>}
                   </td>
                   <td className="mono">{v.duration_s != null ? `${v.duration_s}s` : '—'}</td>
@@ -87,5 +93,45 @@ export default async function VideosPage({ searchParams }: { searchParams: Searc
         </div>
       )}
     </>
+  );
+}
+
+const VERDICT: Record<string, { label: string; color: string }> = {
+  use: { label: 'Good for us', color: TONE.ok }, adapt: { label: 'Adapt it', color: TONE.warn }, skip: { label: 'Not for us', color: TONE.faint },
+};
+
+/** Why the video worked, whether it suits us (Jev's call), and the two ideas built on it. */
+function Analysis({ v }: { v: VideoRow }) {
+  const a = v.analysis!;
+  const verdict = VERDICT[a.verdict] ?? VERDICT.adapt!;
+  return (
+    <details open={a.verdict !== 'skip'} style={{ marginTop: 8 }}>
+      <summary style={{ cursor: 'pointer', fontSize: 12.5 }}>
+        <Chip color={verdict.color}>{verdict.label}</Chip> <b>Why it worked</b>
+        {a.jev && <span className="faint mono" style={{ fontSize: 11 }}> · Jev: fits {Math.round(a.jev.fitsBrand * 100)}%, adaptable {Math.round(a.jev.adaptable * 100)}%</span>}
+      </summary>
+      <div style={{ display: 'grid', gap: 6, fontSize: 12.5, marginTop: 6 }}>
+        <p style={{ margin: 0 }}>{a.whyItWorked}</p>
+        {a.hook.text && <p style={{ margin: 0 }}><span className="faint">Hook{a.hook.type ? ` (${a.hook.type.replace(/_/g, ' ')})` : ''}:</span> “{a.hook.text}” <span className="faint">— {a.hook.why}</span></p>}
+        {a.structure.length > 0 && <p style={{ margin: 0 }}><span className="faint">Structure:</span> {a.structure.map((b) => b.beat).join(' → ')}</p>}
+        {a.cta.text && <p style={{ margin: 0 }}><span className="faint">CTA ({a.cta.type}):</span> “{a.cta.text}”</p>}
+        {a.retention.length > 0 && <p style={{ margin: 0 }}><span className="faint">Keeps people watching:</span> {a.retention.join('; ')}</p>}
+        <p style={{ margin: 0 }}><span className="faint">For us:</span> {a.verdictWhy}</p>
+        {a.adapt.length > 0 && <p style={{ margin: 0 }}><span className="faint">Reuse:</span> {a.adapt.join('; ')}</p>}
+        {a.avoid.length > 0 && <p style={{ margin: 0 }}><span className="faint">Avoid:</span> {a.avoid.join('; ')}</p>}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginTop: 4 }}>
+          {a.ideas.map((idea, i) => (
+            <div key={i} className="card attention" style={{ cursor: 'default', padding: 10 }}>
+              <b>Idea {i + 1}: {idea.title}</b>
+              <p style={{ margin: '6px 0' }}>“{idea.hook}”</p>
+              {idea.beats.length > 0 && <ol style={{ margin: '0 0 6px', paddingLeft: 18 }}>{idea.beats.map((b, j) => <li key={j}>{b}</li>)}</ol>}
+              {idea.cta && <p className="muted" style={{ margin: '0 0 6px' }}>Ends: {idea.cta}</p>}
+              {idea.why && <p className="faint" style={{ margin: '0 0 8px' }}>Reuses: {idea.why}</p>}
+              <ApiButton path={`/content/api/videos/${v.id}`} body={{ useIdea: i }} label="Use this idea →" className="btn btn-sm btn-ink" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
   );
 }

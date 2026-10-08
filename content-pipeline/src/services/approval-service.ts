@@ -5,7 +5,9 @@ import type { ModuleContext } from '../modules/module.ts';
 import { createRepo } from '../db/repo.ts';
 import { createContentItems, IllegalTransition } from '../db/content-items.ts';
 import { effectOfDecision, type ApprovalAction } from '../../core/src/index.ts';
+import { randomUUID } from 'node:crypto';
 import { feedbackText, reviseItem, refreshLessons } from './feedback-service.ts';
+import { withCostScope } from '../cost-ledger.ts';
 
 interface ApplyDecisionInput {
   itemId: string;
@@ -53,11 +55,16 @@ export async function applyApprovalDecision(
   // text in draft for a hand edit, as before.
   let revised = '';
   if (input.action === 'changes' && feedback && ctx.env?.reviseOnChanges) {
-    try { await reviseItem(ctx, item, feedback); revised = ' — rewritten with your feedback'; }
+    try {
+      await withCostScope({ feature: 'revise', refType: 'content_item', refId: item.id }, () => reviseItem(ctx, item, feedback));
+      revised = ' — rewritten with your feedback';
+    }
     catch (e) { revised = ` — couldn't rewrite (${(e as Error).message}); edit it by hand`; }
   }
   // Every note teaches the next drafts (re-learned every few notes; never blocks the decision).
-  if (input.action !== 'approve' && feedback) void refreshLessons(ctx);
+  if (input.action !== 'approve' && feedback) {
+    void withCostScope({ feature: 'feedback_learn', refType: 'op', refId: randomUUID() }, () => refreshLessons(ctx));
+  }
 
   const verb =
     input.action === 'approve' ? '✅ Approved'

@@ -2,6 +2,7 @@
 // Transcription itself runs inside Decode (decode-service transcribeVideos); this is the log
 // of it, the transcript text, and a by-hand (re)try for any one video.
 import type { ModuleContext } from '../modules/module.ts';
+import type { VideoAnalysis } from './video-analysis-service.ts';
 
 export type TranscriptState = 'done' | 'failed' | 'not_yet';
 export interface VideoRow {
@@ -9,25 +10,31 @@ export interface VideoRow {
   posted_at: string | null; duration_s: number | null; views: number | null; vs_own_median: number | null;
   hunt_score: number | null; hook: string | null; state: TranscriptState; error: string | null;
   transcript: string | null; lang: string | null; transcribed_at: string | null;
+  analysis: VideoAnalysis | null;
 }
 
 /** One row per video (its latest Decode run), best hunt score first. */
 export async function listVideos(ctx: ModuleContext): Promise<VideoRow[]> {
-  return (await ctx.db.query<VideoRow>(
+  // A DB not yet migrated for transcripts.analysis (42703) still lists the videos.
+  return (await ctx.db.query<VideoRow>(VIDEOS_SQL('tr.analysis')).catch((e: { code?: string }) =>
+    e.code === '42703' ? ctx.db.query<VideoRow>(VIDEOS_SQL('null::jsonb')) : Promise.reject(e))).rows;
+}
+
+const VIDEOS_SQL = (analysis: string) =>
     `select * from (
        select distinct on (content.norm_url(p.url)) p.id, p.url, p.platform,
          case when c.is_self then 'You' else c.name end as competitor, p.handle, p.thumb, p.posted_at::text,
          p.duration_s, p.views, p.vs_own_median::float8 as vs_own_median, p.hunt_score, p.hook,
          case when tr.text is not null then 'done' when p.transcript_error is not null then 'failed' else 'not_yet' end as state,
-         p.transcript_error as error, tr.text as transcript, tr.lang, tr.created_at::text as transcribed_at
+         p.transcript_error as error, tr.text as transcript, tr.lang, tr.created_at::text as transcribed_at,
+         ${analysis} as analysis
        from content.decoded_posts p
        join content.decode_runs r on r.id = p.run_id
        left join content.competitors c on c.id = p.competitor_id
        left join content.transcripts tr on tr.norm_url = content.norm_url(p.url)
        where p.post_type = 'video'
        order by content.norm_url(p.url), r.started_at desc
-     ) v order by v.hunt_score desc nulls last, v.vs_own_median desc nulls last limit 500`)).rows;
-}
+     ) v order by v.hunt_score desc nulls last, v.vs_own_median desc nulls last limit 500`;
 
 /** Transcribe one video now (a retry, or one past the per-run cap). Synchronous: ~15s-5min. */
 export async function transcribeVideo(ctx: ModuleContext, postId: string): Promise<{ ok: boolean; message: string }> {
