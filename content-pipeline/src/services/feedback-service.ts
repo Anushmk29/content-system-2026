@@ -23,7 +23,7 @@ export function feedbackText(reasons: unknown, note: string | null | undefined):
 }
 
 /** Rewrite one draft from the feedback. Throws on an LLM or parse failure (the caller keeps the old text). */
-export async function reviseItem(ctx: ModuleContext, item: ContentItemRow, feedback: string): Promise<void> {
+export async function reviseItem(ctx: ModuleContext, item: ContentItemRow, feedback: string): Promise<ContentItemRow> {
   if (!ctx.adapters.claude.configured) throw new Error('No AI model is configured.');
   await loadBrand(ctx);
   const raw = await ctx.adapters.claude.complete(
@@ -35,6 +35,7 @@ export async function reviseItem(ctx: ModuleContext, item: ContentItemRow, feedb
   if (!body) throw new Error('the rewrite came back empty');
   const row = await createRepo(ctx.db).updateItemCopy(item.id, { hook: pick('hook'), body, cta: pick('cta') });
   if (!row) throw new Error('the post is no longer editable');
+  return row;
 }
 
 /** Re-learn the standing rules when enough new notes came in since the last time. Never throws. */

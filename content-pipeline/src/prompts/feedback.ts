@@ -4,7 +4,7 @@ import { PIECE_NAME, type DraftPlatform } from './platform-playbooks.ts';
 
 /** One-click reasons on "Request changes" (the note is optional when one is picked). */
 export const CHANGE_REASONS = [
-  'Too long', 'Too generic', 'Off our voice', 'Weak hook', 'Wrong or unproven facts', 'Too salesy', 'Not for our audience', 'Unclear point',
+  'Too long', 'Sounds like AI', 'Too generic', 'Off our voice', 'Weak hook', 'Wrong or unproven facts', 'Too salesy', 'Not for our audience', 'Unclear point',
 ] as const;
 
 export function buildRevisePrompt(i: {

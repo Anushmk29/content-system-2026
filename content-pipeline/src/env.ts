@@ -55,6 +55,9 @@ export interface ContentEnv {
   // CONTENT_POSTIZ_SYNC=1: planning or moving a post on the Content Calendar books (or moves) it
   // in Postiz right away. Off = Postiz gets it on the next publish run (the original behaviour).
   postizSync: boolean;
+  // CONTENT_HUMANIZE_REWRITE (on unless set to 0): QC rewrites a draft once when it scores under
+  // 70 on the human check (humanizer.ts), before anyone reviews it. One extra LLM call per such draft.
+  humanizeRewrite: boolean;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
 }
@@ -98,6 +101,7 @@ export function loadEnv(): ContentEnv {
     platformFit: /^(1|true|on|yes)$/i.test(read('CONTENT_PLATFORM_FIT') ?? ''),
     reviseOnChanges: /^(1|true|on|yes)$/i.test(read('CONTENT_REVISE_ON_CHANGES') ?? ''),
     postizSync: /^(1|true|on|yes)$/i.test(read('CONTENT_POSTIZ_SYNC') ?? ''),
+    humanizeRewrite: !/^(0|false|off|no)$/i.test(read('CONTENT_HUMANIZE_REWRITE') ?? ''),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
   };
 }

@@ -1,7 +1,7 @@
 // Post detail drawer (?item=<id> on any page): platform tabs, live preview, copy editing
 // before approval, claims, approve/changes/reject, posting time, metrics and history.
 import Link from 'next/link';
-import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS } from '@pratapai/content-pipeline';
+import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS, humanScore, HUMAN_MIN } from '@pratapai/content-pipeline';
 import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
 import { ApprovalActions, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
@@ -102,6 +102,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
           <section>
             <h3>{item.status === 'needs_approval' ? 'Step 1 · Fix the words (optional)' : 'Edit copy'}</h3>
             <CopyEditor key={`${item.id}-${item.updated_at}`} itemId={item.id} hook={item.hook ?? ''} body={item.body ?? ''} cta={item.cta ?? ''} />
+            <HumanCheck text={[item.hook, item.body, item.cta].filter(Boolean).join('\n\n')} />
             {hooks.length > 0 && (
               <details style={{ marginTop: 12 }}>
                 <summary className="faint" style={{ cursor: 'pointer', fontSize: 12.5 }}>Want a stronger first line? Let the AI rewrite it in the style of a post that did well</summary>
@@ -182,5 +183,19 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
         </section>
       </aside>
     </>
+  );
+}
+
+/** content-humanizer score of the copy as it stands, with what makes it read AI-written. */
+function HumanCheck({ text }: { text: string }) {
+  if (!text.trim()) return null;
+  const h = humanScore(text);
+  const low = h.score < HUMAN_MIN;
+  return (
+    <p className="faint" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+      <span className="mono" style={{ color: low ? 'var(--warn)' : 'var(--ok)' }}>Human check {h.score}/100</span>
+      {h.tells.length ? ` · ${h.tells.join(' · ')}` : ' · reads like a person wrote it'}
+      {low && '. Use "Sounds like AI" on Request changes for a rewrite.'}
+    </p>
   );
 }

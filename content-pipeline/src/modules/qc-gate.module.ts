@@ -10,6 +10,9 @@ import { classifyLane, escalateLane, type ApprovalLane, hasUnprovenClaims, type 
 import { decide, canDecide } from './decide.ts';
 import { QC_SIGNALS } from './decision-tasks.ts';
 import type { QcSignals } from './qc-parse.ts';
+import { humanScore, humanizeFeedback, HUMAN_MIN } from '../humanizer.ts';
+import { reviseItem } from '../services/feedback-service.ts';
+import { withCostScope } from '../cost-ledger.ts';
 
 export const qcGateModule: Module = {
   id: 'qc_gate',
@@ -43,6 +46,8 @@ export async function qcItem(ctx: ModuleContext, item: ContentItemRow): Promise<
   // Honest-numbers rule: any unproven claim sends it back to draft; operator must attach proof.
   if (hasUnprovenClaims(claims)) return { outcome: 'blocked', signalFailed: false };
 
+  item = await humanize(ctx, item);
+
   // Content signals read from the draft itself (LLM / Jev). A failure falls back to
   // format-only signals — still a human lane.
   let read: Partial<QcSignals> = {};
@@ -70,4 +75,19 @@ export async function qcItem(ctx: ModuleContext, item: ContentItemRow): Promise<
 
   await createContentItems(ctx.db).transition(item.id, { event: 'submit', lane });
   return { outcome: 'to_approval', signalFailed };
+}
+
+/** content-humanizer: a draft that reads AI-written (under HUMAN_MIN) is rewritten once, through the
+ *  same revise path as "Request changes". A failed rewrite keeps the original; the reviewer still sees the score. */
+async function humanize(ctx: ModuleContext, item: ContentItemRow): Promise<ContentItemRow> {
+  if (!ctx.env?.humanizeRewrite || !ctx.adapters.claude.configured) return item;
+  const h = humanScore([item.hook, item.body, item.cta].filter(Boolean).join('\n\n'));
+  if (h.score >= HUMAN_MIN) return item;
+  try {
+    return await withCostScope({ feature: 'humanize', refType: 'content_item', refId: item.id },
+      () => reviseItem(ctx, item, humanizeFeedback(h)));
+  } catch (e) {
+    ctx.logger.warn(`humanize ${item.id}: ${(e as Error).message}`);
+    return item;
+  }
 }

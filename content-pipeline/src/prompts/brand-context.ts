@@ -79,5 +79,18 @@ CRAFT — how every piece is built:
 - Thin material (no real number, no before/after, no concrete pain) means a shorter,
   practical piece — never padding.
 
+SOUND HUMAN — write like the founder talking, not like an AI:
+- Never use: delve, landscape, crucial, vital, pivotal, leverage, robust, comprehensive,
+  holistic, foster, facilitate, navigate, ensure, utilize, furthermore, moreover, innovative,
+  cutting-edge, seamless, empower, streamline, game-changer, unlock, elevate, "in today's
+  fast-paced…", "in conclusion". Say the plain word ("use", "help", "handle") or the specific fact.
+- No hedges ("it's important to note", "in many cases", "generally speaking") and no vague
+  authority ("studies show", "many companies"): state the claim, or name the source.
+- Mix sentence lengths: a long one, then a short one. Fragments are fine. Active voice.
+- At most one em dash per piece. No "It's not X, it's Y". Not everything in threes.
+- Vary paragraphs; at least one is a single line. Talk to "you".
+- No false warmth ("we hope this helps") and no summary ending that repeats the opening:
+  end on the sharpest line or the CTA.
+
 ${PLATFORM_SHAPE}`;
 }

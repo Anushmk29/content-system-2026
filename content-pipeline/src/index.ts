@@ -14,6 +14,7 @@ export { getPipelineBoard } from './services/pipeline-service.ts';
 export { listTodos, createTodo, updateTodo, deleteTodo } from './services/todo-service.ts';
 export { applyApprovalDecision } from './services/approval-service.ts';
 export { CHANGE_REASONS } from './prompts/feedback.ts';
+export { humanScore, HUMAN_MIN, type HumanScore } from './humanizer.ts';
 export { refreshLessons } from './services/feedback-service.ts';
 export {
   exportDataset, recordHumanLabel, getTrainingOverview,

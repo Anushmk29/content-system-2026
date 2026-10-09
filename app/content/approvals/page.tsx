@@ -1,7 +1,7 @@
 // Approvals — the review queue, oldest first. Open a draft to read it as it will appear,
 // check its claims, edit, then decide. Keyboard: J/K move, A approve, C/R note.
 import Link from 'next/link';
-import { getContext, getOperatorConsole, type OperatorConsole } from '@pratapai/content-pipeline';
+import { getContext, getOperatorConsole, humanScore, HUMAN_MIN, type OperatorConsole } from '@pratapai/content-pipeline';
 import { params, type SearchParams } from '../data';
 import { PageHead, KpiStrip, Section, Plat, Chip, NeedsDb } from '../ui/viz';
 import { ItemDrawer } from '../ui/ItemDrawer';
@@ -50,6 +50,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Se
             const unproven = unprovenOf(q);
             const age = item.updated_at ?? item.created_at;
             const old = ageH(q) > 24;
+            const human = humanScore([item.hook, item.body, item.cta].filter(Boolean).join('\n\n')).score;
             return (
               <li key={item.id}>
                 <Link href={itemHref(item.id)} scroll={false} className="row" aria-current={sp.item === item.id || undefined}
@@ -61,6 +62,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Se
                     <div className="d">{(item.hook ?? item.body ?? '').slice(0, 140)}</div>
                   </div>
                   <Chip color={LANE_COLOR[item.approval_lane ?? 'review'] ?? TONE.faint}>{item.approval_lane ?? 'review'}</Chip>
+                  {human < HUMAN_MIN && <Chip color={TONE.warn} title="Human check: reads AI-written">sounds AI {human}</Chip>}
                   {unproven > 0 && <Chip color={TONE.danger} title="claims without a proof link">{unproven} unproven</Chip>}
                   <span className="mono" style={{ width: 80, textAlign: 'right', fontSize: 11.5, color: old ? 'var(--warn)' : 'var(--faint)' }} title={when(age)}>{ago(age)}</span>
                   <span className="btn btn-sm">Review →</span>
