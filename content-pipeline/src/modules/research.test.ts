@@ -70,3 +70,17 @@ test('CONTENT_RESEARCH_MODEL=tinyfish: search + fetch top 3, our LLM writes the 
   assert.match(check.p, /https:\/\/a\.com\/4/);
   assert.match(prompts[1]!.p, /GAP: no-shows/);
 });
+
+test('decideSignal: "use" makes a topic from just that signal and queues it; "drop" shelves one', async () => {
+  const { decideSignal } = await import('../services/console-service.ts');
+  const pick = await repo.insertResearchInput({ rawText: 'picked one' });
+  const other = await repo.insertResearchInput({ rawText: 'not picked' });
+  const r = await decideSignal(ctx(() => '', []), pick.id, 'use');
+  assert.ok(r.ok, r.message);
+  const t = await db.query<{ status: string }>(`select t.status from content.topics t join content.research_inputs r on r.topic_id = t.id where r.id = $1`, [pick.id]);
+  assert.equal(t.rows[0]!.status, 'selected');
+  assert.equal((await repo.researchInput(other.id))?.raw_text, 'not picked', 'the other signal is untouched');
+  assert.ok((await decideSignal(ctx(() => '', []), other.id, 'drop')).ok);
+  assert.equal(await repo.researchInput(other.id), undefined);
+  assert.equal((await decideSignal(ctx(() => '', []), pick.id, 'use')).ok, false, 'used once only');
+});

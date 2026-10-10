@@ -11,6 +11,9 @@ import {
   type ResearchInputRow,
 } from '../db/repo.ts';
 import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS } from '../prompts/platform-playbooks.ts';
+import { researchSignal } from '../modules/research.module.ts';
+import { scoreTopic } from '../modules/scoring.module.ts';
+import { canDecide } from '../modules/decide.ts';
 
 /** A draft awaiting approval, bundled with the claims a reviewer must check (§10.3). */
 interface ApprovalQueueItem {
@@ -61,6 +64,23 @@ export async function addSignal(ctx: ModuleContext, input: AddSignalInput): Prom
     channel: input.channel?.trim() || null,
     sourceUrl: input.sourceUrl?.trim() || null,
   });
+}
+
+/** The operator picks a waiting signal: "use" turns just that one into a topic and queues it for
+ *  drafting (Selected on Ideas, where platforms/angle are chosen); "drop" shelves it. */
+export async function decideSignal(ctx: ModuleContext, id: string, action: 'use' | 'drop'): Promise<{ ok: boolean; message: string }> {
+  const repo = createRepo(ctx.db);
+  if (action === 'drop') return (await repo.dropResearchInput(id)) ? { ok: true, message: 'Dropped' } : { ok: false, message: 'Signal already used (or not found).' };
+  if (action !== 'use') return { ok: false, message: `Unknown action "${action}".` };
+  const input = await repo.researchInput(id);
+  if (!input) return { ok: false, message: 'Signal already used (or not found).' };
+  if (!ctx.adapters.claude.configured) return { ok: false, message: 'No AI model configured.' };
+  const { topicId } = await researchSignal(ctx, input);
+  // Score + platform fit so the card shows them; a failed score never blocks the pick.
+  const topic = canDecide(ctx) ? (await repo.unscoredTopics()).find((t) => t.id === topicId) : undefined;
+  if (topic) await scoreTopic(ctx, topic).catch((e: Error) => ctx.logger.warn(`score ${topicId}: ${e.message}`));
+  await repo.decideTopic(topicId, 'selected');
+  return { ok: true, message: 'Topic made · pick platforms below, then Draft' };
 }
 
 export type TopicDecision = 'selected' | 'dropped';

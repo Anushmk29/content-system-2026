@@ -5,9 +5,25 @@
 // The DB derives score_total + priority_band from the five factors (generated columns).
 import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
-import { createRepo } from '../db/repo.ts';
+import { createRepo, type TopicRow } from '../db/repo.ts';
 import { decide, canDecide } from './decide.ts';
 import { TOPIC_SCORE, PLATFORM_FIT } from './decision-tasks.ts';
+
+/** Score one topic on the five factors, then (CONTENT_PLATFORM_FIT) which platforms it suits. */
+export async function scoreTopic(ctx: ModuleContext, t: TopicRow): Promise<void> {
+  const repo = createRepo(ctx.db);
+  const s = await decide(ctx, TOPIC_SCORE, t.id, t);
+  await repo.setTopicScores(t.id, {
+    leadIntent: s.leadIntent, reach: s.reach, brandFit: s.brandFit,
+    proof: s.proof, repurpose: s.repurpose,
+    pillar: s.pillar ?? t.pillar, funnelStage: s.funnelStage ?? t.funnel_stage,
+  });
+  // Which platforms the idea suits. Never blocks the score (column may not be migrated yet).
+  if (ctx.env.platformFit) {
+    await decide(ctx, PLATFORM_FIT, t.id, t).then((fit) => repo.setTopicFit(t.id, fit))
+      .catch((e: Error) => ctx.logger.warn(`platform fit ${t.id}: ${e.message}`));
+  }
+}
 
 export const scoringModule: Module = {
   id: 'scoring',
@@ -24,17 +40,7 @@ export const scoringModule: Module = {
       const unscored = await repo.unscoredTopics();
       await mapLimit(unscored, MODEL_CONCURRENCY, async (t) => {
         try {
-          const s = await decide(ctx, TOPIC_SCORE, t.id, t);
-          await repo.setTopicScores(t.id, {
-            leadIntent: s.leadIntent, reach: s.reach, brandFit: s.brandFit,
-            proof: s.proof, repurpose: s.repurpose,
-            pillar: s.pillar ?? t.pillar, funnelStage: s.funnelStage ?? t.funnel_stage,
-          });
-          // Which platforms the idea suits. Never blocks the score (column may not be migrated yet).
-          if (ctx.env.platformFit) {
-            await decide(ctx, PLATFORM_FIT, t.id, t).then((fit) => repo.setTopicFit(t.id, fit))
-              .catch((e: Error) => ctx.logger.warn(`platform fit ${t.id}: ${e.message}`));
-          }
+          await scoreTopic(ctx, t);
           scored++;
         } catch (e) {
           failures.push(`${t.id}: ${(e as Error).message}`);

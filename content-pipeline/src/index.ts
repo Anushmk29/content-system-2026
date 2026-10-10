@@ -21,7 +21,7 @@ export {
   type TrainingExample, type TrainingOverview,
 } from './services/dataset-service.ts';
 export {
-  getOperatorConsole, addSignal, decideTopic, setTopicPlan,
+  getOperatorConsole, addSignal, decideSignal, decideTopic, setTopicPlan,
   type OperatorConsole, type TopicDecision,
 } from './services/console-service.ts';
 

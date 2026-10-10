@@ -5,7 +5,7 @@
 import { mapLimit, MODEL_CONCURRENCY } from '../map-limit.ts';
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
-import { createRepo } from '../db/repo.ts';
+import { createRepo, type ResearchInputRow } from '../db/repo.ts';
 import {
   researchSystem, buildResearchPrompt, MARKET_CHECK_SYSTEM, buildMarketCheckPrompt,
   MARKET_CHECK_SOURCES_SYSTEM, buildMarketCheckFromSources,
@@ -40,6 +40,50 @@ async function tinyfishMarketCheck(ctx: ModuleContext, signal: string): Promise<
   })).trim() || null;
 }
 
+// Live web check: "tinyfish" = free TinyFish Search + Fetch, then our LLM; any other value is
+// an OpenRouter model with built-in web search (Perplexity). "off" skips it.
+const researchModelOf = (ctx: ModuleContext) => ctx.env.researchModel ?? DEFAULT_RESEARCH_MODEL;
+const hasWebCheck = (ctx: ModuleContext) => researchModelOf(ctx) === 'tinyfish'
+  ? ctx.adapters.tinyfish.configured
+  : ctx.adapters.claude.provider === 'openrouter' && researchModelOf(ctx) !== 'off';
+
+/** One signal → one new topic. A failed web check never blocks the topic (signal-only, error returned).
+ *  Used by the module for every waiting signal, and by "Make posts" on Ideas for one picked signal. */
+export async function researchSignal(ctx: ModuleContext, input: ResearchInputRow): Promise<{ topicId: string; checked: boolean; checkError?: string }> {
+  const researchModel = researchModelOf(ctx);
+  let marketContext: string | null = null;
+  let checkError: string | undefined;
+  if (hasWebCheck(ctx)) {
+    try {
+      marketContext = researchModel === 'tinyfish'
+        ? await tinyfishMarketCheck(ctx, input.raw_text)
+        : (await ctx.adapters.claude.complete(buildMarketCheckPrompt(input.raw_text), {
+          system: MARKET_CHECK_SYSTEM, model: researchModel, maxTokens: 800,
+        })).trim() || null;
+    } catch (e) {
+      checkError = (e as Error).message;
+    }
+  }
+  const raw = await ctx.adapters.claude.complete(
+    buildResearchPrompt({ rawText: input.raw_text, channel: input.channel, marketContext }),
+    { system: researchSystem() },
+  );
+  const topic = parseExtractedTopic(raw);
+  const repo = createRepo(ctx.db);
+  const topicId = await repo.insertTopic({
+    title: topic.title,
+    pillar: topic.pillar,
+    funnelStage: topic.funnelStage,
+    source: input.channel,
+    sourceDetail: input.raw_text.slice(0, 500),
+    customerLanguage: topic.customerLanguage,
+    marketContext,
+    status: 'new',
+  });
+  await repo.markResearchProcessed(input.id, topicId);
+  return { topicId, checked: !!marketContext, checkError };
+}
+
 export const researchModule: Module = {
   id: 'research',
   title: 'Research Collector',
@@ -53,49 +97,16 @@ export const researchModule: Module = {
       return degraded(`${inputs.length} signal(s) waiting but no LLM configured`, { waiting: inputs.length });
     }
 
-    // Live web check: "tinyfish" = free TinyFish Search + Fetch, then our LLM; any other value is
-    // an OpenRouter model with built-in web search (Perplexity). "off" skips it.
-    const researchModel = ctx.env.researchModel ?? DEFAULT_RESEARCH_MODEL;
-    const viaTinyfish = researchModel === 'tinyfish';
-    const webCheck = viaTinyfish ? ctx.adapters.tinyfish.configured
-      : ctx.adapters.claude.provider === 'openrouter' && researchModel !== 'off';
-
+    const webCheck = hasWebCheck(ctx);
     let created = 0;
     let checked = 0;
     const failures: string[] = [];
     const checkFailures: string[] = [];
     await mapLimit(inputs, MODEL_CONCURRENCY, async (input) => {
       try {
-        // A failed web check never blocks the topic: it falls back to signal-only.
-        let marketContext: string | null = null;
-        if (webCheck) {
-          try {
-            marketContext = viaTinyfish
-              ? await tinyfishMarketCheck(ctx, input.raw_text)
-              : (await ctx.adapters.claude.complete(buildMarketCheckPrompt(input.raw_text), {
-                system: MARKET_CHECK_SYSTEM, model: researchModel, maxTokens: 800,
-              })).trim() || null;
-            if (marketContext) checked++;
-          } catch (e) {
-            checkFailures.push(`${input.id}: ${(e as Error).message}`);
-          }
-        }
-        const raw = await ctx.adapters.claude.complete(
-          buildResearchPrompt({ rawText: input.raw_text, channel: input.channel, marketContext }),
-          { system: researchSystem() },
-        );
-        const topic = parseExtractedTopic(raw);
-        const topicId = await repo.insertTopic({
-          title: topic.title,
-          pillar: topic.pillar,
-          funnelStage: topic.funnelStage,
-          source: input.channel,
-          sourceDetail: input.raw_text.slice(0, 500),
-          customerLanguage: topic.customerLanguage,
-          marketContext,
-          status: 'new',
-        });
-        await repo.markResearchProcessed(input.id, topicId);
+        const r = await researchSignal(ctx, input);
+        if (r.checked) checked++;
+        if (r.checkError) checkFailures.push(`${input.id}: ${r.checkError}`);
         created++;
       } catch (e) {
         failures.push(`${input.id}: ${(e as Error).message}`);

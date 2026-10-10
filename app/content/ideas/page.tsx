@@ -58,16 +58,18 @@ export default async function IdeasPage() {
         <Tile title="Signals waiting" hint={`${data.signals.length}`} span={2}>
           {data.signals.length === 0 ? <p className="empty">Inbox zero. New signals show up here until Research turns them into topics.</p> : (
             <>
-              <ul className="row-list" style={{ marginBottom: 10 }}>
-                {data.signals.slice(0, 5).map((s) => (
+              <p className="faint" style={{ margin: '0 0 6px', fontSize: 12.5 }}>Pick the ones worth posting about: <b>Make posts</b> queues one for drafting below.</p>
+              <ul className="row-list" style={{ marginBottom: 10, maxHeight: 340, overflowY: 'auto' }}>
+                {data.signals.map((s) => (
                   <li key={s.id} className="row">
                     {s.channel && <Chip color={TONE.info}>{s.channel}</Chip>}
                     <span className="grow t" title={s.raw_text}>{s.raw_text}</span>
+                    <ApiButton path={`/content/api/signals/${s.id}`} method="PATCH" body={{ action: 'use' }} label="Make posts" busyLabel="thinking…" className="btn btn-sm btn-primary" />
+                    <ApiButton path={`/content/api/signals/${s.id}`} method="PATCH" body={{ action: 'drop' }} label="Drop" className="btn btn-sm" />
                   </li>
                 ))}
               </ul>
-              {data.signals.length > 5 && <p className="faint" style={{ fontSize: 12 }}>+{data.signals.length - 5} more</p>}
-              <RunModuleButton id="research" label="Turn into topics" className="btn btn-primary" />
+              <RunModuleButton id="research" label="Score them all as topics" className="btn" />
             </>
           )}
         </Tile>
@@ -87,7 +89,7 @@ export default async function IdeasPage() {
                 {data.selectedTopics.map((t) => (
                   <li key={t.id} style={{ display: 'block', borderBottom: '1px solid var(--rule)', padding: '8px 0' }}>
                     <div className="row" style={{ border: 0 }}>
-                      <span className="mono" style={{ color: BAND[t.priority_band]?.color }}>{t.score_total}</span>
+                      <span className="mono" style={{ color: BAND[t.priority_band]?.color }}>{t.score_total ?? '–'}</span>
                       <span className="grow t">{t.title}</span>
                       <ApiButton path={`/content/api/topics/${t.id}`} method="POST" label={t.angles?.length ? 'New angles' : 'Find angles'} busyLabel="thinking…" className="btn btn-sm" />
                       <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn btn-sm" />

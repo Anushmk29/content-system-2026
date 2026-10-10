@@ -163,6 +163,16 @@ export function createRepo(db: Db) {
         [r.channel, r.rawText, r.sourceUrl],
       ).then((res) => (res.rowCount ?? 0) > 0),
 
+    /** A waiting signal (status 'new'), else undefined. */
+    researchInput: (id: string) =>
+      db.query<ResearchInputRow>(
+        `select id, channel, raw_text, source_url, status from content.research_inputs where id = $1 and status = 'new'`, [id],
+      ).then((r) => r.rows[0]),
+
+    dropResearchInput: (id: string) =>
+      db.query(`update content.research_inputs set status = 'dropped', processed_at = now() where id = $1 and status = 'new'`, [id])
+        .then((r) => (r.rowCount ?? 0) > 0),
+
     markResearchProcessed: (id: string, topicId: string) =>
       db.query(
         `update content.research_inputs set status = 'processed', topic_id = $2, processed_at = now() where id = $1`,
