@@ -1,7 +1,7 @@
 // Smoke-test runner — drive the pipeline from the CLI without a Next.js host.
 //   Run all modules:     npm run pipeline
 //   Run one module:      npm run pipeline -- draft_generator
-// Env is loaded from ../.env.content via the npm script (node --env-file).
+// Env is loaded from ../.env and/or ../.env.content via the npm script (node --env-file-if-exists).
 import { buildContext, runModule, runModules, MODULES, getModule } from '../src/index.ts';
 
 const id = process.argv[2];

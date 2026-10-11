@@ -33,7 +33,7 @@ test('cron secret opens only the run routes; spend paths; same-origin writes; ra
   assert.equal(roleForSecret('cron-pw', '/content/api/brand'), null);   // cron secret is not a login
   assert.equal(roleForSecret('client-pw', '/content/api/brand'), 'client');
 
-  assert.ok(isSpendPath('/content/api/run') && isSpendPath('/content/api/styles/abc/generate') && isSpendPath('/content/api/decode'));
+  assert.ok(isSpendPath('/content/api/run') && isSpendPath('/content/api/styles/abc') && isSpendPath('/content/api/decode'));
   assert.ok(!isSpendPath('/content/api/brand') && !isSpendPath('/content/api/items/1'));
 
   assert.ok(sameOrigin('https://app.example.com', 'app.example.com'));

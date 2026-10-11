@@ -57,7 +57,7 @@ const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '
 export const isAdminPath = (p: string) => ADMIN_PATHS.some((a) => p === a || p.startsWith(`${a}/`));
 
 /** Writes that spend money (LLM, Jev, Apify, image model) — rate limited in middleware. */
-const SPEND_PATH = /^\/content\/api\/(run|modules\/[^/]+\/run|styles(\/[^/]+(\/(generate|draft))?)?|brand\/voice|decode(\/use)?|items\/[^/]+\/asset|decisions\/seed|videos\/[^/]+)$/;
+const SPEND_PATH = /^\/content\/api\/(run|modules\/[^/]+\/run|styles(\/[^/]+)?|brand\/voice|decode(\/use)?|items\/[^/]+\/asset|decisions\/seed|videos\/[^/]+)$/;
 export const isSpendPath = (p: string) => SPEND_PATH.test(p);
 
 /** A cookie-authenticated write must come from our own pages (CSRF). No Origin = not a browser. */
