@@ -178,7 +178,7 @@ function mediaUrls(it: Record<string, unknown>): string[] {
 
 export function normalise(platform: ApifyPlatform, it: Record<string, unknown>): ScrapedPost | null {
   const url = str(pick(it, 'url', 'postUrl', 'post_url', 'linkedinUrl', 'twitterUrl', 'topLevelUrl', 'link'));
-  if (!url) return null;
+  if (!url || !/^https:\/\//.test(url)) return null; // it reaches yt-dlp's argv; only real post links
   const caption = str(pick(it, 'caption', 'text', 'fullText', 'full_text', 'content', 'commentary', 'message')) ?? '';
   const thumb = str(pick(it, 'displayUrl', 'thumbnailUrl', 'thumbnail', 'image', 'media.0.thumbnail', 'media.0.photo_image.uri',
     'extendedEntities.media.0.media_url_https', 'entities.media.0.media_url_https', 'postImages.0.url', 'images.0', 'images.0.url',

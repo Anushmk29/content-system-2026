@@ -50,6 +50,18 @@ test('a failing ledger insert never throws into the work', async () => {
   await broken({ provider: 'apify', kind: 'scrape', costUsd: 1, ok: true });
 });
 
+test('a NUL or lone surrogate in a scraped handle still records the spend (the daily cap sums it)', async () => {
+  const fresh = await createTestDb();
+  const rec = costRecorder(fresh, createLogger('test'));
+  await withCostScope({ feature: 'voice\u0000', refId: 'x\ud800' }, () =>
+    rec({ provider: 'apify', kind: 'scrape', costUsd: 2, ok: true, error: 'e\u0000', meta: { handle: 'a\u0000b\udc00', ok: '😀' } }));
+  const r = (await fresh.query<{ feature: string; ref_id: string; cost_usd: string; meta: { handle: string; ok: string } }>(
+    `select feature, ref_id, cost_usd, meta from content.cost_events`)).rows;
+  assert.equal(r.length, 1);
+  assert.deepEqual([r[0]!.feature, r[0]!.ref_id, Number(r[0]!.cost_usd), r[0]!.meta.handle, r[0]!.meta.ok], ['voice', 'x', 2, 'ab', '😀']);
+  await assert.rejects(budgetGuard(fresh, 2, createLogger('test'))(), BudgetExceeded);
+});
+
 test('Apify cost: priced events when usageTotalUsd has not settled yet', () => {
   const pricing = { pricingModel: 'PAY_PER_EVENT', pricingPerEvent: { actorChargeEvents: { 'apify-actor-start': { eventPriceUsd: 0.00005 }, post: { eventPriceUsd: 0.002 } } } };
   assert.equal(runCostUsd({ usageTotalUsd: 0.0001, chargedEventCounts: { 'apify-actor-start': 1, post: 40 }, pricingInfo: pricing }, 40).toFixed(5), '0.08005');
@@ -70,6 +82,15 @@ test('getCosts totals by feature and flags untagged; CSV has every row', async (
   const csv = (await costsCsv(ctx, 'today')).trim().split('\n');
   assert.equal(csv.length, 4);
   assert.ok(csv[0]!.startsWith('at,provider,kind,feature'));
+});
+
+test('costs CSV: third-party error text can neither start a row nor a formula', async () => {
+  const fresh = await createTestDb();
+  await fresh.query(`insert into content.cost_events (provider, kind, feature, cost_usd, ok, error) values
+    ('apify','scrape','t',0.1,false,'boom\r=HYPERLINK("x")'), ('apify','scrape','t',0.1,false,'=1+1')`);
+  const csv = await costsCsv({ db: fresh, env: {} } as unknown as ModuleContext, 'today');
+  assert.match(csv, /"boom\r=HYPERLINK\(""x""\)"/, 'CR is quoted, so it stays inside the cell');
+  assert.match(csv, /,'=1\+1,/, 'a leading = is neutralised');
 });
 
 test('costDays: ranges are IST days', () => {

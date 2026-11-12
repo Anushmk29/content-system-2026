@@ -55,7 +55,7 @@ export function createTranscriber(cfg: TranscriberConfig = {}): TranscriberAdapt
       const dir = await mkdtemp(join(tmpdir(), 'decode-audio-'));
       try {
         // Audio only, no conversion: faster-whisper decodes any container itself.
-        await run(ytdlp, ['-f', 'bestaudio/best', '--no-playlist', '--max-filesize', '300M', '-o', join(dir, 'a.%(ext)s'), url], { timeout: 300_000 });
+        await run(ytdlp, ['-f', 'bestaudio/best', '--no-playlist', '--max-filesize', '300M', '-o', join(dir, 'a.%(ext)s'), '--', url], { timeout: 300_000 });
         const file = (await readdir(dir)).find((f) => f.startsWith('a.'));
         if (!file) throw new Error('yt-dlp downloaded nothing');
         const { stdout } = await run(python, ['-c', WHISPER_PY, join(dir, file), model], { timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });

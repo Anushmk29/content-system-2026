@@ -20,21 +20,44 @@ export interface Signal { channel: string; rawText: string; sourceUrl: string }
 const PER_SOURCE = 10;
 const UA = 'pratapai-content-pipeline/1.0 (market signals)';
 
+// Feeds are third-party input, so every pattern here is linear: no lazy match that rescans to the
+// end of the body from each unclosed opener (a malformed 400 KB feed used to block the event loop for seconds).
 const clean = (s: string) =>
   // Entities first: RSS descriptions usually carry escaped HTML (&lt;p&gt;), which must be stripped too.
-  s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<[^>]+>/g, ' ')
+  s.replaceAll('<![CDATA[', '').replaceAll(']]>', '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<[^<>]*>/g, ' ')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ').trim();
 
-const tag = (xml: string, name: string) => xml.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`, 'i'))?.[1];
+/** Index of the first `</name>` at or after `from` (case-insensitive), or -1. */
+function closeAt(xml: string, name: string, from: number): number {
+  const re = new RegExp(`</${name}>`, 'gi');
+  re.lastIndex = from;
+  return re.exec(xml)?.index ?? -1;
+}
+
+function tag(xml: string, name: string): string | undefined {
+  const open = new RegExp(`<${name}\\b[^<>]*>`, 'i').exec(xml);
+  if (!open) return undefined;
+  const start = open.index + open[0].length;
+  const end = closeAt(xml, name, start);
+  return end < 0 ? undefined : xml.slice(start, end);
+}
 
 /** RSS <item> or Atom <entry> → signals. */
 export function parseFeed(xml: string, channel: string): Signal[] {
-  const items = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) ?? [];
-  return items.slice(0, PER_SOURCE).flatMap((it) => {
+  const items: string[] = [];
+  const open = /<(item|entry)\b/gi;
+  let m: RegExpExecArray | null;
+  while (items.length < PER_SOURCE && (m = open.exec(xml))) {
+    const end = closeAt(xml, m[1]!, open.lastIndex);
+    if (end < 0) break; // no close tag now means none later either
+    open.lastIndex = end + m[1]!.length + 3;
+    items.push(xml.slice(m.index, open.lastIndex));
+  }
+  return items.flatMap((it) => {
     const title = clean(tag(it, 'title') ?? '');
-    const link = clean(tag(it, 'link') ?? '') || it.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || '';
+    const link = clean(tag(it, 'link') ?? '') || it.match(/<link\b[^<>]*href="([^"]+)"/i)?.[1] || '';
     const body = clean(tag(it, 'description') ?? tag(it, 'summary') ?? tag(it, 'content') ?? '').slice(0, 1500);
     return title && link ? [{ channel, rawText: body ? `${title}\n\n${body}` : title, sourceUrl: link }] : [];
   });
@@ -103,6 +126,20 @@ async function get(url: string, headers: Record<string, string> = {}): Promise<R
   return res;
 }
 
+const MAX_FEED = 1 << 20; // 1 MiB: real feeds are tens of KB
+async function feedText(url: string): Promise<string> {
+  const res = await get(url);
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_FEED) throw new Error('feed larger than 1 MiB');
+  if (!res.body) return '';
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+    if ((n += chunk.length) > MAX_FEED) throw new Error('feed larger than 1 MiB');
+    parts.push(chunk);
+  }
+  return Buffer.concat(parts).toString('utf8');
+}
+
 export const marketSignalsModule: Module = {
   id: 'market-signals',
   title: 'Market Signals',
@@ -127,11 +164,11 @@ export const marketSignalsModule: Module = {
       ...feeds.map((f) => {
         const m = f.match(/^(\w+)=(.+)$/);
         const [channel, url] = m ? [m[1]!, m[2]!] : ['trend', f];
-        return { name: url, load: async () => parseFeed(await (await get(url)).text(), channel) };
+        return { name: url, load: async () => parseFeed(await feedText(url), channel) };
       }),
       ...queries.map((q) => ({
         name: `reddit:${q}`,
-        load: async () => parseFeed(await (await get(redditUrl(q))).text(), 'reddit'),
+        load: async () => parseFeed(await feedText(redditUrl(q)), 'reddit'),
       })),
       ...xQueries.map((q) => ({
         name: `x:${q}`,

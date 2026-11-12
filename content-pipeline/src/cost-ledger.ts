@@ -35,19 +35,27 @@ export function costScoped<C, A extends unknown[], R>(feature: string, fn: (ctx:
     () => fn(ctx, ...a));
 }
 
-/** The onCost hook: one insert per call, never throws (a logging failure must not break the work). */
+/** Postgres text/jsonb reject NUL and lone surrogates; scraped handles and error text can carry both. */
+const pgSafe = (s: string) => s.replace(/\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '');
+const safe = (s: string | null | undefined) => (s == null ? null : pgSafe(s));
+
+/** The onCost hook: one insert per call, never throws (a logging failure must not break the work).
+ *  The spend must land even when the descriptive fields can't: the daily cap sums these rows. */
 export function costRecorder(db: Db, logger: Logger): (e: CostEvent) => Promise<void> {
+  const insert = (vals: unknown[]) => db.query(
+    `insert into content.cost_events (provider, kind, feature, model, ref_type, ref_id, input_tokens, output_tokens, units, cost_usd, ok, error, meta)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, vals);
   return async (e) => {
     const s = scope.getStore(); // read now, while still inside the caller's scope
+    const head = [e.provider, e.kind, safe(s?.feature) ?? 'untagged'];
+    const tail = [e.inputTokens ?? null, e.outputTokens ?? null, e.units ?? null, e.costUsd, e.ok];
     try {
-      await db.query(
-        `insert into content.cost_events (provider, kind, feature, model, ref_type, ref_id, input_tokens, output_tokens, units, cost_usd, ok, error, meta)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [e.provider, e.kind, s?.feature ?? 'untagged', e.model ?? null, s?.refType ?? null, s?.refId ?? null,
-          e.inputTokens ?? null, e.outputTokens ?? null, e.units ?? null, e.costUsd, e.ok, e.error?.slice(0, 500) ?? null,
-          e.meta ? JSON.stringify(e.meta) : null]);
+      await insert([...head, safe(e.model), safe(s?.refType), safe(s?.refId), ...tail, safe(e.error?.slice(0, 500)),
+        e.meta ? JSON.stringify(e.meta, (_k, v) => (typeof v === 'string' ? pgSafe(v) : v)) : null]);
     } catch (err) {
       logger.error('cost ledger insert failed', (err as Error).message);
+      try { await insert([...head, null, null, null, ...tail, 'details dropped: ledger insert failed', null]); }
+      catch (err2) { logger.error('cost ledger fallback insert failed', (err2 as Error).message); }
     }
   };
 }

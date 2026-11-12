@@ -174,8 +174,9 @@ async function reconcileProviders(ctx: ModuleContext, since: string | null): Pro
 
 // ---- CSV export -----------------------------------------------------------------
 const cell = (v: unknown) => {
-  const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`; // error text is third-party: never a formula
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
 export async function costsCsv(ctx: ModuleContext, range: CostRange, custom: { from?: string; to?: string } = {}): Promise<string> {

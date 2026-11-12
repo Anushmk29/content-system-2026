@@ -32,6 +32,7 @@ test('normalise: X and Instagram actor shapes', () => {
   assert.deepEqual([side.postType, side.media], ['carousel', ['https://cdn/1.jpg', 'https://cdn/2.jpg', 'https://cdn/3.jpg']]);
   assert.deepEqual(normalise('linkedin', { linkedinUrl: 'https://linkedin.com/p/3', postImages: [{ url: 'https://li/a.jpg' }] })!.media, ['https://li/a.jpg']);
   assert.equal(normalise('facebook', { text: 'no url' }), null);
+  assert.equal(normalise('instagram', { url: '--batch-file=/etc/hosts', type: 'Video' }), null, 'never an option for yt-dlp');
   assert.equal(bareHandle('https://www.instagram.com/acme/'), 'acme');
   assert.equal(bareHandle('@acme'), 'acme');
 });

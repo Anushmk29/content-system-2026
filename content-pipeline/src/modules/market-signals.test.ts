@@ -13,6 +13,21 @@ test('RSS and Atom items become signals; items without a link are dropped', () =
   assert.deepEqual(parseFeed(atom, 'trend'), [{ channel: 'trend', rawText: 'Trend\n\ns', sourceUrl: 'https://b.com/x' }]);
 });
 
+test('a hostile feed parses in linear time (no event-loop stall)', () => {
+  const N = 100_000;
+  for (const body of [
+    '<rss>' + '<item>'.repeat(N) + '</rss>',
+    '<rss><item><title>' + '&lt;'.repeat(N) + '</title><link>https://x.test/a</link></item></rss>',
+    '<rss><item>' + '<title>'.repeat(N) + '</item></rss>',
+    '<rss><item><title>t</title>' + '<link'.repeat(N) + '</item></rss>',
+    '<rss><item><title>' + '<![CDATA['.repeat(N) + '</title><link>https://x.test/a</link></item></rss>',
+  ]) {
+    const t = performance.now();
+    parseFeed(body, 'trend');
+    assert.ok(performance.now() - t < 200, `${body.slice(0, 30)}… took ${Math.round(performance.now() - t)} ms`);
+  }
+});
+
 test('X recent search → signals with engagement and a post link', () => {
   const out = parseXSearch({
     data: [
