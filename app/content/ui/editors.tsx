@@ -245,8 +245,7 @@ export function MakeAll({ itemIds, styles }: { itemIds: string[]; styles: Exampl
   return (
     <div className="next-step">
       <div>
-        <b>Make all {itemIds.length} at once</b>
-        <p className="faint">Each post gets the same example with its own words, about a minute each. Or make them one by one below.</p>
+        <b title="Each post gets the same example with its own words, about a minute each.">Make all {itemIds.length} at once</b>
       </div>
       <div className="cr-row">
         <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} />
@@ -287,6 +286,13 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
     await a.call('up', 'POST', url, form);
   };
   const busy = a.pending;
+  const extra = <>
+    <label className="btn btn-sm" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : 'Use my own image or video'}
+      <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
+    {assets.length > 0 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirm('Remove the creative from this post?') && a.call('rm', 'DELETE', url)}>Remove</button>}
+  </>;
+  // Design cards (bare) keep one main button; the quieter actions sit behind ⋯ beside it.
+  const more = <details className="make-mine dc-more"><summary className="btn btn-sm" aria-label="More actions" title="More actions">⋯</summary><div className="make-pop">{extra}</div></details>;
   return (
     <div className="cr">
       {assets.length > 0 ? (
@@ -311,14 +317,11 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
               <button type="button" className="btn btn-ink" disabled={busy || !styleId} onClick={make}>
                 {a.busy === 'make' ? 'Making… (about a minute)' : assets.length ? 'Make again' : 'Make creative'}
               </button>
+              {bare && more}
             </div>
           ) : <p className="cr-meta">No examples saved yet. <a href="/content/styles">Add one on Design examples</a> to make creatives here.</p>}
-          <div className="cr-row">
-            <label className="btn btn-sm" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : 'Use my own image or video'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
-            {assets.length > 0 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirm('Remove the creative from this post?') && a.call('rm', 'DELETE', url)}>Remove</button>}
-            {a.feedback}
-          </div>
+          {bare && !styles.length && more}
+          {bare ? a.feedback : <div className="cr-row">{extra}{a.feedback}</div>}
           {warnings.length > 0 && <ul className="cr-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
         </div>
       )}

@@ -339,12 +339,16 @@ textarea.input { resize: vertical; min-height: 64px; line-height: 1.5; }
 .linkish { padding: 0; border: 0; background: none; font: inherit; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkish:hover { color: var(--ink); }
 /* Popovers that must float over the layout instead of pushing it down. */
-.dc-bar .make-pop, .next .make-pop, .post-pane .make-pop { position: absolute; z-index: 20; box-shadow: 0 6px 20px rgba(17, 17, 17, .12); }
+.dc-bar .make-pop, .next .make-pop, .post-pane .make-pop, .dz-foot .make-pop { position: absolute; z-index: 20; box-shadow: 0 6px 20px rgba(17, 17, 17, .12); }
 .dc-bar .make-pop { right: 0; color: var(--ink); font: 13px var(--font-ui); }
 /* Chrome still lays out a closed <details>' content: keep closed popovers from widening the page. */
 .make-mine:not([open]) > .make-pop { display: none; }
 .make-pop { max-width: calc(100vw - 32px); }
 .dc-more .make-pop { width: 220px; }
+.dz-foot .make-pop { right: 0; }
+.dz-foot .cr-row { flex-wrap: nowrap; }
+.dz-title a { color: inherit; text-decoration: none; }
+.dz-title a:hover { text-decoration: underline; }
 .next-card[data-top] .btn-lime { background: var(--ink); color: var(--lime); border-color: var(--ink); }
 @media (min-width: 1181px) { .band > :first-child { position: sticky; top: 56px; align-self: start; } }
 
@@ -928,9 +932,6 @@ ol.acc-body { padding-left: 34px; }
 .scr-kind { font: 500 11px/20px var(--font-mono); padding: 0 8px; border-radius: 999px; border: 1px solid var(--rule-2); color: var(--muted); }
 .scr-age { margin-left: auto; font-size: 11.5px; }
 .scr-title { margin: 0; font: 600 16.5px/1.35 var(--font-ui); color: var(--ink); text-wrap: pretty; }
-.scr-next { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--radius); background: var(--hilite, var(--paper-2)); font-size: 13.5px; font-weight: 500; }
-.scr-next.is-done { background: var(--paper-2); font-weight: 400; }
-.scr-step { flex-shrink: 0; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: var(--ink); color: var(--paper); font: 600 11.5px var(--font-mono); }
 .scr-lab { display: block; font: 500 10.5px var(--font-mono); letter-spacing: .8px; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
 .scr-hook p { margin: 0; font-size: 15px; line-height: 1.5; font-weight: 500; color: var(--ink); }
 .scr-scenes { list-style: none; margin: 0; padding: 6px 14px 14px; display: grid; gap: 0; }

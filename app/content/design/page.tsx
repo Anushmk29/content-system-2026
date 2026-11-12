@@ -70,12 +70,9 @@ function ApproveNext({ rows }: { rows: DesignRow[] }) {
   return (
     <div className="next-step">
       <div>
-        <b>Next: approve {ready ? `${ready} post${ready === 1 ? '' : 's'}` : 'them'}</b>
-        <p className="faint">
-          The words and the visual are approved together. Click <b>Review and approve</b> on a card, check it, then Approve.
-          After that it's locked and goes on the Calendar to be posted.
-          {qc > 0 && ` ${qc} still need the quality check first.`}
-        </p>
+        <b title="The words and the visual are approved together, then locked and put on the Calendar.">
+          Approve {ready ? `${ready} post${ready === 1 ? '' : 's'}` : 'them'}{qc > 0 && ` · ${qc} need the quality check first`}
+        </b>
       </div>
       {qc > 0 && <RunModuleButton id="qc_gate" label={`Check ${qc} now`} className="btn" />}
       {ready > 0 && <Link href="/content/approvals" className="btn btn-primary">Approve them one by one →</Link>}
@@ -97,7 +94,7 @@ function DesignCard({ r, styles, href }: { r: DesignRow; styles: ExampleOpt[]; h
           <span>{image ? 'Image' : `Carousel · ${slides.length} slide${slides.length === 1 ? '' : 's'}`}</span>
           <span style={{ marginLeft: 'auto' }}>{r.scheduled_at ? `goes out ${ago(r.scheduled_at)}` : ago(r.created_at)}</span>
         </div>
-        <h3 className="dz-title" title={r.title}>{r.title}</h3>
+        <h3 className="dz-title" title={`${r.title}: edit the copy`}><Link href={href} scroll={false}>{r.title}</Link></h3>
       </header>
       {!r.assets.length && (
         <div className="dz-mock" data-p={r.platform}>
@@ -113,9 +110,7 @@ function DesignCard({ r, styles, href }: { r: DesignRow; styles: ExampleOpt[]; h
       )}
       <div className="dz-foot">
         <CreativePanel itemId={r.id} platform={r.platform} assets={r.assets} styles={styles} editable={r.stage !== 'locked'} bare want={image ? 'image' : 'carousel'} />
-        {r.stage === 'made' && r.status === 'needs_approval'
-          ? <Link href={href} scroll={false} className="btn btn-primary">Review and approve →</Link>
-          : <Link href={href} scroll={false} className="linkish">Edit the copy →</Link>}
+        {r.stage === 'made' && r.status === 'needs_approval' && <Link href={href} scroll={false} className="btn btn-primary">Review and approve →</Link>}
       </div>
     </article>
   );

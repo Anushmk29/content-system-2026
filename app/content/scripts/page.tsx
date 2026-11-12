@@ -71,17 +71,6 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Sear
 const FORMAT_LABEL: Record<string, string> = { reel_script: 'Reel script', short_script: 'Short video script' };
 
 /** What the card asks of you right now, as a numbered step. */
-function nextStep(r: ScriptRow): { n: number; text: string } {
-  if (r.stage === 'review') return r.status === 'needs_approval'
-    ? { n: 2, text: 'Read it and approve it' }
-    : { n: 1, text: 'Run the quality check' };
-  if (r.stage === 'to_film') return r.platform === 'reddit'
-    ? { n: 3, text: 'Post it on Reddit, then paste the link' }
-    : { n: 3, text: 'Film it, then mark it filmed' };
-  if (r.stage === 'filmed') return { n: 4, text: 'Post it, then paste the link' };
-  return { n: 5, text: 'Posted. Views are tracked' };
-}
-
 /** One beat → its on-screen text, b-roll notes and spoken lines. */
 function scene(text: string) {
   const tag = (re: RegExp) => [...text.matchAll(re)].map((m) => m[1]!.trim());
@@ -89,10 +78,9 @@ function scene(text: string) {
   return { screen: tag(/\[ON SCREEN:\s*([^\]]*)\]/gi), broll: tag(/\[B-ROLL:\s*([^\]]*)\]/gi), spoken };
 }
 
-/** The filming card: what to do next, the opening line, the script folded by scene, the closing line. */
+/** The filming card: the opening line, the script folded by scene (closing line last), one button for the next step. */
 function ScriptCard({ r, href }: { r: ScriptRow; href: string }) {
   const beats = splitPosts(r.body ?? '').map(scene);
-  const step = nextStep(r);
   const video = r.platform !== 'reddit';
   return (
     <article className="scr">
@@ -103,14 +91,9 @@ function ScriptCard({ r, href }: { r: ScriptRow; href: string }) {
       </header>
       <h3 className="scr-title">{r.title}</h3>
 
-      <div className={`scr-next${step.n === 5 ? ' is-done' : ''}`}>
-        <span className="scr-step">{step.n === 5 ? '✓' : step.n}</span>
-        <span><span className="faint">Next:</span> {step.text}</span>
-      </div>
-
       {r.hook && (
         <div className="scr-hook">
-          <span className="scr-lab">{video ? 'Opening line (say this first)' : 'Title / first line'}</span>
+          <span className="scr-lab">{video ? 'Opening line' : 'First line'}</span>
           <p>“{r.hook}”</p>
         </div>
       )}
@@ -128,10 +111,10 @@ function ScriptCard({ r, href }: { r: ScriptRow; href: string }) {
               </li>
             ))}
           </ol>
+          {r.cta && <p className="scr-cta"><span className="scr-lab">Ends with</span>“{r.cta}”</p>}
         </details>
       )}
-
-      {r.cta && <p className="scr-cta"><span className="scr-lab">Ends with</span>“{r.cta}”</p>}
+      {r.cta && !beats.length && <p className="scr-cta"><span className="scr-lab">Ends with</span>“{r.cta}”</p>}
 
       {r.stage === 'uploaded' && (
         <p className="mono scr-stats">
