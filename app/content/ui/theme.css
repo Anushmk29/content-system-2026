@@ -52,7 +52,7 @@ a { color: inherit; }
   display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh;
 }
 .side {
-  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 1px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;
   padding: 18px 12px; border-right: 1px solid var(--rule); background: var(--paper);
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 16px; text-decoration: none; }
@@ -464,6 +464,7 @@ textarea.input { resize: vertical; min-height: 64px; line-height: 1.5; }
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side { position: sticky; top: 0; z-index: 25; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 6px 12px; border-right: 0; border-bottom: 1px solid var(--rule); }
   .side .brand small, .nav-label, .side-foot { display: none; }
+  .table { display: block; overflow-x: auto; } /* wide tables scroll in place, not the page */
   .brand { padding: 0 8px 0 0; }
   .nav-link { padding: 6px 10px; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; }
   .nav-link[aria-current='page'] { border-bottom-color: var(--ink); }

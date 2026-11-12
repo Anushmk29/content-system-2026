@@ -130,7 +130,7 @@ test('setLogo needs a saved kit, then stores a PNG', async () => {
 });
 
 test('upgrade: a database with the old pillar enum moves to text with its views intact', async () => {
-  const schema = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8').replace(/create extension[^;]*;/i, '');
+  const schema = readFileSync(new URL('../../../db/schema.sql', import.meta.url), 'utf8').replace(/\r\n/g, '\n').replace(/create extension[^;]*;/i, '');
   // The old schema: today's, with the pillar columns typed by the old enum and no upgrade block.
   const old = `create schema content;
     create type content.pillar as enum ('practical_ai_for_operators','proof_and_use_cases');\n`

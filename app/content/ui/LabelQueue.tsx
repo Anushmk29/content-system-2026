@@ -22,7 +22,7 @@ export function LabelQueue({ queue, pillars }: { queue: TrainingExample[]; pilla
   if (queue.length === 0) {
     return <p className="empty">Nothing to label. Disagreements show up here once Jev runs in shadow mode; practice examples appear after you generate them.</p>;
   }
-  return <div style={{ display: 'grid', gap: 12 }}>{queue.map((e, i) => <LabelCard key={`${e.task}:${e.subjectId}`} ex={e} n={i + 1} of={queue.length} enums={enums} />)}</div>;
+  return <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 }}>{queue.map((e, i) => <LabelCard key={`${e.task}:${e.subjectId}`} ex={e} n={i + 1} of={queue.length} enums={enums} />)}</div>;
 }
 
 function LabelCard({ ex, n, of, enums }: { ex: TrainingExample; n: number; of: number; enums: Enums }) {
