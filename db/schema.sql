@@ -634,6 +634,9 @@ alter table content.decoded_posts add column if not exists demand real;
 alter table content.decoded_posts add column if not exists fit real;
 alter table content.decoded_posts add column if not exists hunt_score real;
 alter table content.decoded_posts add column if not exists paid boolean not null default false;
+-- Our own copy of the thumbnail, taken at scan time: Instagram's image links expire within days.
+-- ponytail: bytea, ~50 KB a post; move to object storage if runs grow to thousands of posts.
+alter table content.decoded_posts add column if not exists thumb_jpg bytea;
 -- Image URLs of the post (carousel slides, or its single image), for Recreate.
 alter table content.decoded_posts add column if not exists media jsonb;
 alter table content.decode_runs add column if not exists jev_health real;    -- pilot's mean weakest-answer confidence

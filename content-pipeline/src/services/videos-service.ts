@@ -3,6 +3,7 @@
 // of it, the transcript text, and a by-hand (re)try for any one video.
 import type { ModuleContext } from '../modules/module.ts';
 import type { VideoAnalysis } from './video-analysis-service.ts';
+import { THUMB_SQL } from './decode-service.ts';
 
 export type TranscriptState = 'done' | 'failed' | 'not_yet';
 export interface VideoRow {
@@ -23,7 +24,7 @@ export async function listVideos(ctx: ModuleContext): Promise<VideoRow[]> {
 const VIDEOS_SQL = (analysis: string) =>
     `select * from (
        select distinct on (content.norm_url(p.url)) p.id, p.url, p.platform,
-         case when c.is_self then 'You' else c.name end as competitor, p.handle, p.thumb, p.posted_at::text,
+         case when c.is_self then 'You' else c.name end as competitor, p.handle, ${THUMB_SQL} as thumb, p.posted_at::text,
          p.duration_s, p.views, p.vs_own_median::float8 as vs_own_median, p.hunt_score, p.hook,
          case when tr.text is not null then 'done' when p.transcript_error is not null then 'failed' else 'not_yet' end as state,
          p.transcript_error as error, tr.text as transcript, tr.lang, tr.created_at::text as transcribed_at,

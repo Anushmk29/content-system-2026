@@ -12,6 +12,7 @@
 // Stop is a status flip the loop checks between accounts / batches. Nothing here posts
 // anything: "add to ideas" / "counter-angle" create Ideas signals; "make my version" (stealFormat)
 // writes drafts that wait in Approvals.
+import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
 import { DECODE_PLATFORMS, type DecodePlatform } from '../adapters/apify.ts';
 import { parseJsonObject } from '../modules/llm-json.ts';
@@ -66,7 +67,9 @@ export interface DecodedPostRow {
 const RUN_COLS = `id, status, stage, competitor_ids, platforms, lookback_days, post_cap, total, decoded,
   cost_ai_usd::float8 as cost_ai_usd, cost_apify_usd::float8 as cost_apify_usd, cost_jev_usd::float8 as cost_jev_usd, jev_health,
   message, started_at, finished_at`;
-const POST_COLS = `p.id, p.competitor_id, c.name as competitor, p.platform, p.post_type, p.url, p.handle, p.thumb,
+/** `thumb`: our stored copy when the scan saved one (see thumbUrl), else the platform's own link. */
+export const THUMB_SQL = `case when p.thumb_jpg is not null then '/content/api/decode/thumb/' || p.id else p.thumb end`;
+const POST_COLS = `p.id, p.competitor_id, c.name as competitor, p.platform, p.post_type, p.url, p.handle, ${THUMB_SQL} as thumb,
   to_char(p.posted_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as posted_at, p.duration_s, p.reactions, p.comments, p.shares, p.views, p.vs_own_median::float8 as vs_own_median,
   p.caption, p.text_source, p.format_id, p.hook, p.beats, p.seq,
   p.lane, p.hook_type, p.hunt_score, p.demand, p.fit, p.paid, p.value_structure, p.cta_type, p.media`;
@@ -270,6 +273,11 @@ async function scrape(ctx: ModuleContext, run: DecodeRunRow, stopped: () => Prom
             [run.id, c.id, p, s.postType, s.url, s.handle ?? handle, s.thumb, s.postedAt, s.durationS,
               s.reactions, s.comments, s.shares, s.views, s.caption, s.postType === 'video' ? 'captions' : 'post_text', JSON.stringify(s.media ?? [])]);
         }
+        // Keep a copy of each thumbnail now, while the link still works.
+        await mapLimit(posts.filter((s) => s.thumb), 6, async (s) => {
+          const jpg = await fetchThumb(s.thumb!);
+          if (jpg) await ctx.db.query(`update content.decoded_posts set thumb_jpg = $3 where run_id = $1 and url = $2`, [run.id, s.url, jpg]);
+        });
         await ctx.db.query(
           `update content.decode_runs set cost_apify_usd = cost_apify_usd + $2,
              total = (select count(*) from content.decoded_posts where run_id = $1) where id = $1`, [run.id, costUsd]);
@@ -581,10 +589,10 @@ export function parseBreakdowns(raw: string, formatCount: number): Map<number, B
 /** `use` = copy a format; `counter` = our take on it. Both land as an Ideas signal (channel 'decode'). */
 /** The post itself, or a format's best performer. */
 async function bestPost(ctx: ModuleContext, input: { formatId?: string; postId?: string }) {
-  type Best = DecodedPostRow & { format_name: string | null; format_desc: string | null;
+  type Best = DecodedPostRow & { thumb_jpg: Buffer | null; format_name: string | null; format_desc: string | null;
     hook_template: string | null; value_template: string | null; cta_template: string | null };
   const post = (await ctx.db.query<Best>(
-    `select ${POST_COLS}, f.name as format_name, f.description as format_desc, f.hook_template, f.value_template, f.cta_template
+    `select ${POST_COLS}, p.thumb_jpg, f.name as format_name, f.description as format_desc, f.hook_template, f.value_template, f.cta_template
      from content.decoded_posts p left join content.competitors c on c.id = p.competitor_id
      left join content.decode_formats f on f.id = p.format_id
      where ${input.postId ? 'p.id = $1' : 'p.format_id = $1 and not p.paid'}
@@ -615,8 +623,26 @@ export async function useDecode(ctx: ModuleContext, input: { formatId?: string; 
 
 export type StealResult = MakeResult & { exampleId?: string };
 
+/** A thumbnail shrunk to a 640px JPEG; null when the link is dead or isn't an image. */
+async function fetchThumb(url: string): Promise<Buffer | null> {
+  try {
+    if (!/^https:\/\//.test(url)) return null;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok || !/^image\//.test(res.headers.get('content-type') ?? '')) return null;
+    return await sharp(Buffer.from(await res.arrayBuffer()), { limitInputPixels: 4e7 })
+      .rotate().resize(640, 640, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
+  } catch { return null; }
+}
+
+/** The stored thumbnail of a decoded post, for /content/api/decode/thumb/:id. */
+export async function getPostThumb(ctx: ModuleContext, postId: string): Promise<Buffer | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(postId)) return null;
+  return (await ctx.db.query<{ thumb_jpg: Buffer | null }>(`select thumb_jpg from content.decoded_posts where id = $1`, [postId])).rows[0]?.thumb_jpg ?? null;
+}
+
 /** A post's images as bytes (up to 4); links that have expired (Instagram's do) are skipped. */
-async function postImages(post: Pick<DecodedPostRow, 'media' | 'thumb'>): Promise<Buffer[]> {
+async function postImages(post: Pick<DecodedPostRow, 'media' | 'thumb'> & { thumb_jpg?: Buffer | null }): Promise<Buffer[]> {
+  if (!post.media?.length && post.thumb_jpg) return [post.thumb_jpg];
   const urls = (post.media?.length ? post.media : post.thumb ? [post.thumb] : []).slice(0, 4);
   const got = await Promise.all(urls.map(async (u) => {
     try {

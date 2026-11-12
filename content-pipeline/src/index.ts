@@ -37,7 +37,7 @@ export {
 } from './services/analytics-service.ts';
 
 export {
-  listCompetitors, saveCompetitor, deleteCompetitor, getDecodeView, getDecodeRun, startDecode, stopDecode,
+  listCompetitors, saveCompetitor, deleteCompetitor, getDecodeView, getDecodeRun, getPostThumb, startDecode, stopDecode,
   type CompetitorRow, type DecodeRunRow, type DecodeFormatRow, type DecodedPostRow, type DecodeView,
 } from './services/decode-service.ts';
 export { listHooks, type HookRow } from './services/hook-service.ts';

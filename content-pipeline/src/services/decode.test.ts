@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
 import { createTestDb } from '../db/test-db.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import { normalise, bareHandle, type ScrapedPost, type DecodePlatform } from '../adapters/apify.ts';
 import {
-  saveCompetitor, runDecode, getDecodeRun, getDecodeView, stopDecode, useDecode, stealFormat, parseBreakdowns,
+  saveCompetitor, runDecode, getDecodeRun, getDecodeView, getPostThumb, stopDecode, useDecode, stealFormat, parseBreakdowns,
 } from './decode-service.ts';
 import { listHooks, rewriteWithHook } from './hook-service.ts';
 import { selfCompetitor, startDecode, listCompetitors } from './decode-service.ts';
@@ -229,4 +230,32 @@ test('own results: hidden "You" row, own median = your usual, published posts ge
   assert.deepEqual(own.baseline, [{ platform: 'x', median_reactions: 30, posts: 5 }]);
   assert.equal(own.lastRun?.id, run);
   assert.ok((await listHooks(ctx)).some((h) => h.self && h.source === 'You'), 'own hooks join the library');
+});
+
+test('scan keeps its own copy of each thumbnail (Instagram links expire); a dead link keeps the platform URL', async () => {
+  const png = await sharp({ create: { width: 1200, height: 1500, channels: 3, background: '#c00' } }).png().toBuffer();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (u: string | URL) => String(u).endsWith('/ok.jpg')
+    ? new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } })
+    : new Response('gone', { status: 403 })) as typeof fetch;
+  try {
+    const shot = (url: string, thumb: string) => ({ ...post(url, 5), thumb });
+    const pics = { ...ctx, adapters: { ...ctx.adapters, apify: { configured: true, async scrape() {
+      return { costUsd: 0, posts: [shot('https://x.com/pics/1', 'https://cdn.test/ok.jpg'), shot('https://x.com/pics/2', 'https://cdn.test/dead.jpg')] };
+    } } } } as unknown as ModuleContext;
+    const c = await saveCompetitor(ctx, { name: 'Pics', handles: { x: 'pics' } });
+    const run = (await db.query<{ id: string }>(
+      `insert into content.decode_runs (competitor_ids, platforms, post_cap) values ($1, '{x}', 50) returning id`, [[c.id]])).rows[0]!.id;
+    await runDecode(pics, run);
+    const posts = (await getDecodeRun(ctx, run))!.posts;
+    const ok = posts.find((p) => p.url.endsWith('/1'))!, dead = posts.find((p) => p.url.endsWith('/2'))!;
+    assert.equal(ok.thumb, `/content/api/decode/thumb/${ok.id}`);
+    const meta = await sharp((await getPostThumb(ctx, ok.id))!).metadata();
+    assert.deepEqual([meta.format, meta.width, meta.height], ['jpeg', 512, 640], 'shrunk to fit 640px');
+    assert.equal(dead.thumb, 'https://cdn.test/dead.jpg');
+    assert.equal(await getPostThumb(ctx, dead.id), null);
+    assert.equal(await getPostThumb(ctx, 'not-an-id'), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
