@@ -89,7 +89,7 @@ export function buildResearchPrompt(input: { rawText: string; channel?: string |
   "customerLanguage": string (the prospect's own words, or "") }
 
 CHANNEL: ${input.channel ?? 'unknown'}
-SIGNAL: ${input.rawText}${input.marketContext ? `
+SIGNAL: ${input.rawText.slice(0, 8000)}${input.marketContext ? `
 
 MARKET CHECK (live web): angle the title at the GAP, not at what is ALREADY SAID.
 ${input.marketContext}` : ''}`;
@@ -145,10 +145,15 @@ Judge native fit on each platform: the format it needs, how this audience uses t
 the tone there. Be selective: most ideas suit 2-4 platforms, not all of them.
 ${brandBrief(b)}`;
 
-export function buildPlatformFitPrompt(state: string, platforms: Record<string, string>): string {
+export function buildPlatformFitPrompt(
+  state: string, platforms: Record<string, { piece: string; formats: string[]; frameworks: string[] }>,
+): string {
+  const choosy = Object.entries(platforms).filter(([, o]) => o.formats.length || o.frameworks.length);
   return `For each platform, give the probability (0 to 1) that this idea would work natively there.
-${Object.entries(platforms).map(([p, piece]) => `- ${p}: as a ${piece}`).join('\n')}
-Respond with ONLY JSON: { ${Object.keys(platforms).map((p) => `"${p}": number`).join(', ')} }
+${Object.entries(platforms).map(([p, o]) => `- ${p}: as a ${o.piece}`).join('\n')}
+Then, for each platform below, pick the post format and the writing structure that suit this idea best:
+${choosy.map(([p, o]) => `- ${p}:${o.formats.length ? ` formats ${o.formats.join(', ')};` : ''}${o.frameworks.length ? ` structures ${o.frameworks.join(', ')}` : ''}`).join('\n')}
+Respond with ONLY JSON: { ${Object.keys(platforms).map((p) => `"${p}": number`).join(', ')}, "picks": { ${choosy.map(([p]) => `"${p}": { "format": id, "framework": id }`).join(', ')} } }
 
 ${state}`;
 }

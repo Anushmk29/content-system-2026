@@ -10,21 +10,42 @@ import {
 type Vars = CSSProperties & Record<`--${string}`, string>;
 
 // ---- page head -------------------------------------------------------------
-/** Breadcrumb, sentence headline (ends with a period), one-sentence lede, freshness stamp. */
-export function PageHead({ crumb, title, sub, children }: { crumb: string; title: string; sub?: ReactNode; children?: ReactNode }) {
-  const asOf = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+/** `title` is the page's sidebar label, so people can tell where they are. `sub`: one short line.
+ *  `how`: the steps, folded. `next`: the one thing to do now, as a sentence and a button. */
+export function PageHead({ title, sub, how, next, children }: {
+  title: string; sub?: ReactNode; how?: ReactNode[]; next?: { text: ReactNode; action?: ReactNode } | null; children?: ReactNode;
+}) {
   return (
     <header className="page-head">
       <div style={{ minWidth: 0 }}>
-        <div className="crumb">content studio · {crumb}</div>
         <h1>{title}</h1>
         {sub && <p className="lede">{sub}</p>}
+        {how && (
+          <details className="how">
+            <summary>How this page works</summary>
+            <ol>{how.map((s, i) => <li key={i}>{s}</li>)}</ol>
+          </details>
+        )}
       </div>
-      <div className="acts">
-        {children}
-        <span className="stamp">data as of {asOf}</span>
-      </div>
+      {children && <div className="acts">{children}</div>}
+      {next && (
+        <div className="page-next">
+          <span className="label">Next</span>
+          <span className="grow">{next.text}</span>
+          {next.action}
+        </div>
+      )}
     </header>
+  );
+}
+
+/** A "?" that opens a short explanation: help text stays one click away instead of on the page. */
+export function Hint({ children, label = 'What is this?' }: { children: ReactNode; label?: string }) {
+  return (
+    <details className="hint">
+      <summary aria-label={label} title={label}>?</summary>
+      <div className="hint-pop">{children}</div>
+    </details>
   );
 }
 
@@ -54,13 +75,17 @@ export function KpiStrip({ items }: { items: KpiCell[] }) {
   );
 }
 
-// ---- section: eyebrow, h2, mono meta; separated by a rule, never boxed -------
+// ---- section: one heading (the title, else the eyebrow); separated by a rule, never boxed --
+/** A string `meta` is explanation, so it folds into a "?"; a node `meta` (a link, controls) stays visible. */
 export function Section({ eyebrow, title, meta, children, id }: { eyebrow: string; title?: string; meta?: ReactNode; children: ReactNode; id?: string }) {
+  const hint = typeof meta === 'string' && meta ? <Hint>{meta}</Hint> : null;
   return (
     <section className="section" id={id}>
-      <div className="label">{eyebrow}</div>
-      {title && <h2>{title}</h2>}
-      {meta ? <div className="meta">{meta}</div> : <div style={{ height: 12 }} />}
+      <div className="section-head">
+        {title ? <h2>{title}</h2> : <div className="label">{eyebrow}</div>}
+        {hint}
+        {meta && !hint && <div className="meta">{meta}</div>}
+      </div>
       {children}
     </section>
   );
@@ -222,12 +247,25 @@ export function BarList({ rows, color = 'var(--ink)' }: {
 }
 
 export function NeedsDb({ error }: { error?: string | null }) {
+  // The raw error can name tables and hosts: log it on the server, show it only in development.
+  if (error && typeof window === 'undefined') console.error('[content] page data:', error);
+  const shown = process.env.NODE_ENV === 'development' ? error : null;
   return (
-    <Section eyebrow="No data yet" title="Connect your database to see data.">
-      <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
+    <Section eyebrow="Can’t load this page" title="This page couldn’t load its data.">
+      <Notice plain="Try again in a minute. If it keeps happening, tell Autonoetic Edge: nothing you did caused it.">
         Set <code>CONTENT_DATABASE_URL</code> in <code>.env.local</code> and run <code>db/schema.sql</code> + <code>db/seed.sql</code>.
-      </p>
-      {error && <p className="faint mono" style={{ fontSize: 11.5 }}>({error})</p>}
+        {shown && <span className="mono"> ({shown})</span>}
+      </Notice>
     </Section>
+  );
+}
+
+/** Something isn't set up: plain words for the client, the technical fix folded for the operator. */
+export function Notice({ plain, children }: { plain: ReactNode; children: ReactNode }) {
+  return (
+    <div className="notice">
+      <p>{plain}</p>
+      <details><summary>Technical detail</summary><p className="faint mono">{children}</p></details>
+    </div>
   );
 }

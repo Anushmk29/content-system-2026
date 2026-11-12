@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Brand Studio: the brand brain",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "operator",
+      "type": "frontend",
+      "label": "Brand Studio",
+      "sublabel": "BrandKit.tsx / Setup.tsx",
+      "pos": [
+        30,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "operator"
+    },
+    {
+      "id": "voiceApi",
+      "type": "backend",
+      "label": "POST /brand/voice",
+      "sublabel": "extractVoice / importOwnPosts",
+      "pos": [
+        250,
+        120
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "claude",
+      "type": "external",
+      "label": "LLM",
+      "sublabel": "claude.complete",
+      "pos": [
+        510,
+        40
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "apify",
+      "type": "external",
+      "label": "Apify / YouTube",
+      "sublabel": "scrape own posts",
+      "pos": [
+        510,
+        180
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "brandApi",
+      "type": "backend",
+      "label": "PATCH /brand",
+      "sublabel": "saveBrand + cleanPatch",
+      "pos": [
+        250,
+        300
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "logoApi",
+      "type": "backend",
+      "label": "/brand/logo",
+      "sublabel": "GET POST DELETE · setLogo",
+      "pos": [
+        250,
+        470
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "fontsApi",
+      "type": "backend",
+      "label": "/brand/fonts",
+      "sublabel": "POST DELETE · uploadFont",
+      "pos": [
+        250,
+        620
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "kit",
+      "type": "database",
+      "label": "content.brand_kit",
+      "sublabel": "one row: voice, pillars, offers",
+      "pos": [
+        510,
+        300
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "logo_png"
+    },
+    {
+      "id": "fontsTbl",
+      "type": "database",
+      "label": "content.brand_fonts",
+      "sublabel": "TTF/OTF per weight",
+      "pos": [
+        510,
+        620
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "loadBrand",
+      "type": "backend",
+      "label": "loadBrand",
+      "sublabel": "readBrand → setBrand",
+      "pos": [
+        770,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "brand.ts"
+    },
+    {
+      "id": "brandCtx",
+      "type": "backend",
+      "label": "brand-context.ts",
+      "sublabel": "brandSystem / brandBrief",
+      "pos": [
+        990,
+        300
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "prompts",
+      "type": "backend",
+      "label": "Draft + decision prompts",
+      "sublabel": "draft, decisions, review, decode",
+      "pos": [
+        985,
+        470
+      ],
+      "size": [
+        190,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "edit-kit",
+      "from": "operator",
+      "to": "brandApi",
+      "label": "kit fields",
+      "variant": "emphasis"
+    },
+    {
+      "id": "save-kit",
+      "from": "brandApi",
+      "to": "kit",
+      "label": "upsert",
+      "variant": "emphasis"
+    },
+    {
+      "id": "read-kit",
+      "from": "kit",
+      "to": "loadBrand",
+      "label": "select",
+      "variant": "emphasis"
+    },
+    {
+      "id": "active-brand",
+      "from": "loadBrand",
+      "to": "brandCtx",
+      "label": "brand()",
+      "variant": "emphasis"
+    },
+    {
+      "id": "inject",
+      "from": "brandCtx",
+      "to": "prompts",
+      "label": "brand block",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "ask-voice",
+      "from": "operator",
+      "to": "voiceApi",
+      "label": "samples or handle",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "extract-voice",
+      "from": "voiceApi",
+      "to": "claude",
+      "label": "voice guide"
+    },
+    {
+      "id": "import-posts",
+      "from": "voiceApi",
+      "to": "apify",
+      "label": "top 8 posts"
+    },
+    {
+      "id": "upload-logo",
+      "from": "operator",
+      "to": "logoApi",
+      "label": "image",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "store-logo",
+      "from": "logoApi",
+      "to": "kit",
+      "label": "PNG ≤1000px"
+    },
+    {
+      "id": "upload-fonts",
+      "from": "operator",
+      "to": "fontsApi",
+      "label": "1-8 files",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "store-fonts",
+      "from": "fontsApi",
+      "to": "fontsTbl",
+      "label": "by family"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One kit, one row",
+      "items": [
+        "PATCH merges a patch: fields left out are kept",
+        "cleanPatch trims and caps every field; offers need https links",
+        "A chosen Google font is fetched once into brand_fonts on save"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Voice is a draft",
+      "items": [
+        "extractVoice needs 3+ posts; one LLM call, not saved",
+        "importOwnPosts returns samples; operator edits, then saves"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Every prompt reads it",
+      "items": [
+        "The orchestrator calls loadBrand before each run",
+        "On a DB error the last loaded brand stays active"
+      ]
+    }
+  ]
+}

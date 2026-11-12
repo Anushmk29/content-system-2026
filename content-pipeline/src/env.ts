@@ -7,8 +7,8 @@ export interface ContentEnv {
   openrouterApiKey: string | undefined;
   // Optional OpenRouter management key: lets the Costs page check spend day by day (/api/v1/activity).
   openrouterMgmtKey: string | undefined;
-  anthropicApiKey: string | undefined;
   llmModel: string | undefined;
+  imageModel: string | undefined;
   // TypeSafe Jev decision model (typed classify/score decisions), served through OpenRouter on the
   // same key. CONTENT_JEV_MODE=off turns it off; CONTENT_JEV_MODEL pins another version.
   jevModel: string | undefined;
@@ -26,6 +26,9 @@ export interface ContentEnv {
   // Live web check in Research: an OpenRouter model (default perplexity/sonar), "tinyfish"
   // (free TinyFish Search + Fetch, then our own LLM), or "off".
   researchModel: string | undefined;
+  // Cheap OpenRouter model for short structured jobs nobody reads (topic extraction).
+  // Default deepseek/deepseek-v4.1-flash; "off" = the main model.
+  cheapModel: string | undefined;
   // TinyFish (free web Search + Fetch): key, news-search queries and competitor pages to watch.
   tinyfishApiKey: string | undefined;
   tinyfishQueries: string | undefined;
@@ -60,6 +63,8 @@ export interface ContentEnv {
   humanizeRewrite: boolean;
   // default campaign used in UTM builder when a content item has none
   defaultUtmCampaign: string;
+  // USD cap on paid calls (LLM, images, Jev, Apify) per rolling 24h; unset = no cap
+  dailyBudgetUsd?: number;
 }
 
 function read(name: string): string | undefined {
@@ -67,22 +72,32 @@ function read(name: string): string | undefined {
   return v && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/** A number setting; a typo fails loudly instead of becoming NaN. */
+function num(name: string): number | undefined {
+  const v = read(name);
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new Error(`${name} must be a number, got "${v}"`);
+  return n;
+}
+
 export function loadEnv(): ContentEnv {
   return {
     databaseUrl: read('CONTENT_DATABASE_URL'),
     openrouterApiKey: read('CONTENT_OPENROUTER_API_KEY'),
     openrouterMgmtKey: read('CONTENT_OPENROUTER_MGMT_KEY'),
-    anthropicApiKey: read('CONTENT_ANTHROPIC_API_KEY'),
     llmModel: read('CONTENT_LLM_MODEL'),
+    imageModel: read('CONTENT_IMAGE_MODEL'),
     jevModel: read('CONTENT_JEV_MODEL'),
     jevMode: jevMode(read('CONTENT_JEV_MODE')),
     jevPrimaryTasks: (read('CONTENT_JEV_PRIMARY_TASKS') ?? '').split(',').map((t) => t.trim()).filter(Boolean),
-    jevMinConfidence: read('CONTENT_JEV_MIN_CONFIDENCE') ? Number(read('CONTENT_JEV_MIN_CONFIDENCE')) : undefined,
+    jevMinConfidence: num('CONTENT_JEV_MIN_CONFIDENCE'),
     marketFeeds: read('CONTENT_MARKET_FEEDS'),
     redditQueries: read('CONTENT_REDDIT_QUERIES'),
     xQueries: read('CONTENT_X_QUERIES'),
     xBearerToken: read('CONTENT_X_BEARER_TOKEN'),
     researchModel: read('CONTENT_RESEARCH_MODEL'),
+    cheapModel: read('CONTENT_CHEAP_MODEL'),
     postizApiUrl: read('CONTENT_POSTIZ_API_URL'),
     postizApiKey: read('CONTENT_POSTIZ_API_KEY'),
     tinyfishApiKey: read('CONTENT_TINYFISH_API_KEY'),
@@ -103,6 +118,7 @@ export function loadEnv(): ContentEnv {
     postizSync: /^(1|true|on|yes)$/i.test(read('CONTENT_POSTIZ_SYNC') ?? ''),
     humanizeRewrite: !/^(0|false|off|no)$/i.test(read('CONTENT_HUMANIZE_REWRITE') ?? ''),
     defaultUtmCampaign: read('CONTENT_DEFAULT_UTM_CAMPAIGN') ?? 'content_pipeline',
+    dailyBudgetUsd: num('CONTENT_DAILY_BUDGET_USD'),
   };
 }
 

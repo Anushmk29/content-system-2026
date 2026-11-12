@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getContext, saveCompetitor, deleteCompetitor } from '@pratapai/content-pipeline';
-import { denied, handle } from '../../guard';
+import { handle } from '../../guard';
 
 // POST /content/api/decode/competitors → add, or edit when `id` is given.
 // Body: { id?, name?, handles?: { x?, instagram?, linkedin?, facebook? }, active? }
@@ -16,11 +16,9 @@ export const POST = handle(async (req: Request) => {
 });
 
 // DELETE /content/api/decode/competitors?id=… → remove (their decoded posts stay, unlinked).
-export async function DELETE(req: Request) {
-  const no = denied(req);
-  if (no) return no;
+export const DELETE = handle(async (req: Request) => {
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ ok: false, error: 'id is required' }, { status: 400 });
   await deleteCompetitor(getContext(), id);
   return NextResponse.json({ ok: true, message: 'Removed' });
-}
+});

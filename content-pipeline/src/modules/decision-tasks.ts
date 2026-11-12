@@ -11,7 +11,7 @@ import { brand, pillarSlugs } from '../brand.ts';
 import { parseTopicScore, type ParsedTopicScore } from './score-parse.ts';
 import { QC_SIGNAL_KEYS, parseQcSignals, type QcSignals } from './qc-parse.ts';
 import { scoringSystem, buildScorePrompt, qcSystem, buildQcPrompt, platformFitSystem, buildPlatformFitPrompt } from '../prompts/decisions.ts';
-import { DRAFT_PLATFORMS, PIECE_NAME, type DraftPlatform } from '../prompts/platform-playbooks.ts';
+import { DRAFT_PLATFORMS, PIECE_NAME, POST_FORMATS, PLATFORM_FRAMEWORKS, type DraftPlatform } from '../prompts/platform-playbooks.ts';
 import { parseJsonObject } from './llm-json.ts';
 import { VALUE_STRUCTURES, CTA_TYPES } from '../prompts/decode.ts';
 
@@ -27,6 +27,9 @@ export interface DecisionTaskDef<S, T> {
   prompt(state: string): string;
   /** LLM text → answer. `subject` is absent for hand labels. */
   parse(raw: string, subject?: S): T;
+  /** When Jev answers first for this task, use its answer at any confidence (low-risk decisions
+   *  the operator sees and can change). Jev's confidences run low even when it agrees with the LLM. */
+  trustJev?: boolean;
 }
 
 /** One line on who the brand writes for, so Jev scores fit against the right audience. */
@@ -133,7 +136,7 @@ const qcState = (i: { platform: string; format: string; title: string; hook?: st
    `BODY:\n${(i.body ?? '').slice(0, 8000)}`, i.cta && `CTA: ${i.cta}`].filter(Boolean).join('\n');
 
 export const TOPIC_SCORE: DecisionTaskDef<TopicSubject, ParsedTopicScore> = {
-  task: 'topic_score', state: topicState, fromJev: topicScoreFromJev,
+  task: 'topic_score', state: topicState, fromJev: topicScoreFromJev, trustJev: true,
   get questions() { return topicQuestions(); },
   get system() { return scoringSystem(); },
   prompt: buildScorePrompt, parse: (raw) => parseTopicScore(raw),
@@ -232,30 +235,76 @@ export function skeletonFromJev(a: Record<string, JevAnswer>, minConf: number): 
   };
 }
 
-// ---- Platform fit: which platforms an idea suits (scoring module, behind CONTENT_PLATFORM_FIT) ----
+// ---- Platform fit: which platforms an idea suits, and Jev's format + writing structure on each
+// (scoring module, behind CONTENT_PLATFORM_FIT). The idea card shows this as Jev's plan; the
+// operator only changes it when they disagree. A new format or framework is just one more choice.
 
-export type PlatformFit = Partial<Record<DraftPlatform, number>>;
+export interface PlatformPick { format: string; framework: string }
+export type PlatformFit = Partial<Record<DraftPlatform, number>> & { picks?: Partial<Record<DraftPlatform, PlatformPick>> };
 
-const platformQuestions = (): Record<string, JevQuestion> => Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, {
-  type: 'noul',
-  instructions: `${audience()} Would this idea work natively as a ${PIECE_NAME[p]}? Consider the format it needs, how this audience uses ${p}, and the tone there.`,
-  criteria: { true: `A natural ${PIECE_NAME[p]} this audience would engage with`, false: `Forced or off-format as a ${PIECE_NAME[p]}` },
-} satisfies JevQuestion]));
+const FORMAT_HINT: Record<string, string> = {
+  post: 'a text post: the idea lands in words alone',
+  article: 'a long article',
+  thread: 'a thread: several linked points',
+  carousel: 'a slide carousel: steps, a list or a before/after people save',
+  image: 'a single image with a headline: one sharp line carries the whole idea',
+  short: 'a short video script',
+};
+const hasChoice = (p: DraftPlatform) => POST_FORMATS[p].length > 1 || PLATFORM_FRAMEWORKS[p].length > 1;
+
+const platformQuestions = (): Record<string, JevQuestion> => Object.fromEntries(DRAFT_PLATFORMS.flatMap((p) => [
+  [p, {
+    type: 'noul',
+    instructions: `${audience()} Would this idea work natively as a ${PIECE_NAME[p]}? Consider the format it needs, how this audience uses ${p}, and the tone there.`,
+    criteria: { true: `A natural ${PIECE_NAME[p]} this audience would engage with`, false: `Forced or off-format as a ${PIECE_NAME[p]}` },
+  } satisfies JevQuestion],
+  ...(POST_FORMATS[p].length > 1 ? [[`${p}_format`, {
+    type: 'choice', instructions: `If this idea is posted on ${p}, which format suits it best?`,
+    criteria: Object.fromEntries(POST_FORMATS[p].map((f) => [f.id, FORMAT_HINT[f.id] ?? f.label])),
+  } satisfies JevQuestion]] : []),
+  ...(PLATFORM_FRAMEWORKS[p].length > 1 ? [[`${p}_framework`, {
+    type: 'choice', instructions: `If this idea is posted on ${p}, which writing structure suits it best?`,
+    criteria: Object.fromEntries(PLATFORM_FRAMEWORKS[p].map((f) => [f.id, `${f.name}: ${f.steps}`])),
+  } satisfies JevQuestion]] : []),
+]));
 
 const clamp01 = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0; };
+/** A known id, else the platform's default (the first). */
+const known = (list: readonly { id: string }[], id: unknown) => (list.some((x) => x.id === id) ? id as string : list[0]!.id);
+const toFit = (prob: (p: DraftPlatform) => unknown, format: (p: DraftPlatform) => unknown, framework: (p: DraftPlatform) => unknown): PlatformFit => ({
+  ...Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, Math.round(clamp01(prob(p)) * 100) / 100])),
+  picks: Object.fromEntries(DRAFT_PLATFORMS.filter(hasChoice).map((p) => [p, {
+    format: known(POST_FORMATS[p], format(p)), framework: known(PLATFORM_FRAMEWORKS[p], framework(p)),
+  }])),
+});
 
 export const PLATFORM_FIT: DecisionTaskDef<TopicSubject, PlatformFit> = {
-  task: 'platform_fit', state: topicState,
+  task: 'platform_fit', state: topicState, trustJev: true,
   get questions() { return platformQuestions(); },
-  fromJev: (a) => Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, Math.round(clamp01(a[p]?.noul) * 100) / 100])),
+  // An unsure format/structure pick (< 0.5) falls back to the platform's proven default.
+  fromJev: (a) => {
+    const sure = (k: string) => (a[k] && minConfidence({ [k]: a[k]! }) >= 0.5 ? a[k]!.choice : undefined);
+    return toFit((p) => a[p]?.noul, (p) => sure(`${p}_format`), (p) => sure(`${p}_framework`));
+  },
   get system() { return platformFitSystem(); },
-  prompt: (state) => buildPlatformFitPrompt(state, PIECE_NAME),
+  prompt: (state) => buildPlatformFitPrompt(state, Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, {
+    piece: PIECE_NAME[p],
+    formats: POST_FORMATS[p].length > 1 ? POST_FORMATS[p].map((f) => `${f.id} (${FORMAT_HINT[f.id] ?? f.label})`) : [],
+    frameworks: PLATFORM_FRAMEWORKS[p].length > 1 ? PLATFORM_FRAMEWORKS[p].map((f) => `${f.id} (${f.name})`) : [],
+  }]))),
   parse: (raw) => {
     const o = parseJsonObject(raw);
-    return Object.fromEntries(DRAFT_PLATFORMS.map((p) => [p, Math.round(clamp01(o[p]) * 100) / 100]));
+    const picks = (o.picks && typeof o.picks === 'object' ? o.picks : {}) as Record<string, { format?: unknown; framework?: unknown } | undefined>;
+    return toFit((p) => o[p], (p) => picks[p]?.format, (p) => picks[p]?.framework);
   },
 };
 
-/** Jev's picks: platforms at or above 0.5, in DRAFT_PLATFORMS order; empty when none. */
-export const suggestedPlatforms = (fit: PlatformFit | null | undefined): DraftPlatform[] =>
-  fit ? DRAFT_PLATFORMS.filter((p) => (fit[p] ?? 0) >= 0.5) : [];
+/** The suggested platforms: the best MAX_PLATFORMS at or above 0.5, in DRAFT_PLATFORMS order; empty
+ *  when none. Capped because Jev scores most platforms 0.5-0.85, which would otherwise mean all of them. */
+export const MAX_PLATFORMS = 4;
+export const suggestedPlatforms = (fit: PlatformFit | null | undefined): DraftPlatform[] => {
+  if (!fit) return [];
+  const best = DRAFT_PLATFORMS.filter((p) => (fit[p] ?? 0) >= 0.5)
+    .sort((a, b) => (fit[b] ?? 0) - (fit[a] ?? 0)).slice(0, MAX_PLATFORMS);
+  return DRAFT_PLATFORMS.filter((p) => best.includes(p));
+};

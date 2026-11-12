@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runModules } from './orchestrator.ts';
+import { runModules, runModule } from './orchestrator.ts';
 import type { Module, ModuleContext } from './module.ts';
 import { ok } from './module.ts';
 import { createTestDb } from '../db/test-db.ts';
@@ -60,4 +60,17 @@ test('modules run in pipeline order, each after the previous finished', async ()
 test('runModules never rejects', async () => {
   const { ctx } = fakeCtx();
   await assert.doesNotReject(runModules([badModule, badModule], ctx));
+});
+
+test('an overlapping run of the same module is skipped, not run twice', async () => {
+  const { ctx } = fakeCtx();
+  let calls = 0, release!: () => void;
+  const slow: Module = { id: 'slow', title: 'Slow', description: '', run: async () => { calls++; await new Promise<void>((r) => { release = r; }); return ok(1, 'done'); } };
+  const first = runModule(slow, ctx);
+  await new Promise((r) => setTimeout(r, 20));
+  const second = await runModule(slow, ctx);
+  assert.equal(second.status, 'skipped');
+  release();
+  assert.equal((await first).status, 'ok');
+  assert.equal(calls, 1);
 });

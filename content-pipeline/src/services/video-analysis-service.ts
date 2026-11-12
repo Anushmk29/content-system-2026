@@ -9,11 +9,12 @@ import { parseJsonObject } from '../modules/llm-json.ts';
 import { brandAudienceLine, minConfidence } from '../modules/decision-tasks.ts';
 import { buildVideoAnalysisPrompt, videoAnalysisSystem } from '../prompts/video.ts';
 import { loadBrand } from './brand-service.ts';
-import { addSignal } from './console-service.ts';
+import { makePosts, type MakeResult } from './make-service.ts';
+import { DRAFT_PLATFORMS, SCRIPT_TARGETS, isScriptTarget, type DraftPlatform, type ScriptTarget } from '../prompts/platform-playbooks.ts';
 import { isHookPattern } from '../hook-patterns.ts';
 
 /** Videos analysed automatically per Decode run (best performers with a transcript). */
-export const AUTO_ANALYSE = 3;
+const AUTO_ANALYSE = 3;
 
 export interface VideoIdea { title: string; hook: string; beats: string[]; cta: string; platforms: string[]; why: string }
 export interface VideoAnalysis {
@@ -120,8 +121,10 @@ export async function analyzeRunVideos(ctx: ModuleContext, runId: string, cap = 
   return done;
 }
 
-/** "Use this idea": one of the two ideas becomes an Ideas signal, with what it reuses. */
-export async function useVideoIdea(ctx: ModuleContext, postId: string, idx: unknown): Promise<{ ok: boolean; message: string }> {
+/** "Use this idea": one of the two ideas → our video script(s) plus the written post(s) it names,
+ *  drafted on the idea's hook / beats / CTA and checked by QC (Jev + the human check), so they wait
+ *  in Approvals (or on the Board when a number needs proof). Synchronous, ~1-3 min. */
+export async function useVideoIdea(ctx: ModuleContext, postId: string, idx: unknown): Promise<{ ok: boolean; message: string } & Partial<MakeResult>> {
   const i = Number(idx);
   const r = (await ctx.db.query<{ url: string; analysis: VideoAnalysis | null; creator: string | null }>(
     `select p.url, tr.analysis, coalesce(c.name, p.handle) as creator from content.decoded_posts p
@@ -129,8 +132,32 @@ export async function useVideoIdea(ctx: ModuleContext, postId: string, idx: unkn
        left join content.transcripts tr on tr.norm_url = content.norm_url(p.url) where p.id = $1`, [postId])).rows[0];
   const idea = r?.analysis?.ideas?.[i];
   if (!r || !idea) return { ok: false, message: 'Idea not found: analyse the video first.' };
-  const rawText = `[Video idea] ${idea.title}. Hook: "${idea.hook}". Beats: ${idea.beats.join(' → ')}. CTA: ${idea.cta}.`
-    + ` Reuses: ${idea.why || 'the structure'} (from ${r.creator ?? 'a'} video that worked).`;
-  await addSignal(ctx, { rawText: rawText.slice(0, 4000), channel: 'decode', sourceUrl: r.url });
-  return { ok: true, message: 'Added to Ideas' };
+  const brief = videoIdeaBrief(idea, r.analysis!, r.creator);
+  const m = await makePosts(ctx, { title: idea.title, source: 'decode', sourceDetail: r.url, hookRef: postId, ...brief });
+  const parts = [
+    `${m.items} draft${m.items === 1 ? '' : 's'} written`,
+    m.toApproval ? `${m.toApproval} waiting in Approvals` : '',
+    m.needProof ? `${m.needProof} need proof for a number first (Board)` : '',
+  ].filter(Boolean);
+  return { ok: true, ...m, message: `${parts.join(' · ')} · $${m.costUsd.toFixed(2)}` };
+}
+
+/** What the drafter gets for a video idea: the scripts and posts the idea names (a Reel script
+ *  and its Instagram caption when it names none) and the idea + analysis as the structure to copy. */
+export function videoIdeaBrief(idea: VideoIdea, a: VideoAnalysis, creator: string | null): {
+  platforms: DraftPlatform[]; scripts: ScriptTarget[]; steal: string;
+} {
+  const named = idea.platforms.filter(isScriptTarget);
+  const scripts: ScriptTarget[] = named.length ? named : ['instagram_reel'];
+  const posts = DRAFT_PLATFORMS.filter((p) => idea.platforms.includes(p));
+  const steal = [
+    `Proof it works: a ${creator ?? 'competitor'} video that beat their usual. Why it worked: ${a.whyItWorked}`,
+    `Our idea: ${idea.title}`,
+    `Hook: "${idea.hook}"`,
+    `Beats, in order:\n${idea.beats.map((b) => `- ${b}`).join('\n')}`,
+    `CTA: ${idea.cta}`,
+    idea.why ? `What it reuses: ${idea.why}` : '',
+    a.avoid.length ? `Avoid: ${a.avoid.join('; ')}` : '',
+  ].filter(Boolean).join('\n');
+  return { platforms: posts.length ? posts : [SCRIPT_TARGETS[scripts[0]!].platform], scripts, steal };
 }

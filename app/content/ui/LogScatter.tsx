@@ -111,6 +111,7 @@ export function LogScatter({ points, match, matchColor, spotId, onPick, origin, 
         <span className="axis-t" style={{ left: 44, top: 0 }}>comments + shares ↑</span>
         <span className="axis-t" style={{ right: 12, bottom: 22 }}>reactions →</span>
         <div className="plot">
+          <span className="corner">big and talked about ↗</span>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
             {g.xt.map((d) => <line key={`x${d}`} x1={g.fx(10 ** d)} x2={g.fx(10 ** d)} y1={0} y2={100} stroke="var(--rule)" vectorEffect="non-scaling-stroke" />)}
             {g.yt.map((d) => <line key={`y${d}`} y1={g.fy(10 ** d)} y2={g.fy(10 ** d)} x1={0} x2={100} stroke="var(--rule)" vectorEffect="non-scaling-stroke" />)}
@@ -140,7 +141,7 @@ export function LogScatter({ points, match, matchColor, spotId, onPick, origin, 
         {off.length > 0 && <div className="strip" aria-hidden />}
       </div>
       <div className="foot">
-        each tile is one post · log scale both axes · dashed line = typical conversation per reaction (above it = started a discussion)
+        → more reactions · ↑ more comments and shares · above the dashed line = more discussion than usual
         {off.length > 0 && ` · ${off.length} post${off.length === 1 ? '' : 's'} with no reactions sit on the strip below`}
       </div>
     </div>

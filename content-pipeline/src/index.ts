@@ -7,12 +7,12 @@ export { buildContext, getContext } from './context.ts'; // buildContext: script
 // orchestration
 export { runModule, runModules } from './modules/orchestrator.ts';
 export { MODULES, getModule } from './modules/registry.ts';
+export { suggestedPlatforms } from './modules/decision-tasks.ts';
 
 // services (what the dashboard/API call)
 export { getSystemHealth, getRunHistory, getActivity, getActions, logAction } from './services/health-service.ts';
-export { getPipelineBoard } from './services/pipeline-service.ts';
 export { listTodos, createTodo, updateTodo, deleteTodo } from './services/todo-service.ts';
-export { applyApprovalDecision } from './services/approval-service.ts';
+export { applyApprovalDecision, resubmitItem } from './services/approval-service.ts';
 export { CHANGE_REASONS } from './prompts/feedback.ts';
 export { humanScore, HUMAN_MIN, type HumanScore } from './humanizer.ts';
 export { refreshLessons } from './services/feedback-service.ts';
@@ -26,10 +26,11 @@ export {
 } from './services/console-service.ts';
 
 export {
-  getIdeaBoard, getItemDetail, editItemCopy, planItem, getCalendar,
+  getIdeaBoard, getItemDetail, editItemCopy, planItem, getCalendar, getPipelineBoard,
   type IdeaBoard, type IdeaCard, type CalendarData,
 } from './services/board-service.ts';
 export { getToday, type Today, type TodayAction } from './services/today-service.ts';
+export { connectedPlatforms, platformChannels, setItemChannels } from './services/calendar-sync-service.ts';
 export {
   getAnalytics, recordMetrics, ANALYTICS_RANGES,
   type Analytics, type AnalyticsRange, type Breakdown, type FormatStat,
@@ -41,18 +42,19 @@ export {
 } from './services/decode-service.ts';
 export { listHooks, type HookRow } from './services/hook-service.ts';
 export {
-  listStyles, getStyleImage, renameStyle, deleteStyle, previewStyle,
-  type StyleRow, type LayoutSpec,
+  listStyles, getStyleImage, renameStyle, deleteStyle, ensureStarterExamples,
+  type StyleRow,
 } from './services/style-service.ts';
+export { isVisualKind, type VisualKind, type MakeResult } from './services/make-service.ts';
 export { PLACEMENTS, isPlacement, toPdf } from './creative.ts';
-export { uploadItemAssets, removeItemAssets, listItemAssets, getItemAsset } from './services/asset-service.ts';
+export { uploadItemAssets, removeItemAssets, listItemAssets, getItemAsset, listDesignQueue, type DesignRow, type DesignStage } from './services/asset-service.ts';
 export { EDITABLE_STATUSES } from '../core/src/index.ts';
 export {
-  loadBrand, readBrand, saveBrand, listFonts, uploadFont, deleteFont, setLogo, getLogo, EMPTY_BRAND,
+  loadBrand, readBrand, saveBrand, listFonts, uploadFont, deleteFont, setLogo, getLogo, setPhotos, getPhotos, EMPTY_BRAND,
   type BrandPatch, type FontRow,
 } from './services/brand-service.ts';
 export { brand, pillarSlugs, type Brand } from './brand.ts';
-export { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS, type DraftPlatform, type Framework } from './prompts/platform-playbooks.ts';
+export { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS, POST_FORMATS, VISUAL_FORMATS, type DraftPlatform, type Framework } from './prompts/platform-playbooks.ts';
 export { CURATED_FONTS } from './fonts.ts';
 export { DECODE_PLATFORMS, type DecodePlatform } from './adapters/apify.ts';
 
@@ -62,7 +64,8 @@ import { costScoped } from './cost-ledger.ts';
 import { seedQcExamples as seedQc } from './services/dataset-service.ts';
 import { useDecode as use_, stealFormat as steal } from './services/decode-service.ts';
 import { rewriteWithHook as rewrite } from './services/hook-service.ts';
-import { createStyle as create, generateCreative as generate, draftCarousel as carousel, remakeTemplate as remake } from './services/style-service.ts';
+import { createStyle as create, generateCreative as generate } from './services/style-service.ts';
+import { makeFromExample as fromExample } from './services/make-service.ts';
 import { saveItemCreative as itemCreative } from './services/asset-service.ts';
 import { extractVoice as voice, importOwnPosts as importOwn } from './services/brand-service.ts';
 export const seedQcExamples = costScoped('qc_seed', seedQc);
@@ -71,8 +74,7 @@ export const stealFormat = costScoped('steal_format', steal);
 export const rewriteWithHook = costScoped('hook_rewrite', rewrite, 'content_item');
 export const createStyle = costScoped('style_analyze', create);
 export const generateCreative = costScoped('style_generate', generate);
-export const draftCarousel = costScoped('style_draft', carousel);
-export const remakeTemplate = costScoped('style_template', remake, 'style_ref');
+export const makeFromExample = costScoped('style_make', fromExample);
 export const saveItemCreative = costScoped('style_generate', itemCreative, 'content_item');
 export const extractVoice = costScoped('brand_voice', voice);
 export const importOwnPosts = costScoped('brand_import', importOwn);
@@ -90,6 +92,16 @@ import { transcribeVideo as transcribe_ } from './services/videos-service.ts';
 export const transcribeVideo = costScoped('transcribe', transcribe_, 'decoded_post');
 export { withCostScope } from './cost-ledger.ts';
 export { getCosts, costsCsv, COST_RANGES, type Costs, type CostRange } from './services/cost-service.ts';
+
+// Creative Check: its own tab, tables and job queue (src/creative-check/). startCheck tags its
+// own cost scope per run, so it isn't wrapped in costScoped here.
+export {
+  listCreatives, getCreative, createCreative, updateCreative, deleteCreative, setCreativeMedia, getCreativeMedia,
+  startCheck, getCheck, setCheckFeedback, applyCheckFix, compareChecks, CheckBusy, CHECK_PLATFORMS, FUNNEL_STAGES, VERDICTS,
+  type CreativeRow, type CreativeListRow, type CreativeDetail, type CheckRow,
+} from './creative-check/service.ts';
+export type { CreativeCheckReport } from './creative-check/report.ts';
+export { MECHANISMS, type Mechanism } from './creative-check/mechanisms.ts';
 
 // row types the dashboard renders
 export type { ContentItemRow, TopicRow, Angle } from './db/repo.ts';

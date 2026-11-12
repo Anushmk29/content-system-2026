@@ -25,6 +25,12 @@ test('normalise: X and Instagram actor shapes', () => {
     videoDuration: 31.4, displayUrl: 'https://cdn/x.jpg', timestamp: '2026-09-01T00:00:00.000Z', ownerUsername: 'acme',
   })!;
   assert.deepEqual([ig.postType, ig.durationS, ig.views, ig.thumb], ['video', 31, 900, 'https://cdn/x.jpg']);
+  assert.deepEqual(ig.media, [], 'videos keep no images');
+  // A carousel keeps every slide's image (for Recreate); LinkedIn posts' image objects too.
+  const side = normalise('instagram', { url: 'https://instagram.com/p/2', type: 'Sidecar', displayUrl: 'https://cdn/1.jpg',
+    childPosts: [{ displayUrl: 'https://cdn/1.jpg' }, { displayUrl: 'https://cdn/2.jpg' }, { displayUrl: 'https://cdn/3.jpg' }] })!;
+  assert.deepEqual([side.postType, side.media], ['carousel', ['https://cdn/1.jpg', 'https://cdn/2.jpg', 'https://cdn/3.jpg']]);
+  assert.deepEqual(normalise('linkedin', { linkedinUrl: 'https://linkedin.com/p/3', postImages: [{ url: 'https://li/a.jpg' }] })!.media, ['https://li/a.jpg']);
   assert.equal(normalise('facebook', { text: 'no url' }), null);
   assert.equal(bareHandle('https://www.instagram.com/acme/'), 'acme');
   assert.equal(bareHandle('@acme'), 'acme');
@@ -122,6 +128,27 @@ test('decode run: scrape → per-competitor median → formats → batched break
   assert.match(r.posts[0]!.posted_at!, /^\d{4}-\d{2}-\d{2}T/, 'dates reach the client as ISO strings, not Date objects');
 
   assert.equal((await getDecodeRun(ctx, runId, 8))!.posts.length, 2, 'poll returns only posts after the cursor');
+});
+
+test('decode run: posts an earlier run broke down reuse that breakdown (no LLM call); metrics are fresh', async () => {
+  const claude = ctx.adapters.claude as unknown as { complete(p: string): Promise<string> };
+  const orig = claude.complete;
+  const prompts: string[] = [];
+  claude.complete = async (p: string) => { prompts.push(p); return orig.call(claude, p); };
+  try {
+    const comps = (await getDecodeView(ctx)).competitors.filter((c) => c.active);
+    const again = (await db.query<{ id: string }>(
+      `insert into content.decode_runs (competitor_ids, platforms, post_cap) values ($1, '{x}', 50) returning id`, [comps.map((c) => c.id)])).rows[0]!.id;
+    await runDecode(ctx, again);
+    const r = (await getDecodeRun(ctx, again))!;
+    assert.equal(r.run.status, 'done');
+    assert.equal(r.run.decoded, 10);
+    assert.ok(r.posts.every((p) => p.hook === 'Hot take' && p.format_id), 'breakdown + format carried over');
+    assert.ok(prompts.some((p) => /Format names already in use: hot take; list|Format names already in use: list; hot take/.test(p)), 'formats prompt names the earlier formats');
+    assert.equal(prompts.filter((p) => /^### \d+/m.test(p)).length, 0, 'no breakdown call');
+  } finally {
+    claude.complete = orig;
+  }
 });
 
 test('useDecode: use + counter-angle become Ideas signals', async () => {

@@ -13,5 +13,3 @@ export const HOOK_PATTERNS = {
 export type HookPattern = keyof typeof HOOK_PATTERNS;
 export const HOOK_PATTERN_KEYS = Object.keys(HOOK_PATTERNS) as HookPattern[];
 export const isHookPattern = (v: unknown): v is HookPattern => typeof v === 'string' && v in HOOK_PATTERNS;
-/** For prompts: one pattern per line. */
-export const hookPatternList = () => HOOK_PATTERN_KEYS.map((k) => `- ${k}: ${HOOK_PATTERNS[k]}`).join('\n');

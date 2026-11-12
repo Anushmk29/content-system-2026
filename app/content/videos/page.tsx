@@ -1,19 +1,29 @@
-// Videos — every video Decode found (competitors' and yours), and whether we have its spoken
-// words. Decode transcribes the best ones automatically; this is the log, the transcripts, and a
-// button to (re)try any one. Kept apart from Decode on purpose: this is the video desk.
+// Videos — every video Decode found (competitors' and yours), grouped by what it needs next:
+// transcribe it, ask why it worked, then use the ideas. Decode transcribes the best ones
+// automatically; this is the desk for the rest. Kept apart from Decode on purpose.
+import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { getContext, listVideos, type VideoRow, type TranscriptState } from '@pratapai/content-pipeline';
+import { getContext, listVideos, type VideoRow } from '@pratapai/content-pipeline';
 import { loadHealth, params, type SearchParams } from '../data';
-import { PageHead, KpiStrip, NeedsDb, Plat, Chip } from '../ui/viz';
+import { PageHead, KpiStrip, NeedsDb, Plat, Chip, Section, Notice } from '../ui/viz';
 import { ApiButton } from '../ui/actions';
-import { ago, compact, times, TONE } from '../ui/format';
+import { ago, compact, times, withParams, TONE } from '../ui/format';
 
-const STATE: Record<TranscriptState, { label: string; color: string }> = {
-  done: { label: 'transcribed', color: TONE.ok },
-  failed: { label: 'failed', color: TONE.danger },
-  not_yet: { label: 'not yet', color: TONE.faint },
-};
-const FILTERS: [string, string][] = [['', 'All'], ['done', 'Transcribed'], ['failed', 'Failed'], ['not_yet', 'Not yet']];
+// Each video sits in the one step it needs next; sections run in workflow order.
+type Step = 'ideas' | 'analyse' | 'transcribe' | 'failed' | 'skipped';
+const stepOf = (v: VideoRow): Step =>
+  v.analysis ? (v.analysis.verdict === 'skip' ? 'skipped' : 'ideas')
+  : v.state === 'done' ? 'analyse' : v.state === 'failed' ? 'failed' : 'transcribe';
+const STEPS: { id: Step; eyebrow: string; title: string; meta: string }[] = [
+  { id: 'ideas', eyebrow: 'Ready to use', title: 'Ideas from videos that worked', meta: 'Analysed and judged a fit. Pick an idea to send it to drafting.' },
+  { id: 'analyse', eyebrow: 'Next step: analyse', title: 'Transcribed, not yet explained', meta: 'We have the words. Ask why it worked and get 2 ideas for us.' },
+  { id: 'transcribe', eyebrow: 'Next step: transcribe', title: 'Not transcribed yet', meta: "Biggest beat over the creator's usual views first. Start with the top few." },
+  { id: 'failed', eyebrow: 'Needs a retry', title: 'Transcription failed', meta: 'Retry, or read the reason under the video.' },
+  { id: 'skipped', eyebrow: 'Parked', title: 'Not for us', meta: 'Analysed and judged a poor fit for the brand.' },
+];
+const FILTERS: [string, string][] = [['', 'All'], ['ideas', 'Ideas'], ['analyse', 'Analyse'], ['transcribe', 'Transcribe'], ['failed', 'Failed']];
+const who = (v: VideoRow) => v.competitor ?? (v.handle ? `@${v.handle}` : '?');
+const HERE = '/content/videos';
 
 export default async function VideosPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await params(searchParams);
@@ -21,78 +31,115 @@ export default async function VideosPage({ searchParams }: { searchParams: Searc
   let error: string | null = null;
   try { rows = await listVideos(getContext()); } catch (e) { error = (e as Error).message; }
   const tool = (await loadHealth()).adapters.find((a) => a.id === 'transcriber');
-  const head = (
-    <PageHead crumb="videos" title="What their videos actually say."
-      sub="Every video Decode found. The best ones are transcribed on this server for free, so hooks and formats come from the spoken words, not just the caption.">
-      <nav className="seg" aria-label="Filter">
-        {FILTERS.map(([k, l]) => <Link key={k} href={k ? `/content/videos?state=${k}` : '/content/videos'} aria-current={(sp.state ?? '') === k ? 'page' : undefined}>{l}</Link>)}
-      </nav>
-    </PageHead>
+  const head = (next: { text: string; action?: React.ReactNode } | null = null) => (
+    <PageHead title="Competitor videos" next={next}
+      sub="What competitors' videos say, and why they worked." />
   );
-  if (!rows) return (<>{head}<NeedsDb error={error} /></>);
-  const n = (s: TranscriptState) => rows!.filter((r) => r.state === s).length;
-  const shown = sp.state ? rows.filter((r) => r.state === sp.state) : rows;
+  if (!rows) return (<>{head()}<NeedsDb error={error} /></>);
   const ready = tool?.state === 'ok';
+  const creators = [...new Set(rows.map(who))].sort();
+  const mine = sp.who ? rows.filter((v) => who(v) === sp.who) : rows;
+  const count = (s: Step) => mine.filter((v) => stepOf(v) === s).length;
+  const steps = sp.step ? STEPS.filter((s) => s.id === sp.step) : STEPS;
+  // The one thing to do now: the furthest-along step that has work in it.
+  const nx = (['ideas', 'analyse', 'failed', 'transcribe'] as Step[]).find((s) => count(s) > 0);
+  const next = !nx ? null : {
+    text: nx === 'ideas' ? `${count('ideas')} ideas from videos that worked are ready to use.`
+      : nx === 'analyse' ? `Ask why ${count('analyse')} transcribed videos worked.`
+      : nx === 'failed' ? `${count('failed')} transcriptions failed. Retry them.`
+      : 'Transcribe the top videos first.',
+    action: <a href={`#${nx}`} className="btn btn-primary">Go ↓</a>,
+  };
 
   return (
     <>
-      {head}
+      {head(next)}
       {!ready && (
-        <p className="mono" style={{ fontSize: 12, color: 'var(--warn)', margin: '-8px 0 20px' }}>
-          Transcriber {tool?.state ?? 'unconfigured'}: {tool?.message}. Install yt-dlp + faster-whisper on the server (see System).
-        </p>
-      )}
-      <KpiStrip items={[
-        { label: 'Videos found', value: rows.length, sub: 'across all Decode runs' },
-        { label: 'Transcribed', value: n('done'), sub: 'hooks read from speech', href: '/content/videos?state=done' },
-        { label: 'Failed', value: n('failed'), sub: n('failed') ? 'retry, or check the reason' : 'none', href: '/content/videos?state=failed' },
-        { label: 'Not yet', value: n('not_yet'), sub: 'past the per-run cap, or never tried', href: '/content/videos?state=not_yet' },
-      ]} />
-      {shown.length === 0 ? <p className="empty">{rows.length ? 'Nothing in this filter.' : 'No videos yet. Run a Decode on competitors who post reels, Shorts or video.'}</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table">
-            <thead><tr><th>Video</th><th>Length</th><th>Views</th><th>Their usual</th><th>Hunt</th><th>Transcript</th><th></th></tr></thead>
-            <tbody>
-              {shown.map((v) => (
-                <tr key={v.id} style={{ verticalAlign: 'top' }}>
-                  <td style={{ maxWidth: 460 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <Plat p={v.platform} />
-                      <b>{v.competitor ?? (v.handle ? `@${v.handle}` : '?')}</b>
-                      <span className="faint" style={{ fontSize: 11.5 }}>{v.posted_at ? ago(v.posted_at) : ''}</span>
-                      <a href={v.url} target="_blank" rel="noreferrer" className="mono" style={{ fontSize: 11 }}>open ↗</a>
-                    </div>
-                    {v.hook && <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>“{v.hook}”</div>}
-                    {v.transcript && (
-                      <details style={{ marginTop: 6 }}>
-                        <summary className="faint" style={{ cursor: 'pointer', fontSize: 12 }}>Read transcript ({v.lang ?? '?'}, {v.transcript.split(/\s+/).length} words)</summary>
-                        <p className="pre" style={{ fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{v.transcript}</p>
-                      </details>
-                    )}
-                    {v.analysis ? <Analysis v={v} /> : v.transcript && (
-                      <div style={{ marginTop: 8 }}>
-                        <ApiButton path={`/content/api/videos/${v.id}`} body={{ analyze: true }} label="Why did it work? + 2 ideas for us"
-                          busyLabel="analysing…" className="btn btn-sm btn-ink" />
-                      </div>
-                    )}
-                    {v.state === 'failed' && v.error && <div className="mono" style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{v.error}</div>}
-                  </td>
-                  <td className="mono">{v.duration_s != null ? `${v.duration_s}s` : '—'}</td>
-                  <td className="mono">{v.views != null ? compact(v.views) : '—'}</td>
-                  <td className="mono">{times(v.vs_own_median)}</td>
-                  <td className="mono">{v.hunt_score != null ? Math.round(v.hunt_score) : '—'}</td>
-                  <td><Chip color={STATE[v.state].color}>{STATE[v.state].label}</Chip></td>
-                  <td>{ready && (
-                    <ApiButton path={`/content/api/videos/${v.id}`} label={v.state === 'done' ? 'Redo' : v.state === 'failed' ? 'Retry' : 'Transcribe'}
-                      busyLabel="transcribing…" className="btn btn-sm" />
-                  )}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ margin: '-8px 0 20px' }}>
+          <Notice plain="Reading what videos say isn’t switched on yet, so new videos can’t be transcribed. Autonoetic Edge sets this up.">
+            Transcriber {tool?.state ?? 'unconfigured'}: {tool?.message}. Install yt-dlp + faster-whisper on the server (see System).
+          </Notice>
         </div>
       )}
+      <KpiStrip items={[
+        { label: 'Videos found', value: mine.length, sub: sp.who, href: withParams(HERE, sp, { step: null }) },
+        { label: 'Ideas ready', value: count('ideas'), href: withParams(HERE, sp, { step: 'ideas' }) },
+        { label: 'To analyse', value: count('analyse'), href: withParams(HERE, sp, { step: 'analyse' }) },
+        { label: 'Failed', value: count('failed'), href: withParams(HERE, sp, { step: 'failed' }) },
+        { label: 'To transcribe', value: count('transcribe'), href: withParams(HERE, sp, { step: 'transcribe' }) },
+      ]} />
+      <div className="toolbar">
+        <span className="label">Step</span>
+        <nav className="seg" aria-label="Filter by step">
+          {FILTERS.map(([k, l]) => <Link key={k} href={withParams(HERE, sp, { step: k || null })} aria-current={(sp.step ?? '') === k ? 'page' : undefined}>{l}</Link>)}
+        </nav>
+        {creators.length > 1 && (<>
+          <span className="label" style={{ marginLeft: 12 }}>Creator</span>
+          <nav className="seg" aria-label="Filter by creator">
+            <Link href={withParams(HERE, sp, { who: null })} aria-current={!sp.who ? 'page' : undefined}>All</Link>
+            {creators.map((c) => <Link key={c} href={withParams(HERE, sp, { who: c })} aria-current={sp.who === c ? 'page' : undefined}>{c}</Link>)}
+          </nav>
+        </>)}
+      </div>
+      {mine.length === 0 ? <p className="empty">{rows.length ? 'Nothing for this creator.' : 'No videos yet. On Competitors, scan accounts who post reels, Shorts or video.'}</p>
+        : steps.map((s) => {
+          const list = mine.filter((v) => stepOf(v) === s.id).sort((a, b) => (b.vs_own_median ?? -1) - (a.vs_own_median ?? -1));
+          if (!list.length) return sp.step ? <p key={s.id} className="empty">Nothing here right now.</p> : null;
+          const body = <ul className="vids">{list.map((v) => <Video key={v.id} v={v} ready={ready} />)}</ul>;
+          return (
+            <Section key={s.id} id={s.id} eyebrow={s.eyebrow} title={`${s.title} · ${list.length}`} meta={s.meta}>
+              {s.id === 'skipped' && !sp.step
+                ? <details><summary className="faint" style={{ cursor: 'pointer', fontSize: 12.5 }}>Show {list.length}</summary>{body}</details>
+                : body}
+            </Section>
+          );
+        })}
     </>
+  );
+}
+
+/** One video: thumbnail, who and when, the hook, the numbers, and the one action it needs. */
+function Video({ v, ready }: { v: VideoRow; ready: boolean }) {
+  const step = stepOf(v);
+  const hot = (v.vs_own_median ?? 0) >= 1.5;
+  const usual = `${times(v.vs_own_median)} their usual`;
+  return (
+    <li className="vid">
+      <a href={v.url} target="_blank" rel="noreferrer" className="vid-thumb" aria-label={`Open ${who(v)} video`}>
+        {v.thumb && <img src={v.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" />}
+        {v.duration_s != null && <span>{v.duration_s}s</span>}
+      </a>
+      <div className="vid-body">
+        <div className="vid-who">
+          <Plat p={v.platform} /> <b>{who(v)}</b>
+          {v.posted_at && <span className="faint">{ago(v.posted_at)}</span>}
+          <a href={v.url} target="_blank" rel="noreferrer" className="mono faint">open ↗</a>
+        </div>
+        <div className="vid-hook">{v.hook ? `“${v.hook}”` : <span className="faint">No caption</span>}</div>
+        <div className="vid-stats mono">
+          <span>{v.views != null ? `${compact(v.views)} views` : '— views'}</span>
+          {v.vs_own_median != null && (hot
+            ? <Chip color={TONE.ok} title="Views vs this creator's median">{usual}</Chip>
+            : <span className="faint" title="Views vs this creator's median">{usual}</span>)}
+        </div>
+        {v.transcript && (
+          <details className="acc acc-sm">
+            <summary>Transcript <span className="faint">· {v.lang ?? '?'}, {v.transcript.split(/\s+/).length} words</span></summary>
+            <p className="acc-body pre">{v.transcript}</p>
+          </details>
+        )}
+        {v.analysis && <Analysis v={v} />}
+        {step === 'failed' && v.error && <div className="mono" style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{v.error}</div>}
+      </div>
+      <div className="vid-act">
+        {step === 'analyse' && <ApiButton path={`/content/api/videos/${v.id}`} body={{ analyze: true }} label="Why did it work?"
+          busyLabel="analysing…" className="btn btn-sm btn-ink" />}
+        {ready && step !== 'ideas' && step !== 'skipped' && (
+          <ApiButton path={`/content/api/videos/${v.id}`} label={v.state === 'done' ? 'Re-transcribe' : v.state === 'failed' ? 'Retry' : 'Transcribe'}
+            busyLabel="transcribing…" className={step === 'transcribe' && hot ? 'btn btn-sm btn-ink' : 'btn btn-sm'} />
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -100,38 +147,82 @@ const VERDICT: Record<string, { label: string; color: string }> = {
   use: { label: 'Good for us', color: TONE.ok }, adapt: { label: 'Adapt it', color: TONE.warn }, skip: { label: 'Not for us', color: TONE.faint },
 };
 
-/** Why the video worked, whether it suits us (Jev's call), and the two ideas built on it. */
+/** Why the video worked, whether it suits us (Jev's call) and the two ideas built on it. Details fold into dropdowns. */
 function Analysis({ v }: { v: VideoRow }) {
   const a = v.analysis!;
   const verdict = VERDICT[a.verdict] ?? VERDICT.adapt!;
   return (
-    <details open={a.verdict !== 'skip'} style={{ marginTop: 8 }}>
-      <summary style={{ cursor: 'pointer', fontSize: 12.5 }}>
-        <Chip color={verdict.color}>{verdict.label}</Chip> <b>Why it worked</b>
-        {a.jev && <span className="faint mono" style={{ fontSize: 11 }}> · Jev: fits {Math.round(a.jev.fitsBrand * 100)}%, adaptable {Math.round(a.jev.adaptable * 100)}%</span>}
+    <details className="acc ana">
+      <summary>
+        <b>{a.ideas.length ? `${a.ideas.length} idea${a.ideas.length === 1 ? '' : 's'} for you` : 'Why it worked'}</b>
+        {a.ideas.length > 0 && <span className="faint">· and why it worked</span>}
+        <span className="acc-end">
+          <Chip color={verdict.color}>{verdict.label}</Chip>
+          {a.jev && <span className="faint mono" title="Jev: fits the brand / easy to adapt">fit {Math.round(a.jev.fitsBrand * 100)}% · adapt {Math.round(a.jev.adaptable * 100)}%</span>}
+        </span>
       </summary>
-      <div style={{ display: 'grid', gap: 6, fontSize: 12.5, marginTop: 6 }}>
-        <p style={{ margin: 0 }}>{a.whyItWorked}</p>
-        {a.hook.text && <p style={{ margin: 0 }}><span className="faint">Hook{a.hook.type ? ` (${a.hook.type.replace(/_/g, ' ')})` : ''}:</span> “{a.hook.text}” <span className="faint">— {a.hook.why}</span></p>}
-        {a.structure.length > 0 && <p style={{ margin: 0 }}><span className="faint">Structure:</span> {a.structure.map((b) => b.beat).join(' → ')}</p>}
-        {a.cta.text && <p style={{ margin: 0 }}><span className="faint">CTA ({a.cta.type}):</span> “{a.cta.text}”</p>}
-        {a.retention.length > 0 && <p style={{ margin: 0 }}><span className="faint">Keeps people watching:</span> {a.retention.join('; ')}</p>}
-        <p style={{ margin: 0 }}><span className="faint">For us:</span> {a.verdictWhy}</p>
-        {a.adapt.length > 0 && <p style={{ margin: 0 }}><span className="faint">Reuse:</span> {a.adapt.join('; ')}</p>}
-        {a.avoid.length > 0 && <p style={{ margin: 0 }}><span className="faint">Avoid:</span> {a.avoid.join('; ')}</p>}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginTop: 4 }}>
-          {a.ideas.map((idea, i) => (
-            <div key={i} className="card attention" style={{ cursor: 'default', padding: 10 }}>
-              <b>Idea {i + 1}: {idea.title}</b>
-              <p style={{ margin: '6px 0' }}>“{idea.hook}”</p>
-              {idea.beats.length > 0 && <ol style={{ margin: '0 0 6px', paddingLeft: 18 }}>{idea.beats.map((b, j) => <li key={j}>{b}</li>)}</ol>}
-              {idea.cta && <p className="muted" style={{ margin: '0 0 6px' }}>Ends: {idea.cta}</p>}
-              {idea.why && <p className="faint" style={{ margin: '0 0 8px' }}>Reuses: {idea.why}</p>}
-              <ApiButton path={`/content/api/videos/${v.id}`} body={{ useIdea: i }} label="Use this idea →" className="btn btn-sm btn-ink" />
+      <div className="acc-body">
+        <p className="ana-lead">{a.whyItWorked}</p>
+
+        {a.ideas.length > 0 && (
+          <section>
+            <h4 className="ana-h">Ideas for us</h4>
+            <div className="ana-ideas">
+              {a.ideas.map((idea, i) => (
+                <article key={i} className="ana-idea">
+                  <span className="ana-num">Idea {i + 1}</span>
+                  <h5>{idea.title}</h5>
+                  <p className="ana-idea-hook">“{idea.hook}”</p>
+                  {idea.cta && <p className="ana-cta"><span className="faint">Ends with:</span> {idea.cta}</p>}
+                  {idea.beats.length > 0 && (
+                    <details className="acc acc-sm">
+                      <summary>Outline <span className="faint">· {idea.beats.length} steps</span></summary>
+                      <ol className="acc-body">{idea.beats.map((b, j) => <li key={j}>{b}</li>)}</ol>
+                    </details>
+                  )}
+                  {idea.why && (
+                    <details className="acc acc-sm">
+                      <summary>What it reuses</summary>
+                      <p className="acc-body muted">{idea.why}</p>
+                    </details>
+                  )}
+                  <div className="ana-go">
+                    <ApiButton path={`/content/api/videos/${v.id}`} body={{ useIdea: i }} label="Write this idea →" busyLabel="writing + checking…" className="btn btn-primary" />
+                  </div>
+                </article>
+              ))}
             </div>
-          ))}
+          </section>
+        )}
+
+        <div>
+          <details className="acc">
+            <summary><b>How it’s built</b> <span className="faint">· hook, {a.structure.length} beats, call to action</span></summary>
+            <div className="acc-body ana-parts">
+              {a.hook.text && <Part name={`Hook${a.hook.type ? ` · ${a.hook.type.replace(/_/g, ' ')}` : ''}`}>
+                <p>“{a.hook.text}”</p>{a.hook.why && <p className="muted">{a.hook.why}</p>}
+              </Part>}
+              {a.structure.length > 0 && <Part name="Structure"><ol>{a.structure.map((b, i) => <li key={i}>{b.beat}</li>)}</ol></Part>}
+              {a.cta.text && <Part name={`Call to action · ${a.cta.type}`}><p>“{a.cta.text}”</p></Part>}
+              {a.retention.length > 0 && <Part name="Keeps people watching"><ul>{a.retention.map((r, i) => <li key={i}>{r}</li>)}</ul></Part>}
+            </div>
+          </details>
+          <details className="acc">
+            <summary><b>Fit for us</b> <span className="faint">· {a.adapt.length} to reuse, {a.avoid.length} to avoid</span></summary>
+            <div className="acc-body ana-parts">
+              <p>{a.verdictWhy}</p>
+              <div className="ana-two">
+                {a.adapt.length > 0 && <Part name="Reuse"><ul className="ana-do">{a.adapt.map((r, i) => <li key={i}>{r}</li>)}</ul></Part>}
+                {a.avoid.length > 0 && <Part name="Avoid"><ul className="ana-dont">{a.avoid.map((r, i) => <li key={i}>{r}</li>)}</ul></Part>}
+              </div>
+            </div>
+          </details>
         </div>
       </div>
     </details>
   );
+}
+
+function Part({ name, children }: { name: string; children: ReactNode }) {
+  return <div className="ana-part"><div className="ana-name">{name}</div>{children}</div>;
 }

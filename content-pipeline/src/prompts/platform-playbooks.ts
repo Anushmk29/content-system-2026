@@ -21,6 +21,48 @@ export const PIECE_NAME: Record<DraftPlatform, string> = {
   reddit: 'Reddit post', youtube: 'YouTube Short script',
 };
 
+// ---- Post formats -----------------------------------------------------------------
+// What each platform's post is drafted as, picked on the idea card. The first is the default
+// and is stored as the bare platform id ('linkedin'); another is 'linkedin:image'. `db` is the
+// content.content_format value (a single image is a 'quote_card'). One written format per
+// platform per idea; video is a separate script (SCRIPT_TARGETS), filmed by a person.
+export interface PostFormat { id: string; label: string; db: string; visual: 'none' | 'image' | 'carousel' }
+const TEXT = { visual: 'none' } as const;
+const IMAGE: PostFormat = { id: 'image', label: 'Image', db: 'quote_card', visual: 'image' };
+export const POST_FORMATS: Record<DraftPlatform, PostFormat[]> = {
+  linkedin: [{ id: 'post', label: 'Text post', db: 'founder_post', ...TEXT }, { id: 'carousel', label: 'Carousel', db: 'carousel', visual: 'carousel' }, IMAGE],
+  instagram: [{ id: 'carousel', label: 'Carousel', db: 'carousel', visual: 'carousel' }, IMAGE],
+  facebook: [{ id: 'post', label: 'Text post', db: 'founder_post', ...TEXT }, IMAGE],
+  x: [{ id: 'thread', label: 'Thread', db: 'thread', ...TEXT }, IMAGE],
+  blog: [{ id: 'article', label: 'Article', db: 'article', ...TEXT }],
+  reddit: [{ id: 'post', label: 'Post', db: 'reddit_answer', ...TEXT }],
+  youtube: [{ id: 'short', label: 'Short (you film)', db: 'short_script', ...TEXT }],
+};
+/** Content formats that need a made visual (the Design desk). */
+export const VISUAL_FORMATS: readonly string[] = ['carousel', 'quote_card'];
+
+/** 'linkedin' | 'linkedin:image' → the platform and its format; null for anything else (scripts, junk). */
+export function parsePick(id: string): { platform: DraftPlatform; format: PostFormat } | null {
+  const [p, f] = id.split(':');
+  if (!(DRAFT_PLATFORMS as readonly string[]).includes(p!)) return null;
+  const list = POST_FORMATS[p as DraftPlatform];
+  const format = f === undefined ? list[0] : list.find((x) => x.id === f);
+  return format ? { platform: p as DraftPlatform, format } : null;
+}
+/** The id a pick is stored as: the default format is the bare platform. */
+export const pickId = (platform: DraftPlatform, formatId: string) =>
+  POST_FORMATS[platform][0]!.id === formatId ? platform : `${platform}:${formatId}`;
+
+/** What a non-default format changes in a platform's shape (overrides PLATFORM_SHAPE for that piece). */
+const FORMAT_SHAPE: Record<string, string> = {
+  image: 'a SINGLE-IMAGE post. hook = the headline printed on the image, at most 12 words. body = the caption that goes with it (X: under 270 characters, one tweet, no "---"; elsewhere 60-150 words).',
+  carousel: 'a 6-8 slide carousel (a document post). Slide 1 is the hook, the last slide the CTA; at most 25 words per slide, one idea per slide. Separate each slide with a line containing only "---". Put only the slide text in body; hook is also the caption\'s first line.',
+};
+export const formatShapeBlock = (formats: Partial<Record<DraftPlatform, string>>) => {
+  const lines = Object.entries(formats).flatMap(([p, f]) => (FORMAT_SHAPE[f!] ? [`- ${p}: ${FORMAT_SHAPE[f!]}`] : []));
+  return lines.length ? `FORMAT OVERRIDES — these pieces use another format than the shape above says:\n${lines.join('\n')}` : '';
+};
+
 /** The per-platform block of the drafting system prompt. */
 export const PLATFORM_SHAPE = `PER-PLATFORM SHAPE (Bible §11.2) — never the same copy everywhere:
 - linkedin: the ANCHOR. One founder-led post, 150-300 words. A strong first line (no

@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+content-pipeline/node_modules
+content-pipeline/dist
+.next
+graphify-out
+docs
+db/*backup*
+*.docx
+*.tsbuildinfo
+.claude
+.impeccable
+infra

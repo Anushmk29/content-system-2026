@@ -1,11 +1,17 @@
 // Decode — the competitor spy. Apify pulls competitors' public posts, the LLM sorts them into
-// formats and breaks each one down, and the page shows what works for them and what we
-// should make of it. Spec: docs/DESIGN-GUIDE.md §6–§6e.
+// formats and breaks each one down, and the page leads with what to make next, then why.
+// Spec: docs/DESIGN-GUIDE.md §6–§6f.
 import { getContext, getDecodeView, listStyles, type DecodeView } from '@pratapai/content-pipeline';
 import { loadHealth, params, type SearchParams } from '../data';
-import { PageHead, Section, NeedsDb } from '../ui/viz';
+import { PageHead, NeedsDb, Notice } from '../ui/viz';
 import { Decode } from '../ui/Decode';
-import { Competitors } from '../ui/Competitors';
+
+const HOW = [
+  'Add the competitors to watch: a handle or the page URL works.',
+  'Press ▶ scan: Apify collects their public posts, then the AI sorts each into a format and breaks it down.',
+  'Start with Make this next: the strongest formats you haven’t tried, and their best post.',
+  '“make my version” writes your own post on the same structure and sends it to Approvals. Nothing is copied word for word.',
+];
 
 export default async function DecodePage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await params(searchParams);
@@ -22,30 +28,24 @@ export default async function DecodePage({ searchParams }: { searchParams: Searc
   const apify = health.adapters.find((a) => a.id === 'apify');
   const youtube = health.adapters.find((a) => a.id === 'youtube');
   const head = (
-    <PageHead crumb="decode" title="Decode the competition."
+    <PageHead title="Competitors" how={HOW}
       sub={view?.run
-        ? `${view.run.total.toLocaleString('en-US')} public posts from ${view.run.competitor_ids.length} competitor${view.run.competitor_ids.length === 1 ? '' : 's'}. Apify collected them, the AI sorted each into a format and broke it down, and every post is plotted by reactions and conversation.`
-        : 'Add the competitors to watch, then decode: Apify collects their public posts and the AI shows which formats work for them, and which ones we’re not using yet.'} />
+        ? 'What works for your competitors, and what to make of it.'
+        : 'Add who to watch, then scan their public posts.'} />
   );
   if (!view) return (<>{head}<NeedsDb error={error} /></>);
-  const competitors = (
-    <Section eyebrow="Who we watch" title="Competitors"
-      meta={`${view.competitors.filter((c) => c.active).length} active · public posts only, no logins · a handle or the page URL works`}>
-      <Competitors list={view.competitors} />
-    </Section>
-  );
 
   return (
     <>
       {head}
       {apify?.state !== 'ok' && youtube?.state !== 'ok' && (
-        <p className="mono" style={{ fontSize: 12, color: 'var(--warn)', margin: '-8px 0 20px' }}>
-          Apify {apify?.state ?? 'unconfigured'}: {apify?.message}. Add CONTENT_APIFY_TOKEN to .env and restart to start decoding.
-        </p>
+        <div style={{ margin: '-8px 0 20px' }}>
+          <Notice plain="Competitor scanning isn’t switched on yet. You can still add who to watch; Autonoetic Edge switches the scan on.">
+            Apify {apify?.state ?? 'unconfigured'}: {apify?.message}. Add CONTENT_APIFY_TOKEN to .env and restart to start decoding.
+          </Notice>
+        </div>
       )}
-      {view.competitors.length === 0 && competitors}
       <Decode view={view} initial={{ f: sp.f, v: sp.v, by: sp.by }} apifyReady={apify?.state === 'ok'} youtubeReady={youtube?.state === 'ok'} styles={styles} />
-      {view.competitors.length > 0 && competitors}
     </>
   );
 }

@@ -23,11 +23,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   let data: CalendarData | null = null;
   let error: string | null = null;
   try { data = await getCalendar(getContext(), from, to); } catch (e) { error = (e as Error).message; }
-  if (!data) return (<><PageHead crumb="calendar" title="What goes out, and when." /><NeedsDb error={error} /></>);
+  if (!data) return (<><PageHead title="Calendar" /><NeedsDb error={error} /></>);
 
   const sync = getContext().env.postizSync;
   const toCal = (i: ContentItemRow, at: string | null): CalItem => ({
-    id: i.id, title: i.title, platform: i.platform, status: i.status, at,
+    id: i.id, title: i.title, platform: i.platform, format: i.format, status: i.status, at,
     movable: (i.status === 'approved' && !i.postiz_id)
       || (sync && i.status === 'queued' && !!i.postiz_id && !!at && new Date(at).getTime() > Date.now()),
   });
@@ -37,12 +37,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
 
   return (
     <>
-      <PageHead crumb="calendar" title="What goes out, and when." sub="Planned, scheduled and published posts. Drag an approved post onto a day to set its time." />
+      <PageHead title="Calendar" sub="What goes out, and when."
+        next={data.unplanned.length ? { text: `${data.unplanned.length} approved post${data.unplanned.length === 1 ? ' has' : 's have'} no date yet. Drag ${data.unplanned.length === 1 ? 'it' : 'them'} from Unplanned onto a day.` } : null}
+        how={[
+          <>Approved posts without a time wait in <b>Unplanned</b>.</>,
+          <>Drag one onto a day to set when it goes out. Click any post to read or change it.</>,
+          <>Video scripts and Reddit posts aren’t posted automatically: those are on <b>Film &amp; post</b>.</>,
+        ]} />
       <KpiStrip items={[
-        { label: 'Scheduled', value: ahead.length, sub: 'in this view, still to go out' },
+        { label: 'Scheduled', value: ahead.length },
         { label: 'Next 7 days', value: ahead.filter((i) => new Date(i.at).getTime() < now + 7 * DAY).length },
-        { label: 'Unplanned', value: data.unplanned.length, sub: 'approved, no time yet' },
-        { label: 'Published', value: data.dated.filter((i) => ['published', 'performance_captured'].includes(i.status)).length, sub: 'in this view' },
+        { label: 'Unplanned', value: data.unplanned.length },
+        { label: 'Published', value: data.dated.filter((i) => ['published', 'performance_captured'].includes(i.status)).length },
       ]} />
       <CalendarGrid view={view} anchor={anchor}
         items={data.dated.map((i) => toCal(i, i.at))}

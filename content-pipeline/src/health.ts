@@ -19,10 +19,10 @@ export function report(
   return { id, state, message, checkedAt: new Date().toISOString(), meta };
 }
 
-// Roll many reports into one overall state (worst wins, but 'unconfigured'
-// alone is not an outage — it's "not turned on yet").
+// Roll many reports into one overall state (worst wins, but an unconfigured adapter
+// is not an outage — it's "not turned on yet"). Without a database nothing works, so that is an error.
 export function rollup(reports: HealthReport[]): HealthState {
-  if (reports.some((r) => r.state === 'error')) return 'error';
+  if (reports.some((r) => r.state === 'error' || (r.id === 'database' && r.state === 'unconfigured'))) return 'error';
   if (reports.some((r) => r.state === 'degraded')) return 'degraded';
   if (reports.length > 0 && reports.every((r) => r.state === 'unconfigured')) return 'unconfigured';
   return 'ok';

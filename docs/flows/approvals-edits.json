@@ -1,0 +1,265 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Approvals, Change Requests and Item Edits",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard /content/api"
+    },
+    {
+      "id": "engine",
+      "label": "Approval engine"
+    },
+    {
+      "id": "rework",
+      "label": "Hand edits, rework + learning"
+    }
+  ],
+  "phases": [
+    {
+      "id": "queue_phase",
+      "label": "QC'd draft waits",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "decide_phase",
+      "label": "Decide + transition",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "after_phase",
+      "label": "Outcome",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "queue",
+    "decide",
+    "apply",
+    "transition",
+    "approved",
+    "plan"
+  ],
+  "nodes": [
+    {
+      "id": "edit",
+      "lane": "rework",
+      "col": 0,
+      "width": 156,
+      "type": "frontend",
+      "label": "PATCH items/:id",
+      "sublabel": "editItemCopy · pre-approval"
+    },
+    {
+      "id": "queue",
+      "lane": "dashboard",
+      "col": 0,
+      "width": 156,
+      "type": "frontend",
+      "label": "Approval queue",
+      "sublabel": "status needs_approval"
+    },
+    {
+      "id": "decide",
+      "lane": "dashboard",
+      "col": 1,
+      "width": 156,
+      "type": "frontend",
+      "label": "PATCH approvals/:id",
+      "sublabel": "approve | changes | reject"
+    },
+    {
+      "id": "apply",
+      "lane": "engine",
+      "col": 2,
+      "width": 156,
+      "type": "backend",
+      "label": "applyApprovalDecision",
+      "sublabel": "feedbackText(reasons, note)"
+    },
+    {
+      "id": "transition",
+      "lane": "engine",
+      "col": 3,
+      "width": 156,
+      "type": "security",
+      "label": "transition(event)",
+      "sublabel": "CONTENT_EVENTS guard"
+    },
+    {
+      "id": "approved",
+      "lane": "engine",
+      "col": 4,
+      "width": 156,
+      "type": "database",
+      "label": "approved",
+      "sublabel": "approval_status approved"
+    },
+    {
+      "id": "plan",
+      "lane": "dashboard",
+      "col": 5,
+      "width": 156,
+      "type": "frontend",
+      "label": "PATCH items/:id",
+      "sublabel": "planItem({ plannedAt })"
+    },
+    {
+      "id": "lessons",
+      "lane": "rework",
+      "col": 2,
+      "width": 156,
+      "type": "backend",
+      "label": "refreshLessons",
+      "sublabel": "brand_kit.learned_rules"
+    },
+    {
+      "id": "draft",
+      "lane": "rework",
+      "col": 4,
+      "width": 156,
+      "type": "database",
+      "label": "draft",
+      "sublabel": "changes_requested"
+    },
+    {
+      "id": "revise",
+      "lane": "rework",
+      "col": 5,
+      "width": 156,
+      "type": "backend",
+      "label": "reviseItem",
+      "sublabel": "LLM rewrite → updateItemCopy"
+    },
+    {
+      "id": "archived",
+      "lane": "rework",
+      "col": 3,
+      "width": 156,
+      "type": "database",
+      "label": "archived",
+      "sublabel": "approval_status rejected"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-edit",
+      "from": "edit",
+      "to": "queue",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e-decide",
+      "from": "queue",
+      "to": "decide",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-apply",
+      "from": "decide",
+      "to": "apply",
+      "label": "action + reasons",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-transition",
+      "from": "apply",
+      "to": "transition",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-approve",
+      "from": "transition",
+      "to": "approved",
+      "label": "approve",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-plan",
+      "from": "approved",
+      "to": "plan",
+      "label": "plan publish",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-changes",
+      "from": "transition",
+      "to": "draft",
+      "label": "changes",
+      "variant": "dashed",
+      "role": "branch",
+      "fromSide": "bottom"
+    },
+    {
+      "id": "e-revise",
+      "from": "draft",
+      "to": "revise",
+      "label": "with feedback",
+      "variant": "dashed",
+      "role": "branch",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-reject",
+      "from": "transition",
+      "to": "archived",
+      "label": "reject",
+      "variant": "security",
+      "role": "error",
+      "fromSide": "bottom"
+    },
+    {
+      "id": "e-lessons",
+      "from": "apply",
+      "to": "lessons",
+      "label": "note on changes/reject",
+      "variant": "dashed",
+      "role": "async",
+      "fromSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Status machine",
+      "items": [
+        "approve: needs_approval → approved",
+        "changes: needs_approval|approved → draft",
+        "reject: draft|needs_approval|approved → archived"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Copy lock",
+      "items": [
+        "Copy edits and hook rewrites only in idea, draft, qc_passed, needs_approval",
+        "planItem only for approved items not yet in Postiz"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Feedback",
+      "items": [
+        "Reasons come from CHANGE_REASONS plus a typed note",
+        "A failed rewrite keeps the old text in draft for a hand edit"
+      ]
+    }
+  ]
+}

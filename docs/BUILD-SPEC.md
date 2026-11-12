@@ -41,10 +41,9 @@ idea → draft → qc_passed → needs_approval → approved → queued → publ
 ```
 
 ## LLM provider
-The intelligence adapter is provider-flexible (`adapters/claude.ts`). It prefers
-**OpenRouter** (OpenAI-compatible Chat Completions) when `CONTENT_OPENROUTER_API_KEY`
-is set, and falls back to the **Anthropic** Messages API (`CONTENT_ANTHROPIC_API_KEY`).
-Model via `CONTENT_LLM_MODEL` (default `anthropic/claude-sonnet-4.5`). Everything
+The intelligence adapter (`adapters/claude.ts`) calls **OpenRouter** (OpenAI-compatible
+Chat Completions) with `CONTENT_OPENROUTER_API_KEY`; there is no direct Anthropic path.
+Model via `CONTENT_LLM_MODEL` (default `anthropic/claude-sonnet-5.5`). Everything
 downstream only calls `complete(prompt, {system})`, so swapping providers changes nothing.
 
 ## Modules (all live — full pipeline, Bible Table 0)
@@ -65,8 +64,7 @@ Lead/metrics data enters via `POST /content/api/leads` and `POST /content/api/me
 
 ## Critical controls (tested in `core/test`, 29 tests)
 - **Escalate-only lane:** `escalateLane(current, proposed)` returns the stricter lane.
-  `safe_auto` stays off unless `CONTENT_ALLOW_SAFE_AUTO=true` (earned, Bible §17.6),
-  and even then only for template-based content derived from approved work.
+  `safe_auto` is never proposed: every item goes to a human (earning it is Bible §17.6, not built).
 - **Honest-numbers:** `canPublish` / `hasUnprovenClaims` block unproven claims —
   mirrored by the `content.v_publish_ready` SQL view, so the rule holds even if a
   caller bypasses the code path.
@@ -124,7 +122,7 @@ npm run build     # emits dist/ (rewrites .ts import extensions → .js)
 3. ✅ `research` + LLM auto-scoring → fills the queue.
 4. ✅ Lead capture (UTM ingest route, intent triage) → `content.leads`.
 5. ✅ `analytics` + `weekly_review` → close the learning loop.
-6. ✅ Earn `safe_auto` for proven templates (`CONTENT_ALLOW_SAFE_AUTO`).
+6. ⏸ `safe_auto` for proven templates: not built; every item goes to a human.
 
 Remaining = wiring/ops, not engine build: connect real Postiz + Telegram + DB + an
 OpenRouter key, register the webhook, point a scheduler at `/run`, and feed real

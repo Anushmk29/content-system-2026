@@ -8,6 +8,7 @@ import { effectOfDecision, type ApprovalAction } from '../../core/src/index.ts';
 import { randomUUID } from 'node:crypto';
 import { feedbackText, reviseItem, refreshLessons } from './feedback-service.ts';
 import { withCostScope } from '../cost-ledger.ts';
+import { qcItem } from '../modules/qc-gate.module.ts';
 
 interface ApplyDecisionInput {
   itemId: string;
@@ -71,4 +72,16 @@ export async function applyApprovalDecision(
     : input.action === 'reject' ? '❌ Rejected'
     : '✏️ Changes requested';
   return { ok: true, message: `${verb}: ${item.title}${revised}`, itemTitle: item.title };
+}
+
+/** After "Request changes" (status back to draft): re-run the QC gate on this one post so it
+ *  returns to the approval queue now, instead of waiting for the next pipeline run. */
+export async function resubmitItem(ctx: ModuleContext, itemId: string): Promise<ApplyDecisionResult> {
+  const item = await createRepo(ctx.db).getItem(itemId);
+  if (!item) return { ok: false, message: `Item ${itemId} not found.` };
+  if (item.status !== 'draft') return { ok: false, message: `Only a draft can be sent back for review (this one is ${item.status}).`, itemTitle: item.title };
+  const r = await qcItem(ctx, item);
+  return r.outcome === 'blocked'
+    ? { ok: false, message: `Still blocked: add proof to every claim first — ${item.title}`, itemTitle: item.title }
+    : { ok: true, message: `↩ Back in the approval queue: ${item.title}`, itemTitle: item.title };
 }

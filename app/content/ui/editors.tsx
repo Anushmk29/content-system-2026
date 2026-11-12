@@ -3,6 +3,7 @@
 // thin form over an API route via useAction (refresh + feedback + login redirect handled there).
 import { useState } from 'react';
 import { useAction } from './actions';
+import { ExamplePicker, firstFor, type ExampleOpt } from './ExamplePicker';
 
 // ---- approve / changes / reject ---------------------------------------------
 export function ApprovalActions({ itemId, unproven = 0, reasons = [] }: { itemId: string; unproven?: number; reasons?: string[] }) {
@@ -119,6 +120,34 @@ export function HookPicker({ itemId, hooks }: { itemId: string; hooks: { id: str
   );
 }
 
+// ---- where it posts: one tick per Postiz channel (profile, page...) --------------
+export function ChannelPicker({ itemId, channels, chosen }: { itemId: string; channels: { id: string; name: string; identifier: string }[]; chosen: string[] | null }) {
+  const a = useAction();
+  // null = every channel; ids no longer connected drop out.
+  const [on, setOn] = useState(() => { const c = chosen?.filter((id) => channels.some((x) => x.id === id)); return c?.length ? c : channels.map((x) => x.id); });
+  const toggle = (id: string) => {
+    const next = on.includes(id) ? on.filter((x) => x !== id) : [...on, id];
+    if (!next.length) return;
+    setOn(next);
+    void a.call('ch', 'PATCH', `/content/api/items/${itemId}`, { channels: next });
+  };
+  const last = (id: string) => on.length === 1 && on[0] === id;
+  return (
+    <fieldset style={{ border: 0, padding: 0, margin: '0 0 10px' }}>
+      <legend className="faint" style={{ fontSize: 12.5, marginBottom: 6 }}>Post on (untick to opt out)</legend>
+      <div className="chips">
+        {channels.map((c) => (
+          <label key={c.id} className="chip" aria-pressed={on.includes(c.id)} title={last(c.id) ? 'Keep at least one. To skip the post, reject it.' : c.identifier}>
+            <input type="checkbox" checked={on.includes(c.id)} disabled={a.pending || last(c.id)} onChange={() => toggle(c.id)} />
+            {' '}{c.name} <span className="faint">· {c.identifier}</span>
+          </label>
+        ))}
+      </div>
+      {a.feedback}
+    </fieldset>
+  );
+}
+
 // ---- plan a posting time ------------------------------------------------------
 export function PlanTime({ itemId, current }: { itemId: string; current: string | null }) {
   const a = useAction();
@@ -195,21 +224,59 @@ export function AddSignal({ pillars = [] }: { pillars?: { slug: string; label: s
   );
 }
 
-// ---- creative on a post: make from a saved style, attach own media, remove -------------
-export function CreativePanel({ itemId, platform, assets, styles, editable }: {
-  itemId: string; platform: string; editable: boolean;
-  assets: Array<{ idx: number; mime: string; source: string; created_at: string }>;
-  styles: Array<{ id: string; name: string }>;
-}) {
+/** Design desk: make the visual for every waiting post from one example, one after another. */
+export function MakeAll({ itemIds, styles }: { itemIds: string[]; styles: ExampleOpt[] }) {
   const a = useAction();
   const [styleId, setStyleId] = useState(styles[0]?.id ?? '');
-  const [fresh, setFresh] = useState(false);
+  const [done, setDone] = useState<number | null>(null);
+  const [result, setResult] = useState('');
+  const run = async () => {
+    setResult('');
+    let n = 0;
+    for (const id of itemIds) {
+      setDone(n);
+      if (await a.call('all', 'POST', `/content/api/items/${id}/asset`, { styleId })) n++;
+    }
+    setDone(null);
+    a.clear();
+    setResult(`${n} of ${itemIds.length} visuals made.`);
+  };
+  if (!itemIds.length || !styles.length) return null;
+  return (
+    <div className="next-step">
+      <div>
+        <b>Make all {itemIds.length} at once</b>
+        <p className="faint">Each post gets the same example with its own words, about a minute each. Or make them one by one below.</p>
+      </div>
+      <div className="cr-row">
+        <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} />
+        <button type="button" className="btn btn-primary" disabled={a.pending || !styleId} onClick={run}>
+          {done !== null ? `Making ${done + 1} of ${itemIds.length}…` : `Make all ${itemIds.length}`}
+        </button>
+        {done === null && result && <span role="status" style={{ fontSize: 12.5 }}>{result}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---- creative on a post: recreate an example with this post's words, attach own media, remove ----
+export function CreativePanel({ itemId, platform, assets, styles, editable, bare, want }: {
+  itemId: string; platform: string; editable: boolean;
+  /** The caller shows its own empty preview (Design cards), so skip the "No creative yet" line. */
+  bare?: boolean;
+  assets: Array<{ idx: number; mime: string; source: string; created_at: string }>;
+  styles: ExampleOpt[];
+  /** What the post is, so examples made for it are offered first. */
+  want?: 'image' | 'carousel';
+}) {
+  const a = useAction();
+  const [styleId, setStyleId] = useState(() => firstFor(styles, want));
   const [warnings, setWarnings] = useState<string[]>([]);
   const url = `/content/api/items/${itemId}/asset`;
   const v = encodeURIComponent(assets[0]?.created_at ?? '');
   const make = async () => {
     setWarnings([]);
-    const r = await a.call('make', 'POST', url, { styleId, fresh });
+    const r = await a.call('make', 'POST', url, { styleId });
     if (r?.warnings) setWarnings(r.warnings);
   };
   const upload = async (files: FileList | null) => {
@@ -229,31 +296,23 @@ export function CreativePanel({ itemId, platform, assets, styles, editable }: {
             // eslint-disable-next-line @next/next/no-img-element
             : <a key={x.idx} href={`${url}?i=${x.idx}&v=${v}`} target="_blank" rel="noreferrer" title={`Open slide ${x.idx + 1} full size`}><img src={`${url}?i=${x.idx}&v=${v}`} alt={`Slide ${x.idx + 1}`} loading="lazy" /></a>)}
         </div>
-      ) : (
+      ) : !bare && (
         <p className="empty">
-          {editable ? 'No creative yet. Make one from a saved style, or attach your own image or video.'
+          {editable ? 'No creative yet. Recreate one of your examples with this post’s words, or attach your own image or video.'
             : platform === 'instagram' ? 'No creative. It goes out with plain text slides.' : 'No creative. It goes out as text only.'}
         </p>
       )}
-      {assets.length > 0 && <p className="cr-meta">{assets.length} {assets[0]!.mime.startsWith('video/') ? 'video' : assets.length === 1 ? 'image' : 'slides'} · {assets[0]!.source === 'upload' ? 'your own' : 'made from a style'}{editable ? '' : ' · locked with the approved copy'}</p>}
+      {assets.length > 0 && <p className="cr-meta">{assets.length} {assets[0]!.mime.startsWith('video/') ? 'video' : assets.length === 1 ? 'image' : 'slides'} · {assets[0]!.source === 'upload' ? 'your own' : 'made from an example'}{editable ? '' : ' · locked with the approved copy'}</p>}
       {editable && (
         <div className="cr-tools">
           {styles.length > 0 ? (
             <div className="cr-row">
-              <select className="input" value={styleId} onChange={(e) => setStyleId(e.target.value)} aria-label="Style" style={{ flex: '1 1 180px' }}>
-                {styles.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} want={want} />
               <button type="button" className="btn btn-ink" disabled={busy || !styleId} onClick={make}>
-                {a.busy === 'make' ? 'Making…' : assets.length ? 'Make again' : 'Make creative'}
+                {a.busy === 'make' ? 'Making… (about a minute)' : assets.length ? 'Make again' : 'Make creative'}
               </button>
             </div>
-          ) : <p className="cr-meta">No styles saved yet. <a href="/content/styles">Save one on Styles</a> to make creatives here.</p>}
-          {styles.length > 0 && (
-            <label className="cr-check">
-              <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} />
-              Add a new picture about this post (a few cents; otherwise the saved design is reused for free)
-            </label>
-          )}
+          ) : <p className="cr-meta">No examples saved yet. <a href="/content/styles">Add one on Design examples</a> to make creatives here.</p>}
           <div className="cr-row">
             <label className="btn btn-sm" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : 'Use my own image or video'}
               <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>

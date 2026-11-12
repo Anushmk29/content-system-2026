@@ -51,7 +51,7 @@ export const PLATFORM: Record<string, { label: string; glyph: string; color: str
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  idea: 'Idea', draft: 'Draft', qc_passed: 'QC passed', needs_approval: 'Needs approval', approved: 'Approved',
+  idea: 'Idea', draft: 'Draft', qc_passed: 'Checked', needs_approval: 'Needs approval', approved: 'Approved',
   queued: 'Scheduled', published: 'Published', performance_captured: 'Measured', archived: 'Archived',
 };
 

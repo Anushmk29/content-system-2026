@@ -5,7 +5,7 @@ import { ok, degraded } from './module.ts';
 import { createRepo } from '../db/repo.ts';
 import { createContentItems } from '../db/content-items.ts';
 import { splitSlides } from '../slides.ts';
-import { scheduleItem } from '../services/calendar-sync-service.ts';
+import { bookItem } from '../services/calendar-sync-service.ts';
 import { isManual } from '../prompts/platform-playbooks.ts';
 
 /** Posting time: one post per platform per day at `hourUtc`, the earliest day that is
@@ -24,7 +24,7 @@ export function pickSlot(now: Date, planned: Date | null, lastForPlatform: Date 
   return planned && planned > now ? planned : nextSlot(now, lastForPlatform, hourUtc);
 }
 
-interface Postable { platform: string; title: string; hook?: string | null; body?: string | null; cta?: string | null }
+interface Postable { platform: string; format?: string | null; title: string; hook?: string | null; body?: string | null; cta?: string | null }
 
 /** What goes into Postiz for one item: X → a thread (one part per "---" tweet, link on the
  *  last); Instagram → a short caption (links aren't clickable there; the slides carry the
@@ -36,7 +36,11 @@ export function postParts(item: Postable, utm: string): string[] {
     const tweets = splitSlides(body);
     return tweets.map((t, i) => (i === tweets.length - 1 ? `${t}\n\n${cta}` : t));
   }
-  if (item.platform === 'instagram') return [`${item.hook || item.title}\n\n${item.cta ?? ''}`.trim()];
+  if (item.platform === 'instagram') {
+    // A single-image post's body is its caption; a carousel's body is the slides.
+    return [`${item.format === 'quote_card' ? body : item.hook || item.title}\n\n${item.cta ?? ''}`.trim()];
+  }
+  if (item.format === 'carousel') return [`${item.hook || item.title}\n\n${cta}`];
   return [`${body}\n\n${cta}`];
 }
 
@@ -67,8 +71,7 @@ export const publisherModule: Module = {
         if (isManual(item)) continue; // Short scripts are filmed, Reddit posts are posted by hand
         const planned = item.scheduled_at ? new Date(item.scheduled_at) : null;
         const slot = pickSlot(now, planned, last.get(item.platform), ctx.env.postHourUtc);
-        const { postizId, utm } = await scheduleItem(ctx, item, slot);
-        await items.transition(item.id, { event: 'schedule', postizId, utmUrl: utm, scheduledAt: slot.toISOString() });
+        if (!(await bookItem(ctx, item.id, slot))) continue; // booked elsewhere, or no longer approved
         const prev = last.get(item.platform);
         if (!prev || slot > prev) last.set(item.platform, slot);
         published++;

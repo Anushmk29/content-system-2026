@@ -44,6 +44,7 @@ export const scoringModule: Module = {
           scored++;
         } catch (e) {
           failures.push(`${t.id}: ${(e as Error).message}`);
+          await repo.noteFailure('topics', t.id, (e as Error).message);
         }
       });
     }

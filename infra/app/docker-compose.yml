@@ -1,0 +1,34 @@
+# Content Studio on one VPS: Caddy (HTTPS) → the Next.js app, plus a scheduler that runs the
+# pipeline every hour. Postiz runs from infra/postiz/ on the same host. Full steps: docs/DEPLOY.md.
+#   cd infra/app && docker compose up -d --build
+# Env comes from the repo-root .env (copy .env.example). DOMAIN is the public hostname.
+services:
+  app:
+    build: ../..
+    restart: unless-stopped
+    env_file: ../../.env
+    expose: ["3000"]
+
+  # Runs every module once an hour (npm run pipeline). Each module holds a database lock while it
+  # runs, so a run started from the dashboard at the same time skips instead of doubling up.
+  # ponytail: sleep loop, not cron; drifts by the run's own length. Use host cron if exact times matter.
+  scheduler:
+    build: ../..
+    restart: unless-stopped
+    env_file: ../../.env
+    command: ["sh", "-c", "while true; do npm --prefix content-pipeline run pipeline; sleep ${PIPELINE_INTERVAL_SECONDS:-3600}; done"]
+    depends_on: [app]
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: "${DOMAIN:?set DOMAIN, e.g. studio.example.com}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [app]
+
+volumes:
+  caddy-data:

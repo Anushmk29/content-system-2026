@@ -22,17 +22,15 @@
     "test": "node --test --test-concurrency=2",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "pipeline": "node --env-file=../.env.content scripts/run.ts"
+    "pipeline": "node --env-file-if-exists=../.env --env-file-if-exists=../.env.content scripts/run.ts",
+    "migrate": "node --env-file-if-exists=../.env --env-file-if-exists=../.env.content scripts/migrate.ts"
   },
   "engines": {
     "node": ">=22.6"
   },
   "dependencies": {
-    "@resvg/resvg-js": "^2.6.2",
     "pg": "^8.13.0",
-    "satori": "^0.35.0",
-    "satori-html": "^0.3.2",
-    "sharp": "^0.34.5"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

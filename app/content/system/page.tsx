@@ -9,7 +9,7 @@ import { ago, when, HEALTH_COLOR, RUN_COLOR, healthIssue } from '../ui/format';
 
 const CONNECTIONS: Record<string, { name: string; role: string; env: string[]; fix: string }> = {
   database: { name: 'Database', role: 'Postgres — every item, decision and run', env: ['CONTENT_DATABASE_URL'], fix: 'Point CONTENT_DATABASE_URL at Postgres and run db/schema.sql.' },
-  claude: { name: 'LLM (Claude)', role: 'Research, scoring, drafting, QC, triage', env: ['CONTENT_OPENROUTER_API_KEY', 'CONTENT_ANTHROPIC_API_KEY', 'CONTENT_LLM_MODEL', 'CONTENT_DECISION_MODEL'], fix: 'Set one LLM key (OpenRouter or Anthropic).' },
+  claude: { name: 'LLM (Claude)', role: 'Research, scoring, drafting, QC, triage', env: ['CONTENT_OPENROUTER_API_KEY', 'CONTENT_LLM_MODEL', 'CONTENT_DECISION_MODEL'], fix: 'Set CONTENT_OPENROUTER_API_KEY.' },
   postiz: { name: 'Postiz', role: 'Schedules posts to LinkedIn, X, Instagram…', env: ['CONTENT_POSTIZ_API_URL', 'CONTENT_POSTIZ_API_KEY'], fix: '404 → the URL path is wrong: self-hosted Postiz usually serves the public API under /api (e.g. https://postiz.example.com/api). 401/403 → wrong API key. Once it answers, connect each channel (LinkedIn, X) inside Postiz.' },
   apify: { name: 'Apify (Decode)', role: 'Scrapes competitors’ public posts on X, Instagram, LinkedIn, Facebook', env: ['CONTENT_APIFY_TOKEN', 'CONTENT_APIFY_ACTOR_X', 'CONTENT_APIFY_ACTOR_INSTAGRAM', 'CONTENT_APIFY_ACTOR_LINKEDIN', 'CONTENT_APIFY_ACTOR_FACEBOOK'], fix: 'Optional. Set CONTENT_APIFY_TOKEN (console.apify.com → Settings → Integrations). Actor overrides only if a default actor changes.' },
   tinyfish: { name: 'TinyFish (free web search)', role: 'Research web check + news and competitor-page signals (Search + Fetch, free)', env: ['CONTENT_TINYFISH_API_KEY', 'CONTENT_RESEARCH_MODEL', 'CONTENT_TINYFISH_QUERIES', 'CONTENT_TINYFISH_WATCH'], fix: 'Optional. Set CONTENT_TINYFISH_API_KEY (agent.tinyfish.ai/api-keys). CONTENT_RESEARCH_MODEL=tinyfish switches the Research web check to it; CONTENT_TINYFISH_QUERIES / CONTENT_TINYFISH_WATCH feed Market Signals.' },
@@ -29,7 +29,7 @@ export default async function SystemPage() {
 
   return (
     <>
-      <PageHead crumb="system" title="Is the machine healthy." sub={`Checked ${ago(health.checkedAt)}. Broken things sort first, each with its fix.`} />
+      <PageHead title="System" sub={`Checked ${ago(health.checkedAt)}. Broken things sort first, each with its fix.`} />
       <KpiStrip items={[
         { label: 'Overall', value: health.overall },
         { label: 'Steps ok', value: health.modules.filter((m) => m.lastStatus === 'ok').length, denom: `${health.modules.length}` },

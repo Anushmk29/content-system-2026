@@ -17,8 +17,8 @@ Designed to be **non-destructive**. It touches nothing you already run:
 |---|---|
 | `content-pipeline/` | A sibling package (or workspace member). The engine. |
 | `app/content/` | Your Next.js `app/` directory → gives you `/content` + `/content/api/*`. |
-| `db/schema.sql`, `db/seed.sql` | Run once against your dedicated Postgres. |
-| `.env.content.example` | Merge the `CONTENT_*` vars into your `.env.local`. |
+| `db/schema.sql` | Apply with `npm run migrate` (one transaction; re-run after every update). `db/seed.sql` is demo data, never for production. |
+| `.env.example` | Merge the `CONTENT_*` vars into your `.env.local`. |
 
 ---
 
@@ -26,8 +26,8 @@ Designed to be **non-destructive**. It touches nothing you already run:
 Create a **dedicated** Supabase project (or reuse one — the `content`
 schema keeps it separate regardless), then:
 ```bash
-psql "$CONTENT_DATABASE_URL" -f db/schema.sql
-psql "$CONTENT_DATABASE_URL" -f db/seed.sql   # optional sample data
+npm run migrate                                # applies db/schema.sql, all or nothing
+psql "$CONTENT_DATABASE_URL" -f db/seed.sql   # optional sample data (dev only)
 ```
 
 ## Step 2 — Add the engine package
@@ -36,7 +36,7 @@ the build emits JS your Next bundler imports cleanly):
 ```bash
 cd content-pipeline
 npm install
-npm test          # 48 tests: core logic + LLM parsers + fault isolation
+npm test          # core logic, LLM parsers, fault isolation, SQL against an in-process Postgres
 npm run build     # emits dist/ (rewrites .ts import extensions to .js)
 ```
 Then make your app depend on it. Easiest with a workspace, or:
@@ -58,9 +58,10 @@ gracefully when unset):
 CONTENT_DATABASE_URL=postgresql://...
 # LLM (drafting/scoring/research/triage/review): OpenRouter preferred, Anthropic fallback
 # CONTENT_OPENROUTER_API_KEY=...   CONTENT_LLM_MODEL=anthropic/claude-sonnet-4.5
-# optional: CONTENT_POSTIZ_*, CONTENT_RUN_SECRET, CONTENT_CRON_SECRET, CONTENT_ALLOW_SAFE_AUTO
+# CONTENT_IMAGE_MODEL=qwen/qwen-image-3   (carousel/image visuals; qwen/qwen-image-3-pro for higher quality)
+# optional: CONTENT_POSTIZ_*, CONTENT_RUN_SECRET, CONTENT_CRON_SECRET
 ```
-See `.env.content.example` for the full, annotated list.
+See `.env.example` for the full, annotated list.
 
 ## Step 4 — Run
 Start your app and open **`/content`**. You'll see:
@@ -76,10 +77,10 @@ Point a scheduler at the run endpoint (replace n8n cron entirely):
 POST /content/api/run                 # whole pipeline
 POST /content/api/modules/qc_gate/run # one module
 ```
-Use Vercel Cron, a GitHub Action, or any cron hitting these routes. Set
-`CONTENT_CRON_SECRET` and send it as the `x-content-secret` header; it opens only the run
-routes. Approvals happen on the dashboard Approvals page. Feed leads to `POST /content/api/leads` and performance
-snapshots to `POST /content/api/metrics`.
+Use any cron on a long-running server (not serverless: runs take minutes; see docs/DEPLOY.md),
+or the bundled scheduler in `infra/app`. Set `CONTENT_CRON_SECRET` and send it as the
+`x-content-secret` header; it opens only the run routes. Approvals happen on the dashboard
+Approvals page. Feed performance snapshots to `POST /content/api/metrics` (`{ itemId, ... }`).
 
 ---
 

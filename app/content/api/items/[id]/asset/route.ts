@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: P) {
   return new Response(new Uint8Array(a.bytes), { headers: { 'content-type': a.mime, 'cache-control': 'private, no-cache' } });
 }
 
-// POST { styleId, fresh? } → make the creative from a saved style.
+// POST { styleId } → recreate a saved example with the post's words.
 // POST multipart (file, file …) → attach the client's own images or one video.
 export const POST = handle(async (req: Request, { params }: P) => {
   const { id } = await params;
@@ -28,8 +28,8 @@ export const POST = handle(async (req: Request, { params }: P) => {
     return NextResponse.json({ ok: true, message: `Attached ${r.count} file${r.count === 1 ? '' : 's'}` });
   }
   const b = (await req.json()) as Record<string, unknown>;
-  if (typeof b.styleId !== 'string' || !b.styleId) throw new Error('Pick a style.');
-  const r = await saveItemCreative(getContext(), id, { styleId: b.styleId, fresh: b.fresh === true });
+  if (typeof b.styleId !== 'string' || !b.styleId) throw new Error('Pick an example.');
+  const r = await saveItemCreative(getContext(), id, { styleId: b.styleId });
   const n = r.images.length;
   return NextResponse.json({
     ok: true, warnings: r.warnings,

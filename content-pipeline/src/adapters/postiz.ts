@@ -14,6 +14,8 @@ interface ScheduleInput {
   media?: Array<{ buf: Buffer; mime: string; name: string }>;
   /** LinkedIn: the document title when several images go out as a swipeable carousel. */
   title?: string;
+  /** Postiz integration ids to post on (one group, deleted together); empty = every channel of the platform. */
+  channelIds?: string[] | null;
 }
 interface ScheduleResult {
   postizId: string;
@@ -25,7 +27,13 @@ export interface PostizAdapter extends Adapter {
   postStats(postizId: string): Promise<{ metrics: PostMetrics; raw: unknown }>;
   /** Delete a scheduled post (the calendar moved it). Postiz public API: DELETE /posts/:id. */
   remove(postizId: string): Promise<void>;
+  /** Our platforms that have a connected, enabled channel in Postiz. */
+  platforms(): Promise<string[]>;
+  /** The enabled channels (a LinkedIn profile, a LinkedIn page...) that can carry one platform. */
+  channels(platform: string): Promise<Channel[]>;
 }
+
+export interface Channel { id: string; name: string; identifier: string }
 
 type MetricField = 'impressions' | 'reach' | 'likes' | 'comments' | 'shares' | 'saves' | 'clicks';
 type PostMetrics = Partial<Record<MetricField, number>>;
@@ -55,7 +63,7 @@ export function toMetrics(series: Series): PostMetrics {
   return out;
 }
 
-interface Integration { id: string; identifier: string; disabled?: boolean }
+interface Integration { id: string; name?: string; identifier: string; disabled?: boolean }
 
 // Our platform → the Postiz channel identifiers that can carry it (first connected one wins).
 const CHANNELS: Record<string, string[]> = {
@@ -77,10 +85,23 @@ export function settingsFor(identifier: string, opts: { images?: number; title?:
   return { __type: identifier };
 }
 
-export function pickIntegration(all: Integration[], platform: string): Integration | undefined {
+/** Every enabled channel that can carry `platform`, in Postiz order. */
+function channelsFor(all: Integration[], platform: string): Integration[] {
   const ids = CHANNELS[platform] ?? [platform];
-  return all.find((i) => !i.disabled && ids.includes(i.identifier));
+  return all.filter((i) => !i.disabled && ids.includes(i.identifier));
 }
+
+export const pickIntegration = (all: Integration[], platform: string): Integration | undefined => channelsFor(all, platform)[0];
+
+/** The channels a post goes to: the chosen ones still connected, else (none chosen) all of them. */
+export function targetsFor(all: Integration[], platform: string, chosen?: string[] | null): Integration[] {
+  const fit = channelsFor(all, platform);
+  return chosen?.length ? fit.filter((i) => chosen.includes(i.id)) : fit;
+}
+
+/** Every platform some enabled channel can carry (our names, plus Postiz ids we have no mapping for). */
+export const connectedTo = (all: Integration[]): string[] =>
+  [...new Set([...Object.keys(CHANNELS), ...all.map((i) => i.identifier)])].filter((p) => pickIntegration(all, p));
 
 export function createPostiz(apiUrl: string | undefined, apiKey: string | undefined): PostizAdapter {
   const configured = Boolean(apiUrl && apiKey);
@@ -98,8 +119,8 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
 
     async schedule(input): Promise<ScheduleResult> {
       if (!configured) throw new Error('Postiz not configured (CONTENT_POSTIZ_API_URL / _API_KEY)');
-      const channel = pickIntegration(await call<Integration[]>('/integrations'), input.platform);
-      if (!channel) throw new Error(`no ${input.platform} channel connected in Postiz`);
+      const targets = targetsFor(await call<Integration[]>('/integrations'), input.platform, input.channelIds);
+      if (!targets.length) throw new Error(input.channelIds?.length ? `none of the chosen ${input.platform} channels is connected in Postiz` : `no ${input.platform} channel connected in Postiz`);
 
       const image: Array<{ id: string; path: string }> = [];
       for (const m of input.media ?? []) {
@@ -116,13 +137,15 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
           date: input.scheduledAt,
           shortLink: false,
           tags: [],
-          posts: [{
+          posts: targets.map((channel) => ({
             integration: { id: channel.id },
             value: input.parts.map((content, i) => ({ content, image: i === 0 ? image : [] })),
             settings: settingsFor(channel.identifier, { images: image.length, title: input.title }),
-          }],
+          })),
         }),
       });
+      // One group: deleting this id (a calendar move) removes the post on every channel.
+      // ponytail: stats are read through the first channel only; keep per-channel ids when that matters.
       const postizId = created[0]?.postId;
       if (!postizId) throw new Error('Postiz response missing postId');
       return { postizId };
@@ -135,6 +158,17 @@ export function createPostiz(apiUrl: string | undefined, apiKey: string | undefi
         method: 'DELETE', headers: { authorization: apiKey! }, signal: AbortSignal.timeout(30000),
       });
       if (!res.ok) throw new Error(`Postiz delete ${res.status}: ${redact((await res.text()).slice(0, 200))}`);
+    },
+
+    async platforms() {
+      if (!configured) throw new Error('Postiz not configured (CONTENT_POSTIZ_API_URL / _API_KEY)');
+      return connectedTo(await call<Integration[]>('/integrations', { signal: AbortSignal.timeout(4000) }));
+    },
+
+    async channels(platform) {
+      if (!configured) throw new Error('Postiz not configured (CONTENT_POSTIZ_API_URL / _API_KEY)');
+      return channelsFor(await call<Integration[]>('/integrations', { signal: AbortSignal.timeout(4000) }), platform)
+        .map(({ id, name, identifier }) => ({ id, name: name || identifier, identifier }));
     },
 
     async postStats(postizId) {

@@ -7,13 +7,16 @@
     "predev": "npm --prefix content-pipeline run build",
     "dev": "next dev --turbopack -p 3001",
     "prebuild": "npm --prefix content-pipeline run build",
-    "build": "next build",
+    "build": "next build --turbopack",
     "start": "next start",
-    "engine:test": "npm --prefix content-pipeline test"
+    "engine:test": "npm --prefix content-pipeline test",
+    "test": "node --test app/content/*.test.ts && npm run engine:test",
+    "migrate": "npm --prefix content-pipeline run migrate",
+    "pipeline": "npm --prefix content-pipeline run pipeline"
   },
   "dependencies": {
     "@pratapai/content-pipeline": "file:./content-pipeline",
-    "next": "^15.1.6",
+    "next": "^15.5.19",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -22,5 +25,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

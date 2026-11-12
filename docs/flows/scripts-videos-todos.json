@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Hand-Posted Desk: Videos, Scripts, Todos",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "videos", "label": "Videos page" },
+    { "id": "ideas", "label": "Ideas + Draft Generator" },
+    { "id": "scripts", "label": "Scripts desk" },
+    { "id": "today", "label": "Todos + Today" }
+  ],
+  "phases": [
+    { "id": "find", "label": "Find + analyse", "fromCol": 0, "toCol": 2 },
+    { "id": "write", "label": "Topic + script", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "post", "label": "Film + post by hand", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["found", "transcribe", "analyse", "use_idea", "topic", "draft", "filmed", "posted"],
+  "nodes": [
+    { "id": "found", "lane": "videos", "col": 0, "width": 132, "type": "external", "label": "Viral video", "sublabel": "decoded_posts, hunt score" },
+    { "id": "transcribe", "lane": "videos", "col": 1, "width": 132, "type": "backend", "label": "transcribeVideo", "sublabel": "POST /videos/:id" },
+    { "id": "analyse", "lane": "videos", "col": 2, "width": 132, "type": "backend", "label": "analyzeVideo", "sublabel": "why it worked + 2 ideas", "tag": "Jev brand fit" },
+    { "id": "use_idea", "lane": "videos", "col": 3, "width": 132, "type": "frontend", "label": "useVideoIdea", "sublabel": "{ useIdea: 0 | 1 }" },
+    { "id": "topic", "lane": "ideas", "col": 3, "width": 132, "type": "messagebus", "label": "Ideas signal", "sublabel": "addSignal, then a topic" },
+    { "id": "draft", "lane": "ideas", "col": 4, "width": 132, "type": "backend", "label": "draftScripts", "sublabel": "IG Reel, LinkedIn, FB Reel" },
+    { "id": "filmed", "lane": "scripts", "col": 4, "width": 132, "type": "frontend", "label": "markFilmed", "sublabel": "PATCH { filmed: true }" },
+    { "id": "posted", "lane": "scripts", "col": 5, "width": 132, "type": "database", "label": "markUploaded", "sublabel": "PATCH { uploadedUrl }" },
+    { "id": "todos", "lane": "today", "col": 2, "width": 132, "type": "frontend", "label": "TodoTracker", "sublabel": "POST, PATCH, DELETE" },
+    { "id": "get_today", "lane": "today", "col": 4, "width": 132, "type": "backend", "label": "getToday", "sublabel": "open todos + script counts" },
+    { "id": "today_page", "lane": "today", "col": 5, "width": 132, "type": "frontend", "label": "Today page", "sublabel": "task actions" }
+  ],
+  "edges": [
+    { "from": "found", "to": "transcribe" },
+    { "from": "transcribe", "to": "analyse", "label": "transcript" },
+    { "from": "analyse", "to": "use_idea", "label": "use / adapt", "variant": "emphasis" },
+    { "from": "use_idea", "to": "topic", "label": "channel decode", "variant": "emphasis" },
+    { "from": "topic", "to": "draft", "label": "script targets" },
+    { "from": "draft", "to": "filmed", "label": "approved", "variant": "emphasis" },
+    { "from": "filmed", "to": "posted", "label": "live link", "route": "straight" },
+    { "from": "todos", "to": "get_today", "label": "listTodos open", "variant": "dashed" },
+    { "from": "filmed", "to": "get_today", "label": "to film", "variant": "dashed", "role": "branch" },
+    { "from": "get_today", "to": "today_page" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Video gates", "items": ["analyzeVideo needs a transcript and caches on transcripts.analysis", "Jev can override the verdict to skip when fit < 0.3 or risk >= 0.7"] },
+    { "dot": "amber", "title": "Posted by a person", "items": ["reel_script and short_script never go to Postiz", "markUploaded only accepts an https link on the item's own platform"] },
+    { "dot": "emerald", "title": "Today tasks", "items": ["Open todos with priority 1-2 become Today tasks", "Approved scripts show as to film or filmed, not posted"] }
+  ]
+}

@@ -61,7 +61,7 @@ test('planning a time: only approved + not yet in Postiz, only in the future', a
   await approve(b!);
   assert.equal((await planItem(ctx, b!, new Date(Date.now() - 1000).toISOString())).ok, false, 'past refused');
   assert.equal((await planItem(ctx, b!, future)).ok, true);
-  await items.transition(b!, { event: 'schedule', postizId: 'p', utmUrl: 'u', scheduledAt: future });
+  await items.transition(b!, { event: 'schedule', postizId: 'p1', utmUrl: 'u', scheduledAt: future });
   assert.equal((await planItem(ctx, b!, future)).ok, false, 'already in Postiz');
 });
 
@@ -91,7 +91,7 @@ test('metrics: only for live items, whole numbers; analytics picks them up', asy
   const [a] = await draftSet();
   assert.equal((await recordMetrics(ctx, a!, { reach: 10 })).ok, false, 'draft refused');
   await approve(a!);
-  await items.transition(a!, { event: 'schedule', postizId: 'p', utmUrl: 'u', scheduledAt: new Date(Date.now() - 60_000).toISOString() });
+  await items.transition(a!, { event: 'schedule', postizId: 'p2', utmUrl: 'u', scheduledAt: new Date(Date.now() - 60_000).toISOString() });
   await items.goLiveDue();
   assert.equal((await recordMetrics(ctx, a!, { reach: -1 })).ok, false);
   assert.equal((await recordMetrics(ctx, a!, {})).ok, false);

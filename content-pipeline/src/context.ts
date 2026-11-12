@@ -8,7 +8,7 @@ import { createPostiz } from './adapters/postiz.ts';
 import { createJev } from './adapters/jev.ts';
 import { createApify } from './adapters/apify.ts';
 import { createTinyfish } from './adapters/tinyfish.ts';
-import { costRecorder } from './cost-ledger.ts';
+import { costRecorder, budgetGuard, gate } from './cost-ledger.ts';
 import { createYoutube } from './adapters/youtube.ts';
 import { createTranscriber } from './adapters/transcriber.ts';
 import type { ModuleContext, Adapters } from './modules/module.ts';
@@ -20,22 +20,23 @@ export function buildContext(envOverride?: Partial<ContentEnv>): ModuleContext {
   const logger = createLogger();
   const db = createDb(env.databaseUrl);
   const onCost = costRecorder(db, logger); // every paid call → content.cost_events
+  const guard = budgetGuard(db, env.dailyBudgetUsd, logger); // …and none once today's spend hits the cap
   const adapters: Adapters = {
-    claude: createClaude({
+    claude: gate(createClaude({
       openrouterApiKey: env.openrouterApiKey,
-      anthropicApiKey: env.anthropicApiKey,
       model: env.llmModel,
+      imageModel: env.imageModel,
       onCost,
-    }),
+    }), ['complete', 'generateImage'], guard),
     postiz: createPostiz(env.postizApiUrl, env.postizApiKey),
-    jev: createJev({
+    jev: gate(createJev({
       apiKey: env.openrouterApiKey,
       model: env.jevModel,
       mode: env.jevMode,
       minConfidence: env.jevMinConfidence,
       onCost,
-    }),
-    apify: createApify(env.apifyToken, env.apifyActors, onCost),
+    }), ['decide'], guard),
+    apify: gate(createApify(env.apifyToken, env.apifyActors, onCost), ['scrape'], guard),
     tinyfish: createTinyfish(env.tinyfishApiKey),
     youtube: createYoutube(env.youtubeApiKey),
     transcriber: createTranscriber({ ytdlp: env.ytdlp, python: env.python, model: env.whisperModel, cap: env.transcribeCap }),

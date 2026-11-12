@@ -19,9 +19,8 @@ import { addSignal } from './console-service.ts';
 import { loadBrand } from './brand-service.ts';
 import { createRepo } from '../db/repo.ts';
 import { DRAFT_PLATFORMS } from '../prompts/platform-playbooks.ts';
-import { draftTopic } from '../modules/draft-generator.module.ts';
-import { qcItem } from '../modules/qc-gate.module.ts';
-import { saveItemCreative } from './asset-service.ts';
+import { makePosts, visualFormat, type MakeResult, type VisualKind } from './make-service.ts';
+import { createStyle } from './style-service.ts';
 import { withCostScope } from '../cost-ledger.ts';
 import { applyRules } from '../adapters/jev.ts';
 import { competitorPostQuestions, competitorState, COMPETITOR_RULES, minConfidence, skeletonQuestions, skeletonFromJev } from '../modules/decision-tasks.ts';
@@ -60,6 +59,8 @@ export interface DecodedPostRow {
   format_id: string | null; hook: string | null; beats: Beat[]; seq: number;
   lane: string | null; hook_type: HookPattern | null; hunt_score: number | null; demand: number | null; fit: number | null; paid: boolean;
   value_structure: string | null; cta_type: string | null;
+  /** Image URLs (carousel slides / the single image); null for posts decoded before they were kept. */
+  media: string[] | null;
 }
 
 const RUN_COLS = `id, status, stage, competitor_ids, platforms, lookback_days, post_cap, total, decoded,
@@ -68,7 +69,7 @@ const RUN_COLS = `id, status, stage, competitor_ids, platforms, lookback_days, p
 const POST_COLS = `p.id, p.competitor_id, c.name as competitor, p.platform, p.post_type, p.url, p.handle, p.thumb,
   to_char(p.posted_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as posted_at, p.duration_s, p.reactions, p.comments, p.shares, p.views, p.vs_own_median::float8 as vs_own_median,
   p.caption, p.text_source, p.format_id, p.hook, p.beats, p.seq,
-  p.lane, p.hook_type, p.hunt_score, p.demand, p.fit, p.paid, p.value_structure, p.cta_type`;
+  p.lane, p.hook_type, p.hunt_score, p.demand, p.fit, p.paid, p.value_structure, p.cta_type, p.media`;
 /** The cached transcript of a post `p` (tr.text, null when none). */
 const TRANSCRIPT_JOIN = `left join content.transcripts tr on tr.norm_url = content.norm_url(p.url)`;
 const BATCH = 8;
@@ -94,6 +95,7 @@ const NOT_SELF_RUN = `not exists (select 1 from content.competitors s where s.is
 export async function saveCompetitor(ctx: ModuleContext, input: { id?: string; name?: string; handles?: Record<string, unknown>; active?: boolean }): Promise<CompetitorRow> {
   const handles = input.handles === undefined ? undefined : Object.fromEntries(DECODE_PLATFORMS
     .map((p) => [p, typeof input.handles![p] === 'string' ? (input.handles![p] as string).trim() : ''] as const).filter(([, v]) => v));
+  if ((input.name?.trim().length ?? 0) > 120) throw new Error('name is too long (120 characters max)');
   if (input.id) {
     const r = await ctx.db.query<CompetitorRow>(
       `update content.competitors set name = coalesce($2, name), handles = coalesce($3, handles), active = coalesce($4, active)
@@ -151,17 +153,10 @@ interface StartDecodeInput { competitorIds?: string[]; platforms?: string[]; loo
 
 /** Creates (or resumes) a run and works it in the background. Returns as soon as the run row exists. */
 export async function startDecode(ctx: ModuleContext, input: StartDecodeInput = {}): Promise<DecodeRunRow> {
-  const busy = await ctx.db.query(`select 1 from content.decode_runs where status = 'running' and started_at > now() - interval '6 hours'`);
-  if (busy.rowCount) throw new Error('A decode is already running — stop it first');
   if (!ctx.adapters.claude.configured) throw new Error('No LLM configured — Decode needs one to break posts down');
 
-  let run: DecodeRunRow | null;
-  if (input.resumeRunId) {
-    run = (await ctx.db.query<DecodeRunRow>(
-      `update content.decode_runs set status = 'running', message = null, finished_at = null
-       where id = $1 and status <> 'done' returning ${RUN_COLS}`, [input.resumeRunId])).rows[0] ?? null;
-    if (!run) throw new Error('run not found or already finished');
-  } else {
+  let insert: unknown[] | null = null;
+  if (!input.resumeRunId) {
     // YouTube needs its own key; every other platform goes through Apify.
     const can = (p: DecodePlatform) => (p === 'youtube' ? ctx.adapters.youtube?.configured : ctx.adapters.apify.configured);
     const platforms = (input.platforms?.length ? input.platforms : [...DECODE_PLATFORMS])
@@ -173,10 +168,24 @@ export async function startDecode(ctx: ModuleContext, input: StartDecodeInput = 
       throw new Error(input.self ? 'Add your own accounts in Brand Kit first' : 'No active competitor has a handle on the chosen platforms');
     }
     // Own results want a real baseline: more posts per platform than a competitor sample.
-    run = (await ctx.db.query<DecodeRunRow>(
-      `insert into content.decode_runs (competitor_ids, platforms, lookback_days, post_cap) values ($1, $2, $3, $4) returning ${RUN_COLS}`,
-      [comps.map((c) => c.id), platforms, clamp(input.lookbackDays, 90, 7, 365), clamp(input.postCap, input.self ? 30 : 10, 5, 500)])).rows[0]!;
+    // Capped at 100 so one scrape can't run far past the daily budget.
+    insert = [comps.map((c) => c.id), platforms, clamp(input.lookbackDays, 90, 7, 365), clamp(input.postCap, input.self ? 30 : 10, 5, 100)];
   }
+  // Busy check and start in one transaction under a lock, so two clicks start one paid scrape.
+  const run = await ctx.db.tx(async (db) => {
+    await db.query(`select pg_advisory_xact_lock(hashtext('decode:start'))`);
+    const busy = await db.query(`select 1 from content.decode_runs where status = 'running' and started_at > now() - interval '6 hours'`);
+    if (busy.rowCount) throw new Error('A decode is already running — stop it first');
+    if (insert) {
+      return (await db.query<DecodeRunRow>(
+        `insert into content.decode_runs (competitor_ids, platforms, lookback_days, post_cap) values ($1, $2, $3, $4) returning ${RUN_COLS}`, insert)).rows[0]!;
+    }
+    const resumed = (await db.query<DecodeRunRow>(
+      `update content.decode_runs set status = 'running', message = null, finished_at = null
+       where id = $1 and status <> 'done' returning ${RUN_COLS}`, [input.resumeRunId])).rows[0];
+    if (!resumed) throw new Error('run not found or already finished');
+    return resumed;
+  });
   // ponytail: in-process background work — fine for one long-lived `next` server; a serverless
   // deploy needs a queue/cron to call runDecode instead.
   void withCostScope({ feature: input.self ? 'own_results' : 'decode', refType: 'decode_run', refId: run!.id }, () => runDecode(ctx, run!.id)).catch((e) => ctx.logger?.error('decode run crashed', { runId: run!.id, error: (e as Error).message }));
@@ -225,6 +234,7 @@ export async function runDecode(ctx: ModuleContext, runId: string): Promise<void
       await bill();
       await stage('decoding');
     }
+    await reuseBreakdowns(ctx, runId);
     while (!(await stopped())) {
       const n = await decodeBatch(ctx, runId);
       await bill();
@@ -255,10 +265,10 @@ async function scrape(ctx: ModuleContext, run: DecodeRunRow, stopped: () => Prom
         for (const s of posts) {
           await ctx.db.query(
             `insert into content.decoded_posts (run_id, competitor_id, platform, post_type, url, handle, thumb, posted_at, duration_s,
-               reactions, comments, shares, views, caption, text_source)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) on conflict (run_id, url) do nothing`,
+               reactions, comments, shares, views, caption, text_source, media)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) on conflict (run_id, url) do nothing`,
             [run.id, c.id, p, s.postType, s.url, s.handle ?? handle, s.thumb, s.postedAt, s.durationS,
-              s.reactions, s.comments, s.shares, s.views, s.caption, s.postType === 'video' ? 'captions' : 'post_text']);
+              s.reactions, s.comments, s.shares, s.views, s.caption, s.postType === 'video' ? 'captions' : 'post_text', JSON.stringify(s.media ?? [])]);
         }
         await ctx.db.query(
           `update content.decode_runs set cost_apify_usd = cost_apify_usd + $2,
@@ -410,7 +420,12 @@ async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
      order by p.hunt_score desc nulls last, p.vs_own_median desc nulls last limit 80`, [runId])).rows;
   const ours = (await ctx.db.query<{ t: string }>(
     `select coalesce(hook, title) as t from content.content_items where status <> 'archived' order by created_at desc limit 40`)).rows;
-  const raw = await ctx.adapters.claude.complete(buildFormatsPrompt(sample, ours), { system: decodeSystem(), maxTokens: 2000 });
+  // Earlier runs' format names, so a recurring format keeps its name and reuseBreakdowns can match it.
+  const known = (await ctx.db.query<{ name: string }>(
+    `select distinct f.name from content.decode_formats f where f.run_id = (
+       select r.id from content.decode_runs r where r.id <> $1 and exists (select 1 from content.decode_formats x where x.run_id = r.id)
+        order by r.started_at desc limit 1)`, [runId])).rows.map((r) => r.name);
+  const raw = await ctx.adapters.claude.complete(buildFormatsPrompt(sample, ours, known), { system: decodeSystem(), maxTokens: 2000 });
   const formats = parseFormats(raw);
   if (!formats.length) throw new Error('LLM returned no formats');
   await ctx.db.tx(async (db) => {
@@ -421,6 +436,33 @@ async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
          values ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [runId, i, f.name, f.description, f.ourPosts, f.hookTemplate, f.valueTemplate, f.ctaTemplate]);
     }
+  });
+}
+
+/** A post an earlier run already broke down (same URL) takes that breakdown instead of a new LLM
+ *  call, when its format still exists in this run (matched by name). Metrics stay this run's own. */
+async function reuseBreakdowns(ctx: ModuleContext, runId: string): Promise<number> {
+  return ctx.db.tx(async (db) => {
+    const base = (await db.query<{ decoded: number }>(`select decoded from content.decode_runs where id = $1 for update`, [runId])).rows[0]!.decoded;
+    const n = (await db.query(
+      `with prev as (
+         select distinct on (content.norm_url(o.url)) content.norm_url(o.url) as nu, o.hook, o.beats, o.hook_type,
+                o.value_structure, o.cta_type, lower(f.name) as fname
+           from content.decoded_posts o join content.decode_formats f on f.id = o.format_id
+           join content.decode_runs r on r.id = o.run_id
+          where o.run_id <> $1 and o.seq is not null
+          order by content.norm_url(o.url), r.started_at desc),
+       hit as (
+         select p.id, prev.*, nf.id as fid,
+                row_number() over (order by p.hunt_score desc nulls last, p.vs_own_median desc nulls last, p.reactions desc) as rn
+           from content.decoded_posts p join prev on prev.nu = content.norm_url(p.url)
+           join content.decode_formats nf on nf.run_id = $1 and lower(nf.name) = prev.fname
+          where p.run_id = $1 and p.seq is null)
+       update content.decoded_posts p set seq = $2 + hit.rn, format_id = hit.fid, hook = hit.hook, beats = hit.beats,
+              hook_type = coalesce(p.hook_type, hit.hook_type), value_structure = hit.value_structure, cta_type = hit.cta_type
+         from hit where p.id = hit.id`, [runId, base])).rowCount ?? 0;
+    if (n) await db.query(`update content.decode_runs set decoded = $2 where id = $1`, [runId, base + n]);
+    return n;
   });
 }
 
@@ -571,20 +613,52 @@ export async function useDecode(ctx: ModuleContext, input: { formatId?: string; 
   return { id: row.id };
 }
 
-export interface StealResult { topicId: string; items: number; toApproval: number; needProof: number; creativeErrors: string[]; costUsd: number }
+export type StealResult = MakeResult & { exampleId?: string };
+
+/** A post's images as bytes (up to 4); links that have expired (Instagram's do) are skipped. */
+async function postImages(post: Pick<DecodedPostRow, 'media' | 'thumb'>): Promise<Buffer[]> {
+  const urls = (post.media?.length ? post.media : post.thumb ? [post.thumb] : []).slice(0, 4);
+  const got = await Promise.all(urls.map(async (u) => {
+    try {
+      const res = await fetch(u, { signal: AbortSignal.timeout(20_000) });
+      return res.ok && /^image\//.test(res.headers.get('content-type') ?? '') ? Buffer.from(await res.arrayBuffer()) : null;
+    } catch { return null; }
+  }));
+  return got.filter((b) => b !== null) as Buffer[];
+}
 
 /**
  * "Make my version": a competitor post's structure → our own drafts for the chosen platforms,
  * through the same QC gate as any draft (unproven numbers stay in draft until proof is attached).
- * A style, when given, makes each post's creative. Synchronous: one draft call + QC reads, ~1 min.
+ * Recreate (`kind`): the drafts are image or carousel posts whose visual is made from an example,
+ * from the competitor's own images (`fromPost`; never a video), and/or images the user added.
+ * `saveAsExample` keeps those images as a new example first. Synchronous, ~1-3 min.
  */
-export async function stealFormat(ctx: ModuleContext, input: { formatId?: string; postId?: string; platforms: string[]; styleId?: string }): Promise<StealResult> {
+export async function stealFormat(ctx: ModuleContext, input: {
+  formatId?: string; postId?: string; platforms: string[]; styleId?: string;
+  kind?: VisualKind; fromPost?: boolean; refs?: Buffer[]; saveAsExample?: string;
+}): Promise<StealResult> {
   if (!ctx.adapters.claude.configured) throw new Error('No LLM configured');
-  const platforms = DRAFT_PLATFORMS.filter((p) => input.platforms.includes(p));
-  if (!platforms.length) throw new Error('Pick at least one platform');
+  const asked = DRAFT_PLATFORMS.filter((p) => input.platforms.includes(p));
+  // Recreate: only platforms that have that kind of post.
+  const platforms = input.kind ? asked.filter((p) => { try { visualFormat(p, input.kind!); return true; } catch { return false; } }) : asked;
+  if (!platforms.length) throw new Error(input.kind ? `Pick a platform that takes ${input.kind} posts` : 'Pick at least one platform');
   const { post, proof } = await bestPost(ctx, input);
   const b = await loadBrand(ctx);
-  const spent = ctx.adapters.claude.spentUsd;
+
+  let refs = [...(input.refs ?? [])];
+  if (input.fromPost) {
+    if (post.post_type === 'video' || post.post_type === 'text') throw new Error('This post has no images to copy. Pick one of your examples instead.');
+    const theirs = await postImages(post);
+    if (!theirs.length) throw new Error('Their images have expired. Pick one of your examples, or add the images yourself.');
+    refs = [...theirs, ...refs];
+  }
+  let styleId = input.styleId, exampleId: string | undefined;
+  if (refs.length && input.saveAsExample?.trim()) {
+    styleId = exampleId = (await createStyle(ctx, { name: input.saveAsExample, images: refs.slice(0, 10) })).id;
+    refs = [];
+  }
+  if (input.kind && !styleId && !refs.length) throw new Error('Pick an example, use their design, or add images');
 
   const steal = [
     `Proof it works: ${proof}.`,
@@ -594,31 +668,13 @@ export async function stealFormat(ctx: ModuleContext, input: { formatId?: string
     `Their hook: "${post.hook ?? post.caption.slice(0, 160)}"`,
     post.beats.length ? `Their beats, in order:\n${post.beats.map((x) => `- ${x.at} ${x.tag}: ${x.text}`).join('\n')}` : `Their post:\n"""${post.caption.slice(0, 1500)}"""`,
   ].filter(Boolean).join('\n');
-  const repo = createRepo(ctx.db);
-  const topicId = await repo.insertTopic({
+  const r = await makePosts(ctx, {
     title: `${b.name}'s version of ${post.format_name ? `"${post.format_name}"` : `@${post.handle ?? post.competitor}'s post`}`,
-    source: 'decode', sourceDetail: `${proof} — ${post.url}`, status: 'selected',
+    source: 'decode', sourceDetail: `${proof} — ${post.url}`, platforms, steal, hookRef: post.id,
+    formats: input.kind ? Object.assign({}, ...platforms.map((p) => visualFormat(p, input.kind!))) : undefined,
+    styleId, refs: refs.length ? refs : undefined,
   });
-  const topic = (await repo.selectedTopics()).find((t) => t.id === topicId)!;
-  const ids = await draftTopic(ctx, topic, { platforms, steal });
-  await ctx.db.query(`update content.content_items set hook_ref = $1 where id = any($2)`, [post.id, ids]);
-
-  // Creatives before QC: a post is still a draft here, so it can carry one.
-  const creativeErrors: string[] = [];
-  if (input.styleId) {
-    for (const id of ids) {
-      const item = (await repo.getItem(id))!;
-      if (item.platform === 'blog') continue;
-      try { await saveItemCreative(ctx, id, { styleId: input.styleId }); }
-      catch (e) { creativeErrors.push(`${item.platform}: ${(e as Error).message}`); }
-    }
-  }
-  let toApproval = 0, needProof = 0;
-  for (const id of ids) {
-    const r = await qcItem(ctx, (await repo.getItem(id))!);
-    if (r.outcome === 'blocked') needProof++; else toApproval++;
-  }
-  return { topicId, items: ids.length, toApproval, needProof, creativeErrors, costUsd: ctx.adapters.claude.spentUsd - spent };
+  return { ...r, exampleId };
 }
 
 function clamp(v: unknown, fallback: number, min: number, max: number): number {

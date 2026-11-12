@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createTestDb } from '../db/test-db.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import type { JevAnswer } from '../adapters/jev.ts';
-import { analyzeVideo, analyzeRunVideos, parseVideoAnalysis, useVideoIdea } from './video-analysis-service.ts';
+import { analyzeVideo, analyzeRunVideos, parseVideoAnalysis, useVideoIdea, videoIdeaBrief } from './video-analysis-service.ts';
 
 const db = await createTestDb();
 const IDEA = (t: string) => ({ title: t, hook: `${t} hook`, beats: ['problem', 'fix'], cta: 'Comment FIX', platforms: ['instagram_reel'], why: 'same contrarian hook' });
@@ -43,7 +43,7 @@ test('parseVideoAnalysis: needs a reason and two ideas; cleans the rest', () => 
   assert.throws(() => parseVideoAnalysis(JSON.stringify({ whyItWorked: 'x', ideas: [IDEA('only one')] })), /incomplete/);
 });
 
-test('analyse: reads the transcript, Jev overrules the verdict when clear, cached; ideas become signals', async () => {
+test('analyse: reads the transcript, Jev overrules the verdict when clear, cached; an idea briefs the drafter', async () => {
   const v = await video('https://www.instagram.com/reel/AAA/');
   const yes = (p: number): JevAnswer => ({ type: 'noul', noul: p });
   const { ctx, prompts } = ctxWith({ fits_brand: yes(0.1), adaptable: yes(0.9), risky: yes(0.2) });
@@ -55,10 +55,12 @@ test('analyse: reads the transcript, Jev overrules the verdict when clear, cache
   assert.equal((await analyzeVideo(ctx, v.id)).message, 'Already analysed');
   assert.equal(prompts.length, 1);
 
-  assert.equal((await useVideoIdea(ctx, v.id, 1)).ok, true);
-  const sig = (await db.query<{ raw_text: string; channel: string }>(`select raw_text, channel from content.research_inputs order by created_at desc limit 1`)).rows[0]!;
-  assert.match(sig.raw_text, /^\[Video idea\] Two\. Hook: "Two hook"\. Beats: problem → fix\. CTA: Comment FIX\./);
-  assert.equal(sig.channel, 'decode');
+  const brief = videoIdeaBrief(r.analysis!.ideas[1]!, r.analysis!, 'Dan');
+  assert.deepEqual(brief.scripts, ['instagram_reel']);
+  assert.deepEqual(brief.platforms, ['instagram'], 'no post named: the Reel gets its caption');
+  assert.match(brief.steal, /Our idea: Two\nHook: "Two hook"\nBeats, in order:\n- problem\n- fix\nCTA: Comment FIX/);
+  assert.match(brief.steal, /Avoid: their income screenshot/);
+  assert.deepEqual(videoIdeaBrief({ ...IDEA('x'), platforms: ['linkedin', 'linkedin_video'] }, r.analysis!, null).platforms, ['linkedin']);
   assert.equal((await useVideoIdea(ctx, v.id, 5)).ok, false);
 });
 

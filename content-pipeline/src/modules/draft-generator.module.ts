@@ -5,28 +5,19 @@
 // rule (QC gate + v_publish_ready) blocks publish until a human attaches proof.
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
+import { connectedPlatforms } from '../services/calendar-sync-service.ts';
 import { createRepo, type TopicRow, type NewContentItem, type Angle } from '../db/repo.ts';
-import { suggestedPlatforms } from './decision-tasks.ts';
+import { suggestedPlatforms, type PlatformFit } from './decision-tasks.ts';
+import { ensureMarketContext } from './research.module.ts';
 import { createContentItems } from '../db/content-items.ts';
 import { brandSystem } from '../prompts/brand-context.ts';
 import { buildDraftPrompt, buildAnglePrompt } from '../prompts/draft.ts';
-import { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, SCRIPT_TARGETS, isScriptTarget, type DraftPlatform, type ScriptTarget } from '../prompts/platform-playbooks.ts';
+import { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, SCRIPT_TARGETS, POST_FORMATS, isScriptTarget, parsePick, type DraftPlatform, type ScriptTarget } from '../prompts/platform-playbooks.ts';
 import { buildScriptPrompt } from '../prompts/scripts.ts';
 import { parseDraftResponse, type DraftSet, type DraftPiece } from './draft-parse.ts';
 import { provenHooks, patternAdvice, hookPatternWeights, scoreHookOptions } from '../services/hook-service.ts';
 import { parseJsonObject } from './llm-json.ts';
 import type { ModuleContext as Ctx } from './module.ts';
-
-// platform → content_format (must match the content.content_format enum).
-const FORMAT: Record<DraftPlatform, string> = {
-  linkedin: 'founder_post',
-  blog: 'article',
-  x: 'thread',
-  instagram: 'carousel',
-  facebook: 'founder_post',
-  reddit: 'reddit_answer',
-  youtube: 'short_script',
-};
 
 export const draftGeneratorModule: Module = {
   id: 'draft_generator',
@@ -35,7 +26,7 @@ export const draftGeneratorModule: Module = {
 
   async run(ctx: ModuleContext): Promise<ModuleResult> {
     if (!ctx.adapters.claude.configured) {
-      return degraded('Claude not configured (CONTENT_ANTHROPIC_API_KEY) — cannot draft');
+      return degraded('No LLM configured (CONTENT_OPENROUTER_API_KEY) — cannot draft');
     }
 
     const repo = createRepo(ctx.db);
@@ -46,15 +37,17 @@ export const draftGeneratorModule: Module = {
     let itemsCreated = 0;
     const failures: string[] = [];
 
-    for (const topic of topics) {
+    for (const t of topics) {
       try {
+        const topic = await ensureMarketContext(ctx, t);
         itemsCreated += (await draftTopic(ctx, topic, {
-          platforms: platformsFor(topic, ctx.env.platformFit), frameworks: topic.frameworks ?? undefined, scripts: scriptsFor(topic),
+          platforms: platformsFor(topic, ctx.env.platformFit), exact: ownPick(topic), formats: formatsFor(topic), frameworks: frameworksFor(topic), scripts: scriptsFor(topic),
         })).length;
         drafted++;
       } catch (e) {
         // Per-topic isolation: one bad topic never blocks the rest of the batch.
-        failures.push(`${topic.title}: ${(e as Error).message}`);
+        failures.push(`${t.title}: ${(e as Error).message}`);
+        await repo.noteFailure('topics', t.id, (e as Error).message);
       }
     }
 
@@ -72,10 +65,10 @@ export const draftGeneratorModule: Module = {
 
 /** One call: a filming card per script target, in the brand voice, from the same angle as the posts. */
 async function draftScripts(
-  ctx: ModuleContext, topic: TopicRow, targets: readonly ScriptTarget[], angle: Angle | null, anchor: string | null,
+  ctx: ModuleContext, topic: TopicRow, targets: readonly ScriptTarget[], angle: Angle | null, anchor: string | null, steal?: string,
 ): Promise<{ pieces: Omit<NewContentItem, 'pillar' | 'funnelStage'>[]; claims: string[] }> {
   const raw = await ctx.adapters.claude.complete(
-    buildScriptPrompt({ topicTitle: topic.title, customerLanguage: topic.customer_language, angle, anchor, targets }),
+    buildScriptPrompt({ topicTitle: topic.title, customerLanguage: topic.customer_language, angle, anchor, targets, steal }),
     { system: brandSystem(), maxTokens: 4000 });
   const o = parseJsonObject(raw);
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
@@ -96,14 +89,34 @@ async function draftScripts(
 /** The script targets ticked on the idea card. */
 export const scriptsFor = (topic: Pick<TopicRow, 'platforms'>): ScriptTarget[] => (topic.platforms ?? []).filter(isScriptTarget);
 
+/** The operator ticked platforms on the idea card (then they're drafted even if not connected in Postiz). */
+const ownPick = (topic: Pick<TopicRow, 'platforms'>): boolean => (topic.platforms ?? []).some((id) => parsePick(id));
+
 /** Where a topic is drafted: the operator's pick on the idea card, else Jev's (when platform fit is on),
  *  else undefined = the default set. Unknown names are dropped. */
 export function platformsFor(topic: Pick<TopicRow, 'platforms' | 'platform_fit'>, useFit: boolean): DraftPlatform[] | undefined {
-  const own = (topic.platforms ?? []).filter((p): p is DraftPlatform => (DRAFT_PLATFORMS as readonly string[]).includes(p));
+  const own = (topic.platforms ?? []).flatMap((id) => parsePick(id)?.platform ?? []);
   if (own.length) return own;
   const jev = useFit ? suggestedPlatforms(topic.platform_fit) : [];
   return jev.length ? jev : undefined;
 }
+
+/** The non-default post formats: picked on the idea card ('linkedin:image' → { linkedin: 'image' }),
+ *  else Jev's format picks when the operator left the plan to Jev. */
+export const formatsFor = (topic: Pick<TopicRow, 'platforms'> & { platform_fit?: PlatformFit | null }): Partial<Record<DraftPlatform, string>> =>
+  topic.platforms?.length
+    ? Object.fromEntries(topic.platforms.flatMap((id) => {
+      const p = parsePick(id);
+      return p && p.format !== POST_FORMATS[p.platform][0] ? [[p.platform, p.format.id]] : [];
+    }))
+    : Object.fromEntries(Object.entries(topic.platform_fit?.picks ?? {}).flatMap(([p, k]) =>
+      k && k.format !== POST_FORMATS[p as DraftPlatform][0]!.id ? [[p, k.format]] : []));
+
+/** The writing framework per platform: the operator's own pick, else Jev's, else the default (unset). */
+export const frameworksFor = (topic: Pick<TopicRow, 'frameworks'> & { platform_fit?: PlatformFit | null }): Partial<Record<DraftPlatform, string>> => ({
+  ...Object.fromEntries(Object.entries(topic.platform_fit?.picks ?? {}).flatMap(([p, k]) => (k ? [[p, k.framework]] : []))),
+  ...(topic.frameworks ?? {}),
+});
 
 /** Parse the angle reply: up to 5 valid angles, strongest first. */
 export function parseAngles(raw: string): Angle[] {
@@ -117,7 +130,7 @@ export function parseAngles(raw: string): Angle[] {
 }
 
 /** The topic's 5 angles, generated once (one LLM call) and saved on the topic. */
-export async function ensureAngles(ctx: Ctx, topic: Pick<TopicRow, 'id' | 'title' | 'customer_language' | 'market_context' | 'angles'>, fresh = false): Promise<Angle[]> {
+async function ensureAngles(ctx: Ctx, topic: Pick<TopicRow, 'id' | 'title' | 'customer_language' | 'market_context' | 'angles'>, fresh = false): Promise<Angle[]> {
   if (topic.angles?.length && !fresh) return topic.angles;
   const angles = parseAngles(await ctx.adapters.claude.complete(buildAnglePrompt(topic), { system: brandSystem(), maxTokens: 1500 }));
   if (!angles.length) throw new Error('no usable angles in the reply');
@@ -150,9 +163,19 @@ export const chosenAngle = (angles: Angle[], idx: number | null | undefined): An
  *  anchor); `steal` is a competitor post whose structure the set copies (Decode). */
 export async function draftTopic(
   ctx: ModuleContext, topic: TopicRow,
-  opts: { platforms?: readonly DraftPlatform[]; steal?: string; frameworks?: Partial<Record<DraftPlatform, string>>; scripts?: readonly ScriptTarget[] } = {},
+  opts: {
+    platforms?: readonly DraftPlatform[]; formats?: Partial<Record<DraftPlatform, string>>; steal?: string;
+    frameworks?: Partial<Record<DraftPlatform, string>>; scripts?: readonly ScriptTarget[];
+    /** The operator chose `platforms` by hand: draft them all, connected in Postiz or not. */
+    exact?: boolean;
+  } = {},
 ): Promise<string[]> {
-  const platforms = opts.platforms?.length ? DRAFT_PLATFORMS.filter((p) => opts.platforms!.includes(p)) : DEFAULT_DRAFT_PLATFORMS;
+  // Defaults and Jev's picks: only platforms Postiz can post to (all when Postiz isn't set up or doesn't
+  // answer). A hand-picked platform is drafted anyway; it just can't be scheduled until it's connected.
+  const on = opts.exact ? null : await connectedPlatforms(ctx);
+  const platforms = (opts.platforms?.length ? DRAFT_PLATFORMS.filter((p) => opts.platforms!.includes(p)) : DEFAULT_DRAFT_PLATFORMS)
+    .filter((p) => !on || on.includes(p));
+  if (!platforms.length) throw new Error('None of the chosen platforms is connected in Postiz. Connect one there, or pick another platform.');
   // A steal already carries its hook pattern; otherwise offer the library's winners.
   const hooks = opts.steal ? null : await provenHooks(ctx, platforms);
   // A steal copies a structure, so it needs no angle; a topic gets its Contrast-Formula angle.
@@ -173,6 +196,7 @@ export async function draftTopic(
       marketContext: topic.market_context,
       platforms,
       frameworks: opts.frameworks,
+      formats: opts.formats,
       steal: opts.steal,
       hooks: hooks?.text,
       angle,
@@ -182,10 +206,10 @@ export async function draftTopic(
   );
   const set = parseDraftResponse(raw, platforms);
   const weights = new Map((await hookPatternWeights(ctx).catch(() => [])).map((x) => [x.pattern, x.weight]));
-  const pieces = draftPieces(topic, set, platforms, hooks?.ids ?? [], weights);
+  const pieces = draftPieces(topic, set, platforms, hooks?.ids ?? [], weights, opts.formats);
   // Video scripts in their own call; a failure never loses the written posts.
   const scripts = opts.scripts?.length
-    ? await draftScripts(ctx, topic, opts.scripts, angle, pieces[0]?.body ?? null).catch((e: Error) => {
+    ? await draftScripts(ctx, topic, opts.scripts, angle, pieces[0]?.body ?? null, opts.steal).catch((e: Error) => {
         ctx.logger.warn(`scripts for ${topic.id}: ${e.message}`);
         return { pieces: [], claims: [] };
       })
@@ -198,7 +222,10 @@ export async function draftTopic(
 /** Anchor first (children link to it), then the repurposed children. Every claim is stored
  *  unproven on every piece, so the honest-numbers gate (QC + v_publish_ready) blocks publish
  *  until a human attaches proof. */
-export function draftPieces(topic: TopicRow, set: DraftSet, platforms: readonly DraftPlatform[], hookIds: string[], weights = new Map<string, number>()): NewContentItem[] {
+export function draftPieces(
+  topic: TopicRow, set: DraftSet, platforms: readonly DraftPlatform[], hookIds: string[], weights = new Map<string, number>(),
+  formats: Partial<Record<DraftPlatform, string>> = {},
+): NewContentItem[] {
   const riskLevel = set.claims.length > 0 ? 'high' : 'medium';
 
   const base = (platform: DraftPlatform, piece: DraftPiece): NewContentItem => {
@@ -209,7 +236,7 @@ export function draftPieces(topic: TopicRow, set: DraftSet, platforms: readonly 
       pillar: set.pillar,
       funnelStage: set.funnelStage,
       platform,
-      format: FORMAT[platform],
+      format: (POST_FORMATS[platform].find((f) => f.id === formats[platform]) ?? POST_FORMATS[platform][0]!).db,
       hook: best?.hook || piece.hook || null,
       cta: piece.cta || null,
       body: piece.body,

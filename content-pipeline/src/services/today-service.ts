@@ -86,7 +86,7 @@ export function runwayDays(readyOrScheduled: number, weeklyTarget: number): numb
 
 const FIX_HINT: Record<string, string> = {
   postiz: '404 = wrong CONTENT_POSTIZ_API_URL (self-hosted Postiz usually serves it under /api); 401/403 = wrong CONTENT_POSTIZ_API_KEY. Then connect LinkedIn + X inside Postiz.',
-  claude: 'Set CONTENT_OPENROUTER_API_KEY or CONTENT_ANTHROPIC_API_KEY.',
+  claude: 'Set CONTENT_OPENROUTER_API_KEY.',
   database: 'Check CONTENT_DATABASE_URL.',
 };
 

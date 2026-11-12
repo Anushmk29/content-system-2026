@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getContext, getDecodeRun, stopDecode } from '@pratapai/content-pipeline';
-import { handle } from '../../guard';
+import { handle, UUID } from '../../guard';
 
-// Run ids are uuids; anything else would reach Postgres as a cast error (a 500), not a 404.
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const notFound = () => NextResponse.json({ ok: false, error: 'run not found' }, { status: 404 });
 
 // GET /content/api/decode/:run?after=<seq> → the run + posts decoded since `after` (the page polls this).

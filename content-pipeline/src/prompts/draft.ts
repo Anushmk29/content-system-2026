@@ -3,7 +3,7 @@ import { FUNNEL_STAGES } from '../../core/src/index.ts';
 import { brand, pillarSlugs, type Brand } from '../brand.ts';
 import { HOOK_PATTERN_KEYS } from '../hook-patterns.ts';
 import { who } from './brand-context.ts';
-import { DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, frameworkBlock, type DraftPlatform } from './platform-playbooks.ts';
+import { DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, frameworkBlock, formatShapeBlock, type DraftPlatform } from './platform-playbooks.ts';
 
 interface DraftBriefInput {
   topicTitle: string;
@@ -24,6 +24,8 @@ interface DraftBriefInput {
   angle?: { belief: string; truth: string; proof_method?: string } | null;
   /** Framework id per platform (platform-playbooks.ts); a platform left out gets its default. */
   frameworks?: Partial<Record<DraftPlatform, string>>;
+  /** Non-default post format per platform (POST_FORMATS id, e.g. { linkedin: 'image' }). */
+  formats?: Partial<Record<DraftPlatform, string>>;
 }
 
 /** Build the user prompt that asks for the anchor + its repurposed drafts as JSON. */
@@ -64,6 +66,7 @@ unless none fits the subject: the shape only, never its words, names or numbers.
 ${order}
 
 ${frameworkBlock(all, input.frameworks)}
+${formatShapeBlock(Object.fromEntries(all.flatMap((p) => (input.formats?.[p] ? [[p, input.formats[p]]] : []))))}
 
 Respond with ONLY a JSON object (no markdown fences, no prose) of this exact shape:
 {

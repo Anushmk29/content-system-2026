@@ -14,7 +14,7 @@ import type { OnCost } from '../cost-ledger.ts';
 const API = 'https://api.apify.com/v2';
 
 /** Platforms Apify scrapes; YouTube goes through the free Data API instead (adapters/youtube.ts). */
-export const APIFY_PLATFORMS = ['x', 'instagram', 'linkedin', 'facebook'] as const;
+const APIFY_PLATFORMS = ['x', 'instagram', 'linkedin', 'facebook'] as const;
 export type ApifyPlatform = (typeof APIFY_PLATFORMS)[number];
 export const DECODE_PLATFORMS = [...APIFY_PLATFORMS, 'youtube'] as const;
 export type DecodePlatform = (typeof DECODE_PLATFORMS)[number];
@@ -39,6 +39,8 @@ export interface ScrapedPost {
   shares: number;
   views: number | null;
   caption: string;
+  /** Image URLs: a carousel's slides or the post's image(s); [] when none were found. */
+  media?: string[];
 }
 
 export interface ApifyAdapter extends Adapter {
@@ -160,6 +162,20 @@ function date(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/** Every image URL the actors return, across their different shapes (strings or objects). */
+function mediaUrls(it: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const k of ['childPosts', 'images', 'postImages', 'document.coverPages', 'extendedEntities.media', 'media']) {
+    const list = pick(it, k);
+    if (!Array.isArray(list)) continue;
+    for (const v of list) {
+      const u = typeof v === 'string' ? v : str(pick(v, 'displayUrl', 'url', 'media_url_https', 'photo_image.uri', 'image.uri'));
+      if (u && /^https:\/\//.test(u)) out.push(u);
+    }
+  }
+  return [...new Set(out)].slice(0, 10);
+}
+
 export function normalise(platform: ApifyPlatform, it: Record<string, unknown>): ScrapedPost | null {
   const url = str(pick(it, 'url', 'postUrl', 'post_url', 'linkedinUrl', 'twitterUrl', 'topLevelUrl', 'link'));
   if (!url) return null;
@@ -182,5 +198,6 @@ export function normalise(platform: ApifyPlatform, it: Record<string, unknown>):
     comments: num(pick(it, 'commentsCount', 'replyCount', 'reply_count', 'comments', 'numComments', 'engagement.comments', 'stats.comments')) ?? 0,
     shares: (num(pick(it, 'retweetCount', 'retweet_count', 'shares', 'sharesCount', 'numShares', 'reposts', 'engagement.shares', 'stats.reposts')) ?? 0)
       + (num(pick(it, 'quoteCount', 'quote_count')) ?? 0),
+    media: isVideo ? [] : mediaUrls(it),
   };
 }

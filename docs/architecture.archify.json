@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "PRATAP AI Content Pipeline",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1340,
+      660
+    ]
+  },
+  "components": [
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Operator",
+      "sublabel": "human approver",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "dashboard",
+      "type": "frontend",
+      "label": "Dashboard",
+      "sublabel": "Next.js /content",
+      "pos": [
+        260,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "API guard",
+      "sublabel": "login, CSRF, roles",
+      "pos": [
+        490,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "services",
+      "type": "backend",
+      "label": "Services",
+      "sublabel": "approvals, brand, decode",
+      "pos": [
+        720,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "9 modules in order",
+      "pos": [
+        960,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "Postgres",
+      "sublabel": "content schema",
+      "pos": [
+        1180,
+        300
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "Claude LLM",
+      "sublabel": "via OpenRouter",
+      "pos": [
+        840,
+        110
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "jev",
+      "type": "external",
+      "label": "Jev",
+      "sublabel": "typed decisions",
+      "pos": [
+        1080,
+        110
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Market sources",
+      "sublabel": "Apify, YouTube",
+      "pos": [
+        720,
+        500
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "postiz",
+      "type": "cloud",
+      "label": "Postiz",
+      "sublabel": "self-hosted",
+      "pos": [
+        960,
+        500
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "socials",
+      "type": "external",
+      "label": "Social platforms",
+      "sublabel": "LinkedIn, IG, X",
+      "pos": [
+        1180,
+        500
+      ],
+      "size": [
+        130,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "content-pipeline engine",
+      "wraps": [
+        "services",
+        "orchestrator"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "op-dash",
+      "from": "operator",
+      "to": "dashboard",
+      "label": "approve",
+      "variant": "emphasis"
+    },
+    {
+      "id": "dash-guard",
+      "from": "dashboard",
+      "to": "guard"
+    },
+    {
+      "id": "guard-svc",
+      "from": "guard",
+      "to": "services",
+      "variant": "security"
+    },
+    {
+      "id": "svc-orch",
+      "from": "services",
+      "to": "orchestrator",
+      "label": "/run"
+    },
+    {
+      "id": "orch-db",
+      "from": "orchestrator",
+      "to": "postgres",
+      "label": "SQL"
+    },
+    {
+      "id": "orch-llm",
+      "from": "orchestrator",
+      "to": "llm",
+      "label": "drafts",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "orch-jev",
+      "from": "orchestrator",
+      "to": "jev",
+      "label": "scores",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "orch-src",
+      "from": "orchestrator",
+      "to": "sources",
+      "label": "signals",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "orch-postiz",
+      "from": "orchestrator",
+      "to": "postiz",
+      "label": "schedule",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 60,
+      "labelDx": 34
+    },
+    {
+      "id": "postiz-social",
+      "from": "postiz",
+      "to": "socials",
+      "label": "publish"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Approval-gated",
+      "items": [
+        "Nothing publishes without a human approval",
+        "Dashboard drives every human step"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fault-isolated",
+      "items": [
+        "Each stage is its own Module",
+        "Every run recorded to module_runs"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Adapters",
+      "items": [
+        "All external HTTP goes through adapters/",
+        "Jev decides, LLM writes, with fallback"
+      ]
+    }
+  ]
+}

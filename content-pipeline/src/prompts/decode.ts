@@ -11,11 +11,11 @@ export const CTA_TYPES = ['follow', 'comment', 'dm', 'link', 'lead_magnet', 'non
 
 export const decodeSystem = () => `You analyse social media posts for ${brand().name}${brand().tagline ? ` (${brand().tagline})` : ''}. Reply with JSON only.`;
 
-export function buildFormatsPrompt(sample: Array<{ platform: string; post_type: string; caption: string }>, ours: Array<{ t: string }>): string {
+export function buildFormatsPrompt(sample: Array<{ platform: string; post_type: string; caption: string }>, ours: Array<{ t: string }>, known: string[] = []): string {
   return `Competitor posts (best performers first):\n${sample.map((p, i) => `${i + 1}. [${p.platform} ${p.post_type}] ${p.caption.replace(/\s+/g, ' ')}`).join('\n')}
 
 Our own recent posts:\n${ours.map((o) => `- ${o.t}`).join('\n') || '(none yet)'}
-
+${known.length ? `\nFormat names already in use: ${known.join('; ')}. When a group is one of these, use that exact name.\n` : ''}
 Group the competitor posts into at most 10 recurring content FORMATS (a repeatable structure, e.g. "client before/after story", "tool list", "contrarian take"), not topics.
 For each format count how many of OUR posts already use it, and write its SKELETON as fill-in templates with [brackets] for the parts that change:
 - hook_template: the opening line's pattern, e.g. "I [did X] for [time]. Here's what nobody tells you:"

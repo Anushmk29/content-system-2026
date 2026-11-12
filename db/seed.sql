@@ -1,3 +1,5 @@
+-- DEV / DEMO ONLY. Never run against production: re-running duplicates every row, and the live
+-- pipeline would then spend LLM money processing the fake research signals.
 -- ============================================================================
 -- PRATAP AI — Content Pipeline : Seed data (worked anchor example, Bible §8.2)
 -- Run AFTER schema.sql:  psql "$CONTENT_DATABASE_URL" -f db/seed.sql

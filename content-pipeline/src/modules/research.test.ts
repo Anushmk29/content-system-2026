@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestDb } from '../db/test-db.ts';
 import { createRepo } from '../db/repo.ts';
-import { researchModule } from './research.module.ts';
+import { researchModule, researchSignal, ensureMarketContext } from './research.module.ts';
 import type { ModuleContext } from './module.ts';
 
 const db = await createTestDb();
@@ -10,28 +10,51 @@ const repo = createRepo(db);
 const TOPIC = JSON.stringify({ title: 'T', pillar: 'founder_build_notes', funnelStage: 'trust', customerLanguage: '' });
 
 // Fake OpenRouter: the Perplexity call returns (or throws) the market check; the extraction call returns a topic.
-function ctx(market: () => string, prompts: string[]) {
+// `relevance` set = Jev is on and answers P(relevant) with it.
+function ctx(market: () => string, prompts: string[], models: Array<string | undefined> = [], relevance?: number) {
   return {
     db, env: {}, logger: { warn() {} },
-    adapters: { claude: { configured: true, provider: 'openrouter', async complete(p: string, o?: { model?: string }) {
-      prompts.push(p);
-      return o?.model === 'perplexity/sonar' ? market() : TOPIC;
-    } } },
+    adapters: {
+      claude: { configured: true, provider: 'openrouter', async complete(p: string, o?: { model?: string }) {
+        prompts.push(p);
+        models.push(o?.model);
+        return o?.model === 'perplexity/sonar' ? market() : TOPIC;
+      } },
+      jev: { configured: relevance !== undefined, decide: async () => ({ model: 'jev-test', answers: { relevant: { type: 'noul', noul: relevance } } }) },
+    },
   } as unknown as ModuleContext;
 }
 
-test('web check feeds extraction and is stored on the topic; a failed check falls back to signal-only', async () => {
+test('batch: cheap-model extraction with no web check; the check runs once, at draft time; a failed check keeps the topic', async () => {
   await repo.insertResearchInput({ rawText: 'how do I automate invoices', channel: 'reddit' });
-  const prompts: string[] = [];
-  const r = await researchModule.run(ctx(() => 'GAP: nobody covers approvals https://x.com', prompts));
+  const prompts: string[] = [], models: Array<string | undefined> = [];
+  const r = await researchModule.run(ctx(() => 'GAP: nobody covers approvals https://x.com', prompts, models));
   assert.equal(r.status, 'ok');
-  assert.match(prompts[1]!, /GAP: nobody covers approvals/);
+  assert.deepEqual(models, ['deepseek/deepseek-v4.1-flash'], 'one cheap call, no Perplexity');
   const [topic] = await repo.unscoredTopics();
-  assert.equal(topic!.market_context, 'GAP: nobody covers approvals https://x.com');
+  assert.equal(topic!.market_context, null);
 
-  await repo.insertResearchInput({ rawText: 'second signal' });
-  const r2 = await researchModule.run(ctx(() => { throw new Error('OpenRouter 502'); }, []));
-  assert.deepEqual([r2.status, r2.itemsProcessed], ['degraded', 1], 'topic still created');
+  const checked = await ensureMarketContext(ctx(() => 'GAP: nobody covers approvals https://x.com', []), topic!);
+  assert.equal(checked.market_context, 'GAP: nobody covers approvals https://x.com');
+  assert.equal((await repo.unscoredTopics())[0]!.market_context, checked.market_context, 'saved on the topic');
+  const again: string[] = [];
+  await ensureMarketContext(ctx(() => 'x', again), checked);
+  assert.equal(again.length, 0, 'never paid twice');
+
+  const failed = await ensureMarketContext(ctx(() => { throw new Error('OpenRouter 502'); }, []), { ...topic!, market_context: null });
+  assert.equal(failed.market_context, null, 'drafts without it, as before');
+});
+
+test('Jev relevance gate: a clearly off-audience signal is dropped with no LLM call; the rest go on', async () => {
+  await db.query(`update content.research_inputs set status = 'processed' where status = 'new'`);
+  const off = await repo.insertResearchInput({ rawText: 'best pizza in Naples' });
+  const prompts: string[] = [];
+  const r = await researchModule.run(ctx(() => '', prompts, [], 0.05));
+  assert.match(r.message, /1 dropped as off-audience/);
+  assert.equal(prompts.length, 0);
+  assert.equal(await repo.researchInput(off.id), undefined);
+  await repo.insertResearchInput({ rawText: 'invoice approvals take a week' });
+  assert.equal((await researchModule.run(ctx(() => '', [], [], 0.6))).itemsProcessed, 1);
 });
 
 test('CONTENT_RESEARCH_MODEL=tinyfish: search + fetch top 3, our LLM writes the check from those pages only', async () => {
@@ -42,7 +65,7 @@ test('CONTENT_RESEARCH_MODEL=tinyfish: search + fetch top 3, our LLM writes the 
   const c = {
     db, env: { researchModel: 'tinyfish' }, logger: { warn() {} },
     adapters: {
-      claude: { configured: true, provider: 'anthropic', async complete(p: string, o?: { model?: string }) {
+      claude: { configured: true, async complete(p: string, o?: { model?: string }) {
         prompts.push({ p, model: o?.model });
         return p.includes('From these sources only') ? 'GAP: no-shows https://a.com/1' : TOPIC;
       } },
@@ -59,8 +82,8 @@ test('CONTENT_RESEARCH_MODEL=tinyfish: search + fetch top 3, our LLM writes the 
       },
     },
   } as unknown as ModuleContext;
-  const r = await researchModule.run(c);
-  assert.equal(r.status, 'ok');
+  const input = (await repo.unprocessedResearchInputs()).at(-1)!;
+  assert.ok((await researchSignal(c, input)).checked, '"Make posts" checks at once');
   assert.deepEqual(searched, ['How do clinics automate reminders?'], 'first line is the query');
   assert.deepEqual(fetched, ['https://a.com/1', 'https://a.com/2', 'https://a.com/3']);
   const check = prompts[0]!;

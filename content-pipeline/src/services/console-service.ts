@@ -10,7 +10,7 @@ import {
   type TopicRow,
   type ResearchInputRow,
 } from '../db/repo.ts';
-import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS } from '../prompts/platform-playbooks.ts';
+import { DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS, parsePick, pickId } from '../prompts/platform-playbooks.ts';
 import { researchSignal } from '../modules/research.module.ts';
 import { scoreTopic } from '../modules/scoring.module.ts';
 import { canDecide } from '../modules/decide.ts';
@@ -24,6 +24,8 @@ interface ApprovalQueueItem {
 export interface OperatorConsole {
   /** Raw signals captured but not yet turned into topics (run Research to process). */
   signals: ResearchInputRow[];
+  /** Topics Research made that the Topic Scorer hasn't scored yet (hidden from reviewTopics). */
+  unscoredTopics: TopicRow[];
   /** Scored topics awaiting a select/drop decision before drafting. */
   reviewTopics: TopicRow[];
   /** Topics already selected, waiting for the Draft Generator. */
@@ -34,8 +36,9 @@ export interface OperatorConsole {
 
 export async function getOperatorConsole(ctx: ModuleContext): Promise<OperatorConsole> {
   const repo = createRepo(ctx.db);
-  const [signals, reviewTopics, selectedTopics, needsApproval] = await Promise.all([
+  const [signals, unscoredTopics, reviewTopics, selectedTopics, needsApproval] = await Promise.all([
     repo.unprocessedResearchInputs(),
+    repo.unscoredTopics(),
     repo.reviewableTopics(),
     repo.selectedTopics(),
     repo.itemsByStatus('needs_approval'),
@@ -46,7 +49,7 @@ export async function getOperatorConsole(ctx: ModuleContext): Promise<OperatorCo
     needsApproval.map(async (item) => ({ item, claims: await repo.claimsFor(item.id) })),
   );
 
-  return { signals, reviewTopics, selectedTopics, approvalQueue };
+  return { signals, unscoredTopics, reviewTopics, selectedTopics, approvalQueue };
 }
 
 interface AddSignalInput {
@@ -59,6 +62,7 @@ interface AddSignalInput {
 export async function addSignal(ctx: ModuleContext, input: AddSignalInput): Promise<ResearchInputRow> {
   const rawText = input.rawText?.trim();
   if (!rawText) throw new Error('rawText is required');
+  if (rawText.length > 8000) throw new Error('Signal is too long (8,000 characters max).');
   return createRepo(ctx.db).insertResearchInput({
     rawText,
     channel: input.channel?.trim() || null,
@@ -107,9 +111,14 @@ export async function setTopicPlan(
   const plan: { platforms?: string[] | null; frameworks?: Record<string, string> | null } = {};
   if (input.platforms !== undefined) {
     if (input.platforms !== null && !Array.isArray(input.platforms)) return { ok: false, message: 'platforms must be a list' };
-    const known: string[] = [...DRAFT_PLATFORMS, ...Object.keys(SCRIPT_TARGETS)]; // posts, then video scripts
-    const list = input.platforms === null ? null : known.filter((p) => (input.platforms as unknown[]).includes(p));
-    if (list && !list.some((p) => (DRAFT_PLATFORMS as readonly string[]).includes(p))) return { ok: false, message: 'Pick at least one platform to post on.' };
+    let list: string[] | null = null;
+    if (input.platforms !== null) {
+      const ids = (input.platforms as unknown[]).filter((x): x is string => typeof x === 'string');
+      // One written format per platform (the last pick wins), in platform order; then video scripts.
+      const posts = new Map(ids.flatMap((id) => { const p = parsePick(id); return p ? [[p.platform, pickId(p.platform, p.format.id)] as const] : []; }));
+      list = [...DRAFT_PLATFORMS.flatMap((p) => posts.get(p) ?? []), ...Object.keys(SCRIPT_TARGETS).filter((t) => ids.includes(t))];
+      if (!posts.size) return { ok: false, message: 'Pick at least one platform to post on.' };
+    }
     plan.platforms = list;
   }
   if (input.frameworks !== undefined) {

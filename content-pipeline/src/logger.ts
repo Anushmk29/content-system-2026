@@ -1,4 +1,5 @@
-// Minimal structured logger. Prefixed so host-app logs stay readable.
+// Minimal structured logger. Readable `[content:scope] msg` lines in dev; one JSON object per line
+// in production (or CONTENT_LOG_FORMAT=json) so a log shipper can index level/scope/msg.
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 export interface Logger {
@@ -9,9 +10,15 @@ export interface Logger {
   child(scope: string): Logger;
 }
 
+const json = () => (process.env.CONTENT_LOG_FORMAT ?? (process.env.NODE_ENV === 'production' ? 'json' : 'text')) === 'json';
+
 function emit(scope: string, level: Level, msg: string, meta?: unknown): void {
-  const line = `[content:${scope}] ${msg}`;
   const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+  if (json()) {
+    fn(JSON.stringify({ t: new Date().toISOString(), level, scope, msg, ...(meta !== undefined ? { meta: meta instanceof Error ? meta.message : meta } : {}) }));
+    return;
+  }
+  const line = `[content:${scope}] ${msg}`;
   if (meta !== undefined) fn(line, meta);
   else fn(line);
 }

@@ -6,7 +6,7 @@ import {
   createRepo, type ContentItemRow, type ClaimRow, type ApprovalLogRow, type PerformanceRow,
 } from '../db/repo.ts';
 import { CONTENT_STATUSES } from '../../core/src/index.ts';
-import { syncPlanned } from './calendar-sync-service.ts';
+import { syncPlanned, connectedPlatforms } from './calendar-sync-service.ts';
 
 interface IdeaPiece {
   id: string;
@@ -108,6 +108,9 @@ export async function planItem(ctx: ModuleContext, id: string, at: unknown): Pro
   const when = typeof at === 'string' ? new Date(at) : null;
   if (!when || Number.isNaN(when.getTime())) return { ok: false, message: 'Invalid date.' };
   if (when.getTime() < Date.now()) return { ok: false, message: 'Pick a time in the future.' };
+  const on = await connectedPlatforms(ctx);
+  const platform = on && (await createRepo(ctx.db).getItem(id))?.platform;
+  if (on && platform && !on.includes(platform)) return { ok: false, message: `No ${platform} channel is connected in Postiz. Connect it there first.` };
   const done = await createRepo(ctx.db).planItem(id, when.toISOString());
   // With CONTENT_POSTIZ_SYNC the calendar is live: book it in Postiz now, or move it there.
   const synced = await syncPlanned(ctx, id, when);
@@ -133,4 +136,9 @@ export async function getCalendar(ctx: ModuleContext, from: Date, to: Date): Pro
   }
   const unplanned = items.filter((i) => i.status === 'approved' && !i.scheduled_at && !i.postiz_id);
   return { dated: dated.sort((a, b) => (a.at < b.at ? -1 : 1)), unplanned };
+}
+
+/** Recent items for the dashboard's command palette. */
+export async function getPipelineBoard(ctx: ModuleContext): Promise<{ recent: ContentItemRow[] }> {
+  return { recent: await createRepo(ctx.db).allItems(25) };
 }

@@ -6,6 +6,7 @@ import { performanceSignal } from '@pratapai/content-pipeline/core';
 import { params, type SearchParams } from '../data';
 import { PageHead, KpiStrip, Tile, Area, BarList, Plat, Chip, NeedsDb } from '../ui/viz';
 import { ItemDrawer } from '../ui/ItemDrawer';
+import { ApiButton } from '../ui/actions';
 import { compact, prettyPillar, withParams, ago, when, times, PLATFORM, TONE } from '../ui/format';
 
 const SIGNAL: Record<string, { label: string; color: string; tip: string }> = {
@@ -22,7 +23,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   let error: string | null = null;
   try { a = await getAnalytics(getContext(), range); } catch (e) { error = (e as Error).message; }
   const head = (
-    <PageHead crumb="analytics" title="What actually performed." sub="Results per post over the window, and the next move for each one.">
+    <PageHead title="Results" sub="What performed, and the next move for each post.">
+      <ApiButton path="/content/api/decode" body={{ self: true }} label="Refresh my results" className="btn btn-sm" />
       <nav className="seg" aria-label="Range">
         {ANALYTICS_RANGES.map((r) => <Link key={r} href={`/content/analytics?range=${r}`} aria-current={r === range ? 'page' : undefined}>{r}d</Link>)}
       </nav>
@@ -45,7 +47,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         { label: 'Reach', value: compact(t.reach), sub: `${compact(t.clicks)} clicks` },
         { label: 'Engagement', value: compact(t.engagement), sub: `likes, comments & shares · ${t.engagementPerPost ?? '—'} per post` },
         { label: 'Vs your usual', value: times(t.vsUsual), sub: t.vsUsual != null ? 'the median post, against your own median'
-          : a.own.baseline.length ? 'no results on these posts yet' : 'refresh your results on Today', href: '/content' },
+          : a.own.baseline.length ? 'no results on these posts yet' : 'click Refresh my results above' },
       ]} />
       <div className="bento">
         {noMetrics.length > 0 && (
@@ -89,8 +91,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         <Tile title="By platform" span={2}><BreakdownTable rows={a.byPlatform} name={(k) => <><Plat p={k} /> {PLATFORM[k]?.label ?? k}</>} /></Tile>
         <Tile title="By pillar" span={2}><BreakdownTable rows={a.byPillar} name={(k) => prettyPillar(k)} /></Tile>
 
-        <Tile title="Your formats" hint="latest scrape of your accounts" span={2}><FormatList rows={a.formats.yours} empty="Refresh your results on Today to see which of your formats work." /></Tile>
-        <Tile title="Competitors’ formats" hint="latest Decode" span={2}><FormatList rows={a.formats.theirs} empty="Run a Decode to compare." /></Tile>
+        <Tile title="Your formats" hint="latest scrape of your accounts" span={2}><FormatList rows={a.formats.yours} empty="Click Refresh my results above to see which of your formats work." /></Tile>
+        <Tile title="Competitors’ formats" hint="latest Decode" span={2}><FormatList rows={a.formats.theirs} empty="Scan competitors on Competitors to compare." /></Tile>
 
         <Tile title="Every post" hint={`${a.posts.length}`} span={4}>
           {a.posts.length === 0 ? <p className="empty">Nothing published in this window.</p> : (

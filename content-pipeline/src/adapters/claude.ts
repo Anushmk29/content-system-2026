@@ -1,29 +1,29 @@
 // LLM adapter — drafting / QC / scoring / triage intelligence (Bible: the custom part).
-// Provider-flexible: prefers OpenRouter (OpenAI-compatible Chat Completions) when its
-// key is set, and falls back to the Anthropic Messages API. The rest of the engine
-// only depends on `complete(prompt, {system})`, so swapping providers changes nothing
-// downstream. The adapter id stays 'claude' so the health panel label is stable.
-import type { Adapter } from './adapter.ts';
+// Every model call goes through OpenRouter (OpenAI-compatible Chat Completions). The rest of the
+// engine only depends on `complete(prompt, {system})`. The adapter id stays 'claude' so the
+// health panel label is stable.
+import { redact, type Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { OnCost } from '../cost-ledger.ts';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-// Sensible defaults; override per provider with CONTENT_LLM_MODEL.
+// Default model; override with CONTENT_LLM_MODEL.
 const DEFAULT_OPENROUTER_MODEL = 'anthropic/claude-sonnet-5.5';
-const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5'; // Anthropic ids use hyphens; OpenRouter slugs use dots
-// Image generation ("nano banana"); OpenRouter only.
-const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
+const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
+// Image generation; OpenRouter only. Qwen Image 3 renders text itself and takes up to 4 reference images.
+const DEFAULT_IMAGE_MODEL = 'qwen/qwen-image-3';
+const MAX_REFS = 4;
 // A hung call fails its one item instead of stalling the module (and, now runs are
 // sequential, the whole pipeline). 120s covers the 8000-token seed batch.
 const TIMEOUT_MS = 120_000;
-// USD per million tokens [input, output] for the direct Anthropic path, which reports no cost.
-// ponytail: family-level list prices; the ledger marks these rows estimated.
-const anthropicPrice = (m: string): [number, number] => /haiku/.test(m) ? [1, 5] : /opus/.test(m) ? [5, 25] : [3, 15];
-// Long system prompts (the brand context with voice samples) are marked for Anthropic prompt
-// caching: repeat calls within ~5 minutes (a pipeline run) read that part at ~10% of the price.
+// Claude 5.5 thinks on every call (it can't be turned off) and Sonnet defaults to 'high' effort; thinking is billed
+// as output and counts against max_tokens. 'medium' keeps drafts good at a lower bill.
+// ponytail: one level for every call; make it per-call if a route measurably needs 'high'.
+const EFFORT = 'medium';
+// Long system prompts (the brand context with voice samples) are marked for prompt
+// caching (OpenRouter passes cache_control through to Anthropic): repeat calls within ~5 minutes (a pipeline run) read that part at ~10% of the price.
 // Shorter prompts are below Anthropic's cache minimum (~1024 tokens) and are sent as plain text.
 const CACHE_MIN_CHARS = 4000;
 const cachedSystem = (m: string, system: string) =>
@@ -33,8 +33,9 @@ const cachedSystem = (m: string, system: string) =>
 
 interface LlmConfig {
   openrouterApiKey?: string;
-  anthropicApiKey?: string;
   model?: string;
+  /** OpenRouter image model slug (CONTENT_IMAGE_MODEL). */
+  imageModel?: string;
   /** Called once per API call (success or failure) — the cost ledger. */
   onCost?: OnCost;
 }
@@ -43,31 +44,31 @@ interface LlmConfig {
 interface CompleteOpts { system?: string; model?: string; maxTokens?: number; images?: string[] }
 
 export interface ClaudeAdapter extends Adapter {
-  readonly provider: 'openrouter' | 'anthropic' | 'none';
   readonly model: string;
   complete(prompt: string, opts?: CompleteOpts): Promise<string>;
-  /** One image from a prompt, optionally guided by reference images (data URLs). OpenRouter only. */
+  /** One image from a prompt, guided by up to 4 reference images (data URLs; extras are dropped). OpenRouter only. */
   generateImage(prompt: string, opts?: { images?: string[]; aspectRatio?: string }): Promise<Buffer>;
-  /** USD spent by this process so far (OpenRouter `usage.cost`; Anthropic is estimated from tokens). Diff it around a job. */
+  /** USD spent by this process so far (OpenRouter `usage.cost`). Diff it around a job. */
   readonly spentUsd: number;
 }
 
 export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
 
-  const provider: ClaudeAdapter['provider'] =
-    c.openrouterApiKey ? 'openrouter' : c.anthropicApiKey ? 'anthropic' : 'none';
-  const model =
-    c.model ?? (provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : DEFAULT_ANTHROPIC_MODEL);
-  const configured = provider !== 'none';
+  const model = c.model ?? DEFAULT_OPENROUTER_MODEL;
+  const configured = !!c.openrouterApiKey;
   let spentUsd = 0;
 
-  type OrMessage = { content?: string; images?: Array<{ image_url?: { url?: string } }> };
+  type OrMessage = { content?: string };
+  type Reply = {
+    model?: string; choices?: Array<{ message?: OrMessage; finish_reason?: string }>; data?: Array<{ b64_json?: string }>;
+    usage?: { cost?: number; prompt_tokens?: number; completion_tokens?: number };
+  };
 
-  async function openRouter(body: Record<string, unknown>): Promise<OrMessage> {
-    const kind = body.modalities ? 'image' : 'llm';
+  async function openRouter(body: Record<string, unknown>, url = OPENROUTER_URL): Promise<Reply> {
+    const kind = url === OPENROUTER_IMAGES_URL ? 'image' : 'llm';
     const log = (e: { ok: boolean; costUsd?: number; model?: string; inputTokens?: number; outputTokens?: number; error?: string }) =>
       c.onCost?.({ provider: 'openrouter', kind, model: String(body.model), costUsd: 0, units: kind === 'image' && e.ok ? 1 : undefined, ...e });
-    const send = () => fetch(OPENROUTER_URL, {
+    const send = () => fetch(url, {
       method: 'POST',
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
@@ -77,9 +78,8 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
         'HTTP-Referer': 'https://content-studio.local',
         'X-Title': 'Content Studio',
       },
-      body: JSON.stringify({ ...body, usage: { include: true } }),
+      body: JSON.stringify(kind === 'llm' ? { ...body, usage: { include: true } } : body),
     });
-    type Reply = { model?: string; choices?: Array<{ message?: OrMessage }>; usage?: { cost?: number; prompt_tokens?: number; completion_tokens?: number } };
     let data: Reply;
     try {
       // Rate limits / brief outages (several calls at once, e.g. a carousel's layouts): wait as told, retry up to 3 times.
@@ -89,7 +89,7 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
         await sleep(wait * 1000);
         res = await send();
       }
-      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${redact((await res.text()).slice(0, 300))}`);
       data = (await res.json()) as Reply;
     } catch (e) {
       log({ ok: false, error: (e as Error).message });
@@ -98,7 +98,7 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
     const cost = Number(data.usage?.cost ?? 0);
     spentUsd += cost;
     log({ ok: true, costUsd: cost, model: data.model ?? String(body.model), inputTokens: data.usage?.prompt_tokens, outputTokens: data.usage?.completion_tokens });
-    return data.choices?.[0]?.message ?? {};
+    return data;
   }
 
   // Text plus image parts in OpenAI chat shape; plain string when there are no images.
@@ -112,82 +112,42 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
       ...(opts?.system ? [{ role: 'system', content: cachedSystem(m, opts.system) ?? opts.system }] : []),
       { role: 'user', content: userContent(prompt, opts?.images) },
     ];
-    const msg = await openRouter({ model: m, max_tokens: opts?.maxTokens ?? 2048, messages });
-    return msg.content ?? '';
+    const data = await openRouter({ model: m, max_tokens: opts?.maxTokens ?? 2048, messages, ...(/claude/.test(m) ? { reasoning: { effort: EFFORT } } : {}) });
+    const choice = data.choices?.[0];
+    if (!choice) throw new Error(`OpenRouter returned no answer: ${JSON.stringify(data).slice(0, 200)}`);
+    if (choice.finish_reason === 'length') throw new Error(`reply cut off at max_tokens (${opts?.maxTokens ?? 2048}); raise it or ask for less`);
+    return choice.message?.content ?? '';
   }
 
-  async function completeAnthropic(prompt: string, opts?: CompleteOpts): Promise<string> {
-    const images = (opts?.images ?? []).map((url) => {
-      const m = /^data:([^;]+);base64,(.*)$/s.exec(url);
-      if (!m) throw new Error('Anthropic images must be data URLs');
-      return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } };
-    });
-    const m = opts?.model ?? model;
-    const log = (e: { ok: boolean; costUsd?: number; inputTokens?: number; outputTokens?: number; error?: string }) =>
-      c.onCost?.({ provider: 'anthropic', kind: 'llm', model: m, costUsd: 0, ...e, meta: e.ok ? { estimated: true } : undefined });
-    const res = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': c.anthropicApiKey!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: m,
-        max_tokens: opts?.maxTokens ?? 2048,
-        system: opts?.system ? cachedSystem(m, opts.system) ?? opts.system : undefined,
-        messages: [{ role: 'user', content: images.length ? [...images, { type: 'text', text: prompt }] : prompt }],
-      }),
-    });
-    if (!res.ok) {
-      const err = new Error(`Anthropic ${res.status}: ${await res.text()}`);
-      log({ ok: false, error: err.message });
-      throw err;
-    }
-    type Usage = { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }>; usage?: Usage };
-    const [inUsd, outUsd] = anthropicPrice(m);
-    const u = data.usage ?? {};
-    // Cache writes cost 1.25x input, cache reads 0.1x; input_tokens excludes both.
-    const inputEq = (u.input_tokens ?? 0) + 1.25 * (u.cache_creation_input_tokens ?? 0) + 0.1 * (u.cache_read_input_tokens ?? 0);
-    const cost = (inputEq * inUsd + (u.output_tokens ?? 0) * outUsd) / 1e6;
-    spentUsd += cost;
-    log({ ok: true, costUsd: cost, inputTokens: data.usage?.input_tokens, outputTokens: data.usage?.output_tokens });
-    return (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
-  }
 
   return {
     id: 'claude',
     configured,
-    provider,
     model,
     get spentUsd() { return spentUsd; },
 
     async complete(prompt, opts) {
-      if (provider === 'openrouter') return completeOpenRouter(prompt, opts);
-      if (provider === 'anthropic') return completeAnthropic(prompt, opts);
-      throw new Error('No LLM configured (set CONTENT_OPENROUTER_API_KEY or CONTENT_ANTHROPIC_API_KEY)');
+      if (!configured) throw new Error('No LLM configured (set CONTENT_OPENROUTER_API_KEY)');
+      return completeOpenRouter(prompt, opts);
     },
 
     async generateImage(prompt, opts) {
-      if (provider !== 'openrouter') throw new Error('Image generation needs CONTENT_OPENROUTER_API_KEY');
-      const msg = await openRouter({
-        model: IMAGE_MODEL,
-        modalities: ['image', 'text'],
-        messages: [{ role: 'user', content: userContent(prompt, opts?.images) }],
-        ...(opts?.aspectRatio ? { image_config: { aspect_ratio: opts.aspectRatio } } : {}),
-      });
-      const url = msg.images?.[0]?.image_url?.url ?? '';
-      const b64 = /^data:[^;]+;base64,(.*)$/s.exec(url)?.[1];
-      if (!b64) throw new Error(`image model returned no image${msg.content ? `: ${msg.content.slice(0, 200)}` : ''}`);
+      if (!configured) throw new Error('Image generation needs CONTENT_OPENROUTER_API_KEY');
+      const refs = (opts?.images ?? []).slice(0, MAX_REFS);
+      const data = await openRouter({
+        model: c.imageModel || DEFAULT_IMAGE_MODEL, prompt, n: 1, resolution: '2K',
+        ...(opts?.aspectRatio ? { aspect_ratio: opts.aspectRatio } : {}),
+        ...(refs.length ? { input_references: refs.map((url) => ({ type: 'image_url', image_url: { url } })) } : {}),
+      }, OPENROUTER_IMAGES_URL);
+      const b64 = data.data?.[0]?.b64_json;
+      if (!b64) throw new Error('image model returned no image');
       return Buffer.from(b64, 'base64');
     },
 
     async healthCheck(): Promise<HealthReport> {
-      if (!configured) return report('claude', 'unconfigured', 'no LLM key (CONTENT_OPENROUTER_API_KEY / CONTENT_ANTHROPIC_API_KEY)');
+      if (!configured) return report('claude', 'unconfigured', 'no LLM key (CONTENT_OPENROUTER_API_KEY)');
       // Presence-only: don't burn tokens on every health poll.
-      return report('claude', 'ok', `${provider} key present`, { provider, model });
+      return report('claude', 'ok', 'openrouter key present', { provider: 'openrouter', model });
     },
   };
 }

@@ -123,7 +123,7 @@ export async function recordHumanLabel(
  *  the labelling queue (seed=true) and stay out of the training export until reviewed.
  *  Jev answers them too when configured, so you also see where it would disagree. */
 export async function seedQcExamples(ctx: ModuleContext, count = 20): Promise<{ created: number }> {
-  if (!ctx.adapters.claude.configured) throw new Error('seeding needs an LLM key (CONTENT_OPENROUTER_API_KEY or CONTENT_ANTHROPIC_API_KEY)');
+  if (!ctx.adapters.claude.configured) throw new Error('seeding needs an LLM key (CONTENT_OPENROUTER_API_KEY)');
   const n = Math.min(Math.max(Math.round(count) || 20, 1), 25); // one call stays inside max_tokens
   await loadBrand(ctx);
   const raw = await ctx.adapters.claude.complete(buildSeedQcPrompt(n), { system: seedQcSystem(), maxTokens: 8000 });

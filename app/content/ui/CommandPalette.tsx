@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAction, summarizeRun } from './actions';
 import { GROUPS } from './Nav';
 
-interface Cmd { id: string; label: string; group: string; run: () => void }
+interface Cmd { id: string; label: string; group: string; run: () => void; keywords?: string }
 
 
 export function CommandPalette({ modules, admin }: { modules: { id: string; title: string }[]; admin: boolean }) {
@@ -37,14 +37,14 @@ export function CommandPalette({ modules, admin }: { modules: { id: string; titl
 
   const go = (href: string) => () => { setOpen(false); router.push(href); };
   const cmds: Cmd[] = [
-    ...GROUPS.filter((g) => admin || !g.admin).flatMap((g) => g.links).map(({ href, label }) => ({ id: href, label, group: 'Go to', run: go(href) })),
+    ...GROUPS.filter((g) => admin || !g.admin).flatMap((g) => g.links).map(({ href, label, keywords }) => ({ id: href, label, keywords, group: 'Go to', run: go(href) })),
     { id: 'new-signal', label: 'Capture a new signal', group: 'Create', run: go('/content/ideas#capture') },
     { id: 'run-all', label: 'Run full pipeline', group: 'Run', run: () => a.call('all', 'POST', '/content/api/run', undefined, summarizeRun) },
     ...modules.map((m) => ({ id: `run-${m.id}`, label: `Run ${m.title}`, group: 'Run', run: () => a.call(m.id, 'POST', `/content/api/modules/${m.id}/run`, undefined, summarizeRun) })),
     ...items.map((it) => ({ id: it.id, label: `${it.title} · ${it.platform}`, group: 'Post', run: go(`/content/board?item=${it.id}`) })),
   ];
 
-  const shown = cmds.filter((c) => c.label.toLowerCase().includes(q.toLowerCase())).slice(0, 40);
+  const shown = cmds.filter((c) => `${c.label} ${c.keywords ?? ''}`.toLowerCase().includes(q.toLowerCase().trim())).slice(0, 40);
 
   // Native modal: Escape closes it (onClose), a click on the backdrop lands on the dialog itself.
   return (

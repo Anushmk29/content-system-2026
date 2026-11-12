@@ -5,13 +5,15 @@ import { SCRIPT_TARGETS, type ScriptTarget } from './platform-playbooks.ts';
 
 export function buildScriptPrompt(input: {
   topicTitle: string; customerLanguage?: string | null; angle?: { belief: string; truth: string } | null;
-  anchor?: string | null; targets: readonly ScriptTarget[];
+  anchor?: string | null; targets: readonly ScriptTarget[]; steal?: string;
 }): string {
   return `Write a video script for each target below, on this topic, in our voice, for our audience.
 
 TOPIC: ${input.topicTitle}
 ${input.customerLanguage ? `CUSTOMER LANGUAGE (use their words): ${input.customerLanguage}` : ''}
 ${input.angle ? `ANGLE — every script argues this:\nCOMMON BELIEF: ${input.angle.belief}\nOUR TRUTH: ${input.angle.truth}` : ''}
+${input.steal ? `A PROVEN VIDEO TO BUILD ON (copy its structure, not its words):
+${input.steal}` : ''}
 ${input.anchor ? `THE WRITTEN POST ON THIS TOPIC (same points; spoken, not read aloud):\n${input.anchor.slice(0, 2500)}` : ''}
 
 TARGETS — each is a FILMING CARD the founder records:

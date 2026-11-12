@@ -1,0 +1,281 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Signals and Topic Selection",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "ui",
+      "label": "Operator · Ideas page"
+    },
+    {
+      "id": "api",
+      "label": "Next.js · /content/api"
+    },
+    {
+      "id": "engine",
+      "label": "Engine + Postgres · content-pipeline"
+    },
+    {
+      "id": "out",
+      "label": "Shelved",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "capture",
+      "label": "Capture",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "rank",
+      "label": "Topic + score",
+      "fromCol": 1,
+      "toCol": 3
+    },
+    {
+      "id": "select",
+      "label": "Operator decides",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "draft",
+      "label": "Drafting",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "form",
+    "post_signals",
+    "research",
+    "scoring",
+    "topics",
+    "review",
+    "patch",
+    "decide",
+    "drafter"
+  ],
+  "nodes": [
+    {
+      "id": "form",
+      "lane": "ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Add signal",
+      "sublabel": "rawText + source",
+      "width": 128
+    },
+    {
+      "id": "post_signals",
+      "lane": "api",
+      "col": 0,
+      "type": "backend",
+      "label": "POST /signals",
+      "sublabel": "addSignal()",
+      "tag": "201 { id }",
+      "width": 128
+    },
+    {
+      "id": "research",
+      "lane": "engine",
+      "col": 1,
+      "type": "backend",
+      "label": "Research module",
+      "sublabel": "next run: LLM → topic",
+      "width": 128
+    },
+    {
+      "id": "scoring",
+      "lane": "engine",
+      "col": 2,
+      "type": "backend",
+      "label": "Topic Scorer",
+      "sublabel": "setTopicScores()",
+      "tag": "decide(TOPIC_SCORE)",
+      "width": 128
+    },
+    {
+      "id": "topics",
+      "lane": "engine",
+      "col": 3,
+      "type": "database",
+      "label": "content.topics",
+      "sublabel": "score_total + band",
+      "width": 128
+    },
+    {
+      "id": "review",
+      "lane": "ui",
+      "col": 3,
+      "type": "frontend",
+      "label": "Review queue",
+      "sublabel": "getOperatorConsole",
+      "width": 128
+    },
+    {
+      "id": "patch",
+      "lane": "api",
+      "col": 4,
+      "type": "backend",
+      "label": "PATCH /topics/:id",
+      "sublabel": "decision | plan | angle",
+      "width": 128
+    },
+    {
+      "id": "decide",
+      "lane": "engine",
+      "col": 4,
+      "type": "backend",
+      "label": "decideTopic()",
+      "sublabel": "selected | dropped",
+      "width": 128
+    },
+    {
+      "id": "dropped",
+      "lane": "out",
+      "col": 4,
+      "type": "database",
+      "label": "Dropped topic",
+      "sublabel": "status dropped",
+      "width": 128
+    },
+    {
+      "id": "angles",
+      "lane": "api",
+      "col": 5,
+      "type": "backend",
+      "label": "POST /topics/:id",
+      "sublabel": "topicAngles()",
+      "tag": "5 angles, 1 LLM call",
+      "width": 128
+    },
+    {
+      "id": "drafter",
+      "lane": "engine",
+      "col": 5,
+      "type": "backend",
+      "label": "Draft Generator",
+      "sublabel": "drafts selected topics",
+      "width": 128
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-form",
+      "from": "form",
+      "to": "post_signals",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-insert",
+      "from": "post_signals",
+      "to": "research",
+      "label": "research_inputs row",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "e-new",
+      "from": "research",
+      "to": "scoring",
+      "label": "new",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-scores",
+      "from": "scoring",
+      "to": "topics",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-review",
+      "from": "topics",
+      "to": "review",
+      "label": "ranked by score",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "e-patch",
+      "from": "review",
+      "to": "patch",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "e-decide",
+      "from": "patch",
+      "to": "decide",
+      "label": "{ decision }"
+    },
+    {
+      "id": "e-selected",
+      "from": "decide",
+      "to": "drafter",
+      "label": "selected",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-dropped",
+      "from": "decide",
+      "to": "dropped",
+      "label": "dropped",
+      "role": "error",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-find",
+      "from": "review",
+      "to": "angles",
+      "label": "find angles",
+      "role": "branch"
+    },
+    {
+      "id": "e-angle",
+      "from": "angles",
+      "to": "drafter",
+      "label": "chosen angle",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "PATCH /topics/:id routes by body",
+      "items": [
+        "{ angle } → pickAngle(); { platforms, frameworks } → setTopicPlan()",
+        "else { decision: selected | dropped } → decideTopic()"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Guards",
+      "items": [
+        "A topic already drafted (status used) can't be re-decided or re-planned",
+        "Review queue lists only scored topics still in status new"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Angles",
+      "items": [
+        "Draft uses the operator's picked angle, else the strongest",
+        "An angle failure never blocks the draft"
+      ]
+    }
+  ]
+}

@@ -3,13 +3,16 @@ import { getContext, logAction } from '@pratapai/content-pipeline';
 import { SESSION_COOKIE, SESSION_DAYS, roleForPassword, signSession } from '../../auth';
 import { clientIp, limited } from '../../rate-limit';
 
+// Behind a TLS-terminating proxy req.url says http:, so production always marks the cookie Secure.
 const cookie = (req: Request) => ({
   httpOnly: true, sameSite: 'lax' as const, path: '/content',
-  secure: new URL(req.url).protocol === 'https:',
+  secure: process.env.NODE_ENV === 'production' || new URL(req.url).protocol === 'https:',
 });
 
 // POST /content/api/login { password } → session cookie. DELETE → log out.
 export async function POST(req: Request) {
+  // Per IP. No global cap: anyone could trip it and lock every user out. Production refuses
+  // passwords under 16 characters (auth.ts configProblem), so per-IP limits are enough.
   if (limited(`login:${clientIp(req)}`, 10)) {
     return NextResponse.json({ ok: false, error: 'Too many tries — wait a minute.' }, { status: 429 });
   }

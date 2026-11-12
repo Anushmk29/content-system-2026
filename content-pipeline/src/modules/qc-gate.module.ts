@@ -22,18 +22,26 @@ export const qcGateModule: Module = {
   async run(ctx: ModuleContext): Promise<ModuleResult> {
     const drafts = await createRepo(ctx.db).itemsByStatus('draft');
     let passed = 0, blocked = 0, signalFailures = 0;
+    const failures: string[] = [];
 
     await mapLimit(drafts, MODEL_CONCURRENCY, async (item) => {
-      const r = await qcItem(ctx, item);
-      if (r.signalFailed) signalFailures++;
-      if (r.outcome === 'blocked') blocked++;
-      else passed++;
+      try {
+        const r = await qcItem(ctx, item);
+        if (r.signalFailed) signalFailures++;
+        if (r.outcome === 'blocked') blocked++;
+        else passed++;
+      } catch (e) {
+        // One bad item (edited mid-run, DB hiccup) must not fail the rest; it stays a draft for next run.
+        failures.push(`${item.id}: ${(e as Error).message}`);
+      }
     });
 
     const message =
       `${passed} to approval, ${blocked} blocked for missing proof` +
-      (signalFailures ? `; ${signalFailures} read on format rules only` : '');
-    return ok(passed + blocked, message, { passed, blocked, signalFailures, scanned: drafts.length });
+      (signalFailures ? `; ${signalFailures} read on format rules only` : '') +
+      (failures.length ? `; ${failures.length} failed` : '');
+    const meta = { passed, blocked, signalFailures, failures, scanned: drafts.length };
+    return failures.length ? { status: 'degraded', itemsProcessed: passed + blocked, message, meta } : ok(passed + blocked, message, meta);
   },
 };
 
@@ -83,6 +91,9 @@ async function humanize(ctx: ModuleContext, item: ContentItemRow): Promise<Conte
   if (!ctx.env?.humanizeRewrite || !ctx.adapters.claude.configured) return item;
   const h = humanScore([item.hook, item.body, item.cta].filter(Boolean).join('\n\n'));
   if (h.score >= HUMAN_MIN) return item;
+  // Once per post: a draft that keeps failing QC must not pay for a rewrite on every hourly run.
+  const done = await ctx.db.query(`select 1 from content.cost_events where feature = 'humanize' and ref_type = 'content_item' and ref_id = $1 limit 1`, [item.id]);
+  if (done.rowCount) return item;
   try {
     return await withCostScope({ feature: 'humanize', refType: 'content_item', refId: item.id },
       () => reviseItem(ctx, item, humanizeFeedback(h)));

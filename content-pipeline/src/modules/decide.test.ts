@@ -200,6 +200,25 @@ test('platform fit: Jev probabilities per platform, picks at >= 0.5; drafting fo
   assert.equal(platformsFor({ platforms: null, platform_fit: null }, true), undefined);
 });
 
+test("platform fit: Jev also picks each platform's format and framework; the draft follows unless the operator chose", async () => {
+  const { PLATFORM_FIT } = await import('./decision-tasks.ts');
+  const { formatsFor, frameworksFor } = await import('./draft-generator.module.ts');
+  const ch = (choice: string): JevAnswer => ({ type: 'choice', choice, probabilities: { [choice]: 0.9 } });
+  const fit = PLATFORM_FIT.fromJev({
+    linkedin: { type: 'noul', noul: 0.9 }, linkedin_format: ch('carousel'), linkedin_framework: ch('pas'), x_format: ch('bogus'),
+  });
+  assert.deepEqual(fit.picks?.linkedin, { format: 'carousel', framework: 'pas' });
+  assert.deepEqual(fit.picks?.x, { format: 'thread', framework: 'thread_numbered' });       // unknown → default
+  assert.equal(fit.picks?.blog, undefined);                                                 // nothing to choose
+  assert.deepEqual(PLATFORM_FIT.parse('{"x": 0.7, "picks": {"x": {"format": "image", "framework": "single_insight"}}}').picks?.x,
+    { format: 'image', framework: 'single_insight' });
+
+  assert.deepEqual(formatsFor({ platforms: null, platform_fit: fit }), { linkedin: 'carousel' });
+  assert.deepEqual(formatsFor({ platforms: ['linkedin'], platform_fit: fit }), {});         // operator's own pick wins
+  assert.equal(frameworksFor({ frameworks: null, platform_fit: fit }).linkedin, 'pas');
+  assert.equal(frameworksFor({ frameworks: { linkedin: 'numbered' }, platform_fit: fit }).linkedin, 'numbered');
+});
+
 test('setTopicPlan: known platforms and frameworks only; null goes back to following Jev', async () => {
   const { setTopicPlan } = await import('../services/console-service.ts');
   const id = (await db.query<{ id: string }>(`insert into content.topics (title, status) values ('t', 'new') returning id`)).rows[0]!.id;
@@ -213,4 +232,42 @@ test('setTopicPlan: known platforms and frameworks only; null goes back to follo
   row = (await db.query<{ platforms: string[]; frameworks: Record<string, string> }>(`select platforms, frameworks from content.topics where id = $1`, [id])).rows[0]!;
   assert.equal(row.platforms, null);
   assert.deepEqual(row.frameworks, { linkedin: 'pas' });                 // untouched
+});
+
+test('formats: one written format per platform, default stored bare, scripts kept; the draft reads them', async () => {
+  const { setTopicPlan } = await import('../services/console-service.ts');
+  const { platformsFor, formatsFor, scriptsFor } = await import('./draft-generator.module.ts');
+  const id = (await db.query<{ id: string }>(`insert into content.topics (title, status) values ('t', 'new') returning id`)).rows[0]!.id;
+  const ctx = { db } as unknown as ModuleContext;
+  await setTopicPlan(ctx, id, { platforms: ['instagram_reel', 'instagram:image', 'linkedin:post', 'instagram:carousel', 'x:bogus', 'facebook:image'] });
+  const platforms = (await db.query<{ platforms: string[] }>(`select platforms from content.topics where id = $1`, [id])).rows[0]!.platforms;
+  assert.deepEqual(platforms, ['linkedin', 'instagram', 'facebook:image', 'instagram_reel']); // last IG pick wins; junk dropped
+  const t = { platforms, platform_fit: null };
+  assert.deepEqual(platformsFor(t, false), ['linkedin', 'instagram', 'facebook']);
+  assert.deepEqual(formatsFor(t), { facebook: 'image' });
+  assert.deepEqual(scriptsFor(t), ['instagram_reel']);
+});
+
+test('Jev decides scoring + platform plan at any confidence; QC still needs a confident Jev', async () => {
+  const { PLATFORM_FIT, suggestedPlatforms } = await import('./decision-tasks.ts');
+  const shaky: JevAnswer = { type: 'score', score: 2, confidence: 0.2 };
+  const { ctx, prompts } = ctxWith({ llm: true, jev: { leadIntent: shaky, reach: shaky, brandFit: shaky, proof: shaky, repurpose: shaky } });
+  (ctx as { env: unknown }).env = { jevPrimaryTasks: ['topic_score', 'qc_signals'] };
+  assert.equal((await decide(ctx, TOPIC_SCORE, randomUUID(), { title: 't' })).reach, 3);
+  assert.equal(prompts.length, 0, 'the LLM is not asked');
+
+  const unsure = ctxWith({ llm: true, jev: JEV_UNSURE });
+  (unsure.ctx as { env: unknown }).env = { jevPrimaryTasks: ['qc_signals'] };
+  assert.equal((await decide(unsure.ctx, QC_SIGNALS, randomUUID(), DRAFT)).hasMetric, false);   // LLM answer
+  assert.equal(unsure.prompts.length, 1);
+
+  // Jev scores most platforms 0.5-0.85: only the best 4 are suggested.
+  const yes = (p: number): JevAnswer => ({ type: 'noul', noul: p });
+  const ch = (choice: string, p: number): JevAnswer => ({ type: 'choice', choice, probabilities: { [choice]: p } });
+  const fit = PLATFORM_FIT.fromJev({
+    linkedin: yes(0.65), blog: yes(0.84), x: yes(0.72), instagram: yes(0.6), facebook: yes(0.51), reddit: yes(0.66), youtube: yes(0.56),
+    linkedin_format: ch('carousel', 0.97), linkedin_framework: ch('pas', 0.3),
+  });
+  assert.deepEqual(suggestedPlatforms(fit), ['linkedin', 'blog', 'x', 'reddit']);
+  assert.deepEqual(fit.picks?.linkedin, { format: 'carousel', framework: 'hook_story_lesson' }); // unsure structure → default
 });

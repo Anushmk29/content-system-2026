@@ -10,10 +10,8 @@ import { brandSystem } from '../prompts/brand-context.ts';
 import { buildDraftPrompt } from '../prompts/draft.ts';
 import { parseDraftResponse } from '../modules/draft-parse.ts';
 import { topicQuestions } from '../modules/decision-tasks.ts';
-import { loadBrand, saveBrand, cleanPatch, setLogo } from './brand-service.ts';
+import { loadBrand, saveBrand, cleanPatch, setLogo, setPhotos, getPhotos } from './brand-service.ts';
 import { fontInfo } from '../fonts.ts';
-import { renderCreative, logoBox } from '../creative.ts';
-import type { StyleSpec } from './style-service.ts';
 
 const ctxWith = async (): Promise<ModuleContext> =>
   ({ db: await createTestDb(), logger: { warn() {} }, adapters: {} } as unknown as ModuleContext);
@@ -102,20 +100,19 @@ test('fontInfo reads the family and weight the renderer will register', () => {
   assert.throws(() => fontInfo(Buffer.from('wOFF0000000000000000')), /not a TTF or OTF/);
 });
 
-test('the logo is stamped in its corner and text keeps clear of it', async () => {
-  const W = 1080, H = 1350;
-  const bg = await sharp({ create: { width: W, height: H, channels: 3, background: '#ffffff' } }).png().toBuffer();
-  const logo = await sharp({ create: { width: 400, height: 100, channels: 3, background: '#ff0000' } }).png().toBuffer();
-  const spec = { palette: [], typography: 'bold sans', text_zones: [{ role: 'headline', x: 0.08, y: 0.1, w: 0.84, h: 0.1 }] } as unknown as StyleSpec;
-  const long = 'word '.repeat(400);
-  const png = await renderCreative(bg, spec, 'instagram', { headline: 'Hello', body: long }, undefined, [], { logo, logoCorner: 'br' });
-  const box = logoBox(W, H, 4, 'br');
-  const at = async (x: number, y: number) => [...(await sharp(png).extract({ left: Math.round(x), top: Math.round(y), width: 1, height: 1 }).raw().toBuffer())];
-  assert.deepEqual((await at(box.x + box.w / 2, box.y + box.h / 2)).slice(0, 3), [255, 0, 0]);
-  // No body text drawn into the strip above the logo's top edge across the logo's width.
-  // (crop to a buffer first: sharp's stats() ignores extract())
-  const strip = await sharp(await sharp(png).extract({ left: Math.round(box.x), top: Math.round(box.y - 30), width: Math.round(box.w), height: 30 }).toBuffer()).stats();
-  assert.ok(strip.channels[0]!.min > 200, 'text ran into the logo');
+test('your photos: need a saved kit, at most 4, stored as PNGs and cleared with []', async () => {
+  const ctx = await ctxWith();
+  const img = await sharp({ create: { width: 2000, height: 2000, channels: 3, background: '#888' } }).jpeg().toBuffer();
+  await assert.rejects(setPhotos(ctx, [img]), /brand name first/);
+  await saveBrand(ctx, { name: 'Acme' });
+  await assert.rejects(setPhotos(ctx, [img, img, img, img, img]), /At most 4/);
+  await setPhotos(ctx, [img, img]);
+  const got = await getPhotos(ctx);
+  assert.equal(got.length, 2);
+  assert.deepEqual(await sharp(got[0]!).metadata().then((m) => [m.format, m.width]), ['png', 1024]);
+  await setPhotos(ctx, []);
+  assert.deepEqual(await getPhotos(ctx), []);
+  setBrand(DEFAULT_BRAND);
 });
 
 test('setLogo needs a saved kit, then stores a PNG', async () => {
@@ -125,6 +122,10 @@ test('setLogo needs a saved kit, then stores a PNG', async () => {
   await saveBrand(ctx, { name: 'Acme' });
   await setLogo(ctx, img);
   assert.equal((await loadBrand(ctx)).hasLogo, true);
+  // An SVG padded past any sniffing window must still be refused, for the logo and for photos.
+  const svg = Buffer.from(`<?xml version="1.0"?><!--${'x'.repeat(4096)}--><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`);
+  await assert.rejects(setLogo(ctx, svg), /PNG, JPG or WebP/);
+  await assert.rejects(setPhotos(ctx, [svg]), /PNG, JPG or WebP/);
   setBrand(DEFAULT_BRAND);
 });
 

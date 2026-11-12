@@ -410,6 +410,14 @@ do $$ begin
 end $$;
 alter table content.style_variants enable row level security;
 
+-- Examples (replace templates): the uploaded design's pages, recreated by the image model with
+-- our text and brand. style_prompt = the description the model gets. plate_png, spec.tpl and
+-- style_variants are no longer read. ponytail: drop them once nobody needs the old templates.
+alter table content.style_refs add column if not exists pages bytea[];          -- null = [source_png]
+alter table content.style_refs add column if not exists kind text not null default 'image' check (kind in ('image','carousel'));
+alter table content.style_refs add column if not exists has_person boolean not null default false;
+alter table content.style_refs add column if not exists starter text unique;    -- slug of a built-in example
+
 -- ===========================================================================
 -- BRAND KIT — the one brand this install writes for (name, voice, audience, pillars,
 -- offers, look). Read by every prompt and creative; edited on /content/brand.
@@ -436,6 +444,8 @@ drop trigger if exists trg_brand_kit_updated on content.brand_kit;
 create trigger trg_brand_kit_updated before update on content.brand_kit
   for each row execute function content.set_updated_at();
 alter table content.brand_kit enable row level security;
+-- Headshots put into examples that have a person in them (1-4).
+alter table content.brand_kit add column if not exists photos bytea[];
 
 -- Font files for creatives (Google Fonts downloads or the client's own uploads).
 create table if not exists content.brand_fonts (
@@ -624,6 +634,8 @@ alter table content.decoded_posts add column if not exists demand real;
 alter table content.decoded_posts add column if not exists fit real;
 alter table content.decoded_posts add column if not exists hunt_score real;
 alter table content.decoded_posts add column if not exists paid boolean not null default false;
+-- Image URLs of the post (carousel slides, or its single image), for Recreate.
+alter table content.decoded_posts add column if not exists media jsonb;
 alter table content.decode_runs add column if not exists jev_health real;    -- pilot's mean weakest-answer confidence
 alter table content.decode_runs add column if not exists cost_jev_usd numeric(10,4) not null default 0;
 
@@ -666,3 +678,59 @@ join content.v_content_performance p on p.id = ci.id
 where ci.hook_pattern is not null and p.vs_usual is not null
   and ci.published_at > now() - interval '90 days'
 group by ci.hook_pattern;
+
+-- Retry cap: a topic or signal that fails a step this many times (repo.ts MAX_ATTEMPTS) is no
+-- longer picked up by scheduled runs. Reset attempts to 0 to retry it.
+alter table content.topics add column if not exists attempts int not null default 0;
+alter table content.topics add column if not exists last_error text;
+alter table content.research_inputs add column if not exists attempts int not null default 0;
+alter table content.research_inputs add column if not exists last_error text;
+
+-- One of our items per Postiz post: a double booking fails here instead of posting twice.
+create unique index if not exists content_items_postiz_id_uq on content.content_items (postiz_id) where postiz_id is not null;
+
+-- Which Postiz channels (integration ids) the post goes to; null = every connected channel of its platform.
+alter table content.content_items add column if not exists channels text[];
+
+-- Creative Check (its own tab, docs/creative-check-prd.md). Self-contained on purpose: no
+-- references to content_items, so a check can never block or be blocked by the posting pipeline.
+create table if not exists content.check_creatives (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null,
+  platform     text not null default 'instagram',
+  funnel_stage text not null default 'awareness',      -- awareness|consideration|conversion|retention
+  hook         text not null default '',
+  body         text not null default '',
+  cta          text not null default '',
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+-- What the creator can show (numbers, reviews, deadlines): claims matching it count as backed.
+alter table content.check_creatives add column if not exists proof text not null default '';
+create table if not exists content.check_media (
+  creative_id  uuid not null references content.check_creatives(id) on delete cascade,
+  idx          int not null,
+  mime         text not null,                           -- image/png|image/jpeg|video/mp4
+  bytes        bytea not null,
+  primary key (creative_id, idx)
+);
+create table if not exists content.check_runs (
+  id             uuid primary key default gen_random_uuid(),
+  creative_id    uuid not null references content.check_creatives(id) on delete cascade,
+  input_hash     text not null,                         -- sha256 of copy + media: the version
+  status         text not null default 'running',       -- running|done|error
+  stage          text not null default 'queued',        -- queued|reading|listening|checking|done
+  report         jsonb,
+  feedback       jsonb not null default '{}',           -- { [recId]: { verdict, note, at } }
+  prompt_version text,
+  model          text,
+  message        text,
+  started_at     timestamptz not null default now(),
+  finished_at    timestamptz
+);
+create index if not exists idx_check_runs_creative on content.check_runs(creative_id, started_at desc);
+-- One running check per creative, enforced by the database (any number of web instances).
+create unique index if not exists check_runs_one_running on content.check_runs(creative_id) where status = 'running';
+alter table content.check_creatives enable row level security;
+alter table content.check_media enable row level security;
+alter table content.check_runs enable row level security;

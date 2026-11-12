@@ -10,14 +10,14 @@ export default async function TrainingPage() {
   let training: TrainingOverview | null = null;
   let error: string | null = null;
   try { training = await getTrainingOverview(ctx); } catch (e) { error = (e as Error).message; }
-  if (!training) return (<><PageHead crumb="training" title="Teach it your judgment." /><NeedsDb error={error} /></>);
+  if (!training) return (<><PageHead title="Training" /><NeedsDb error={error} /></>);
   const jev = (await loadHealth()).adapters.find((a) => a.id === 'jev');
   const jevOn = jev?.state === 'ok';
   const pct = training.agreementRate === null ? '—' : `${Math.round(training.agreementRate * 100)}%`;
 
   return (
     <>
-      <PageHead crumb="training" title="Teach it your judgment." sub="Every select/drop and approve/reject is already logged. Label the hard cases here; your answers count double.">
+      <PageHead title="Training" sub="Label the hard cases. Your answers count double.">
         <a className="btn" href="/content/api/dataset">Download dataset (JSONL) ↓</a>
       </PageHead>
       <KpiStrip items={[

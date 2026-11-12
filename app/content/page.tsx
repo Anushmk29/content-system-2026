@@ -8,12 +8,20 @@ import { Section, Tile, Funnel, PillarBars, Plat, StatusChip, Dot, NeedsDb, Page
 import { ApiButton, RunModuleButton } from './ui/actions';
 import { TodoTracker } from './ui/TodoTracker';
 import { ItemDrawer } from './ui/ItemDrawer';
-import { ago, when, shortDate, compact, times, RUN_COLOR, TONE, withParams } from './ui/format';
+import { ago, when, shortDate, compact, times, RUN_COLOR, TONE, PLATFORM, withParams } from './ui/format';
 
 const KIND_LABEL: Record<TodayAction['kind'], string> = {
   fix: 'Fix', blocked: 'Blocked', approve: 'Approve', topic: 'Decide', draft: 'Run', signal: 'Run', task: 'Task',
 };
 const MAX_ACTIONS = 9;
+/** Fixes and blocks carry engine messages (URLs, HTTP codes): say it plainly, fold the detail. */
+function plainDetail(a: TodayAction): string | null {
+  if (a.kind === 'fix') return 'Something stopped working. Try again, or ask Autonoetic Edge.';
+  if (a.kind !== 'blocked') return null;
+  const p = a.detail.split(' · ')[0]!;
+  const where = PLATFORM[p]?.label ?? p;
+  return a.detail.includes('proof') ? `Approved for ${where}, but a claim needs a proof link.` : `Approved for ${where}, but it couldn’t be scheduled.`;
+}
 const TONE_ATTR: Record<string, string | undefined> = { danger: 'danger', warn: 'warn', info: 'info' };
 
 export default async function TodayPage({ searchParams }: { searchParams: SearchParams }) {
@@ -29,7 +37,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
     error = (e as Error).message;
   }
   const itemHref = (id: string) => withParams('/content', sp, { item: id });
-  const head = (sub?: string) => <PageHead crumb="today" title="Today" sub={sub} />;
+  const head = (sub?: string) => <PageHead title="Today" sub={sub} />;
 
   if (!today) return (<>{head()}<NeedsDb error={error} /></>);
   const k = today.kpis;
@@ -43,8 +51,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
       {head(new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + (today.actions.length === 0 ? '. Nothing needs you right now.'
         : `. ${today.actions.length} thing${today.actions.length === 1 ? ' needs' : 's need'} you${urgent ? `, ${urgent} urgent` : ''}.`))}
 
-      <Section eyebrow="Needs you" title={today.actions.length ? 'Work top to bottom' : 'You’re clear'} id="needs-you"
-        meta={today.actions.length ? `${today.actions.length} open, urgent first${k.oldestWaitingHours != null ? `; oldest approval waiting ${k.oldestWaitingHours}h` : ''}` : undefined}>
+      <Section eyebrow="Needs you" title={today.actions.length ? 'Needs you' : 'You’re clear'} id="needs-you"
+        meta={today.actions.length ? `Urgent first: start at the top and work down.${k.oldestWaitingHours != null ? ` The oldest approval has waited ${k.oldestWaitingHours}h.` : ''}` : undefined}>
         {today.actions.length === 0 ? (
           <div className="attention" data-tone="info">
             {k.runwayDays < 3
@@ -56,8 +64,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
             {today.actions.slice(0, MAX_ACTIONS).map((a, i) => (
               <li key={i} className="attention" data-tone={TONE_ATTR[a.tone]}>
                 <div className="what">
-                  <b>{a.title}</b>
-                  <span title={a.detail}>{KIND_LABEL[a.kind]}: {a.detail}{a.at ? ` (${ago(a.at)})` : ''}</span>
+                  <b>{a.kind === 'fix' ? a.title.replace(/ is error$/, ' isn’t working').replace(/ degraded$/, ' is having trouble') : a.title}</b>
+                  {plainDetail(a) ? (
+                    <span>{plainDetail(a)} <details className="tech"><summary>details</summary>{a.detail}</details></span>
+                  ) : <span title={a.detail}>{KIND_LABEL[a.kind]}: {a.detail}{a.at ? ` (${ago(a.at)})` : ''}</span>}
                 </div>
                 <ActionButtons a={a} itemHref={itemHref} />
               </li>

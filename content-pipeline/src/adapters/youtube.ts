@@ -7,8 +7,6 @@ import { report } from '../health.ts';
 import type { ScrapedPost } from './apify.ts';
 
 const API = 'https://www.googleapis.com/youtube/v3';
-/** At or under this many seconds a video counts as a Short. */
-export const SHORT_MAX_S = 180;
 
 export interface YoutubeAdapter extends Adapter {
   scrape(handle: string, opts: { since: Date; limit: number }): Promise<{ posts: ScrapedPost[]; costUsd: number }>;

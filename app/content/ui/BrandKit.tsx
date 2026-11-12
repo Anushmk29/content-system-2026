@@ -236,7 +236,7 @@ function GoogleFonts({ families }: { families: string[] }) {
   return <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?${families.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;800`).join('&')}&display=swap`} />;
 }
 
-export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand; fonts: FontRow[]; curated: readonly string[]; onSaved?: Saved; cta?: string }) {
+export function LookSection({ kit, fonts, curated, onSaved, cta, photos }: { kit: Brand; fonts: FontRow[]; curated: readonly string[]; onSaved?: Saved; cta?: string; photos?: number }) {
   const a = useAction();
   const up = useAction();
   const [heading, setHeading] = useState(kit.headingFont ?? '');
@@ -244,6 +244,8 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
   const [corner, setCorner] = useState(kit.logoCorner);
   const [palette, setPalette] = useState<string[]>(kit.palette);
   const [logoV, setLogoV] = useState(0); // cache-buster after an upload
+  const [photoN, setPhotoN] = useState(photos ?? 0);
+  const [photoV, setPhotoV] = useState(0);
   const families = [...new Set([...fonts.map((f) => f.family), ...curated])];
   const uploaded = new Set(fonts.filter((f) => f.source === 'upload').map((f) => f.family));
   const hasLogo = kit.hasLogo || logoV > 0;
@@ -253,21 +255,22 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
     for (const f of Array.from(files)) form.append('file', f);
     if (!(await up.call(key, 'POST', path, form))) return;
     if (key === 'logo') setLogoV(Date.now());
+    if (key === 'photos') { setPhotoN(files.length); setPhotoV(Date.now()); }
     if (key === 'font') location.reload();
   };
   const fontPick = (label: string, value: string, set: (v: string) => void, weight: number) => (
     <label className="bk-field bk-font"><span className="bk-lab">{label}</span>
       <select className="input" value={value} onChange={(e) => set(e.target.value)}>
-        <option value="">From the style (default)</option>
+        <option value="">Like the example (default)</option>
         {families.map((f) => <option key={f} value={f}>{f}{uploaded.has(f) ? ' (uploaded)' : ''}</option>)}
       </select>
       <span className="bk-specimen" style={{ fontFamily: value ? `'${value}', var(--font-ui)` : undefined, fontWeight: value ? weight : undefined }}>
-        {value ? (uploaded.has(value) ? `${value} is used on creatives; it can’t be previewed here.` : 'Aa Bb Cc 0123 The quick brown fox') : 'Uses the style’s own font'}
+        {value ? (uploaded.has(value) ? `${value} is used on creatives; it can’t be previewed here.` : 'Aa Bb Cc 0123 The quick brown fox') : 'Uses the example’s own font'}
       </span>
     </label>
   );
   return (
-    <Card title="Look" hint="Your logo, fonts and colours go on every creative made from a style." done={kitDone(kit).look}>
+    <Card title="Look" hint="Your logo, fonts and colours go on every creative made from an example." done={kitDone(kit).look}>
       <GoogleFonts families={[heading, body].filter((f) => f && !uploaded.has(f))} />
       <div className="bk-logo">
         <div className="bk-field">
@@ -285,6 +288,23 @@ export function LookSection({ kit, fonts, curated, onSaved, cta }: { kit: Brand;
           </span>
           <span className="bk-note">A PNG with a transparent background looks best.</span>
         </div>
+        {photos !== undefined && (
+          <div className="bk-field">
+            <span className="bk-lab">Your photos</span>
+            <div className="bk-logo-well" style={{ display: 'flex', gap: 6 }}>
+              {photoN > 0
+                // eslint-disable-next-line @next/next/no-img-element
+                ? Array.from({ length: photoN }, (_, i) => <img key={i} src={`/content/api/brand/photos?i=${i}&v=${photoV}`} alt={`Your photo ${i + 1}`} />)
+                : <span className="bk-note">No photos yet</span>}
+            </div>
+            <span className="bk-line">
+              <label className="btn btn-sm">{photoN ? 'Replace photos' : 'Upload 1–4 photos'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => upload('/content/api/brand/photos', 'photos', e.target.files)} /></label>
+              {photoN > 0 && <button type="button" className="btn btn-sm" onClick={async () => { if (await up.call('rm', 'DELETE', '/content/api/brand/photos')) setPhotoN(0); }}>Remove</button>}
+            </span>
+            <span className="bk-note">Used when a design has a person in it. A clear head-and-shoulders shot works best; without one, the person is left out.</span>
+          </div>
+        )}
         <fieldset className="bk-field bk-corner-set">
           <legend className="bk-lab">Logo corner</legend>
           <div className="bk-corner">
@@ -447,7 +467,7 @@ function KitMeter({ kit }: { kit: Brand }) {
 }
 
 /** The whole kit on one page (/content/brand). */
-export function BrandKit({ kit, fonts, curated }: { kit: Brand; fonts: FontRow[]; curated: readonly string[] }) {
+export function BrandKit({ kit, fonts, curated, photos }: { kit: Brand; fonts: FontRow[]; curated: readonly string[]; photos?: number }) {
   return (
     <div className="bk-page">
       <div className="bk-sheet">
@@ -456,7 +476,7 @@ export function BrandKit({ kit, fonts, curated }: { kit: Brand; fonts: FontRow[]
         <VoiceSection kit={kit} />
         <AudienceSection kit={kit} />
         <OffersSection kit={kit} />
-        <LookSection kit={kit} fonts={fonts} curated={curated} />
+        <LookSection kit={kit} fonts={fonts} curated={curated} photos={photos} />
         <AccountsSection kit={kit} />
         <LearnedSection kit={kit} />
       </div>

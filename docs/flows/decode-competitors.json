@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Decode: Competitor Research Run",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1500, 700]
+  },
+  "participants": [
+    { "id": "page", "type": "frontend", "label": "Decode page" },
+    { "id": "api", "type": "backend", "label": "API → decode-service" },
+    { "id": "runner", "type": "backend", "label": "runDecode loop" },
+    { "id": "apify", "type": "external", "label": "Apify actors" },
+    { "id": "jev", "type": "cloud", "label": "Jev judge" },
+    { "id": "llm", "type": "cloud", "label": "LLM" },
+    { "id": "db", "type": "database", "label": "Postgres" }
+  ],
+  "segments": [
+    { "from": 164, "to": 300, "label": "Set up + start" },
+    { "from": 306, "to": 470, "label": "Background run" },
+    { "from": 476, "to": 556, "label": "Poll + stop" },
+    { "from": 562, "to": 624, "label": "Use the result" }
+  ],
+  "messages": [
+    { "from": "page", "to": "api", "y": 182, "label": "POST /decode/competitors {handles}", "variant": "default" },
+    { "from": "api", "to": "db", "y": 210, "label": "saveCompetitor → content.competitors", "variant": "default" },
+    { "from": "page", "to": "api", "y": 238, "label": "POST /decode", "variant": "emphasis" },
+    { "from": "api", "to": "db", "y": 266, "label": "startDecode → insert decode_runs", "variant": "emphasis" },
+    { "from": "api", "to": "page", "y": 294, "label": "201 {run}", "variant": "return" },
+    { "from": "api", "to": "runner", "y": 324, "label": "void runDecode(runId)", "variant": "dashed" },
+    { "from": "runner", "to": "apify", "y": 352, "label": "apify.scrape(platform, handle)", "variant": "emphasis" },
+    { "from": "apify", "to": "runner", "y": 380, "label": "public posts → decoded_posts", "variant": "return" },
+    { "from": "runner", "to": "jev", "y": 408, "label": "jev.decide(post questions)", "variant": "emphasis" },
+    { "from": "runner", "to": "llm", "y": 436, "label": "formats, then breakdown batches", "variant": "emphasis" },
+    { "from": "runner", "to": "db", "y": 464, "label": "hunt_score, formats, post seq", "variant": "emphasis" },
+    { "from": "page", "to": "api", "y": 494, "label": "GET /decode/:run?after=seq", "variant": "default" },
+    { "from": "api", "to": "page", "y": 522, "label": "run + formats + new posts", "variant": "return" },
+    { "from": "page", "to": "api", "y": 550, "label": "PATCH /decode/:run → stopDecode", "variant": "dashed" },
+    { "from": "page", "to": "api", "y": 580, "label": "POST /decode/use {mode}", "variant": "emphasis" },
+    { "from": "api", "to": "db", "y": 608, "label": "useDecode → Ideas · stealFormat → drafts + QC", "variant": "emphasis" }
+  ],
+  "activations": [
+    { "participant": "api", "from": 176, "to": 330, "type": "backend" },
+    { "participant": "runner", "from": 318, "to": 470, "type": "backend" },
+    { "participant": "api", "from": 488, "to": 556, "type": "backend" },
+    { "participant": "api", "from": 574, "to": 614, "type": "backend" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "One run at a time", "items": ["startDecode refuses while another run is 'running'", "POST returns 201 at once; runDecode works in-process", "resumeRunId restarts a run at its saved stage"] },
+    { "dot": "amber", "title": "Scoring and judging", "items": ["hunt = 100·√(demand·fit), or 100·demand without Jev", "Paid flag: low engagement rate or Jev says sponsored", "LLM writes hook + beats; Jev's confident picks override format"] },
+    { "dot": "emerald", "title": "Stop and use", "items": ["PATCH sets 'stopped'; the loop checks between accounts and batches", "use / counter add an Ideas signal; nothing is posted", "steal drafts pass QC, then wait in Approvals"] }
+  ]
+}

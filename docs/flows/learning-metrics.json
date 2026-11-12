@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Learning Loop, Metrics and Costs",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "stages": [
+    {
+      "label": "Sources"
+    },
+    {
+      "label": "Collect"
+    },
+    {
+      "label": "Store"
+    },
+    {
+      "label": "Derive"
+    },
+    {
+      "label": "Read"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "decide",
+      "type": "backend",
+      "label": "decide()",
+      "sublabel": "topic_score \u00b7 qc_signals",
+      "stage": 0,
+      "row": 0,
+      "tag": "Jev / LLM"
+    },
+    {
+      "id": "training",
+      "type": "frontend",
+      "label": "Training page",
+      "sublabel": "POST /decisions \u00b7 /seed",
+      "stage": 0,
+      "row": 1,
+      "tag": "admin"
+    },
+    {
+      "id": "manual",
+      "type": "frontend",
+      "label": "POST /metrics",
+      "sublabel": "recordMetrics",
+      "stage": 0,
+      "row": 2,
+      "tag": "live items"
+    },
+    {
+      "id": "collect",
+      "type": "external",
+      "label": "Post stats",
+      "sublabel": "Postiz \u00b7 Own Results",
+      "stage": 1,
+      "row": 2,
+      "tag": "scheduled",
+      "yOffset": 57,
+      "height": 48
+    },
+    {
+      "id": "paid",
+      "type": "external",
+      "label": "Paid calls",
+      "sublabel": "LLM \u00b7 Apify \u00b7 Jev",
+      "stage": 0,
+      "row": 3,
+      "tag": "onCost"
+    },
+    {
+      "id": "decisions",
+      "type": "database",
+      "label": "content.decisions",
+      "sublabel": "one row per answer",
+      "stage": 2,
+      "row": 0,
+      "tag": "dataset",
+      "width": 132
+    },
+    {
+      "id": "metrics",
+      "type": "database",
+      "label": "content.metrics",
+      "sublabel": "per post",
+      "stage": 2,
+      "row": 2
+    },
+    {
+      "id": "costEvents",
+      "type": "database",
+      "label": "content.cost_events",
+      "sublabel": "feature \u00b7 ref",
+      "stage": 2,
+      "row": 3,
+      "tag": "ledger",
+      "width": 132
+    },
+    {
+      "id": "analytics",
+      "type": "backend",
+      "label": "Analytics",
+      "sublabel": "performanceSignal",
+      "stage": 3,
+      "row": 2,
+      "tag": "Table 30"
+    },
+    {
+      "id": "dataset",
+      "type": "backend",
+      "label": "GET /dataset",
+      "sublabel": "exportDataset JSONL",
+      "stage": 4,
+      "row": 0,
+      "tag": "admin"
+    },
+    {
+      "id": "weekly",
+      "type": "backend",
+      "label": "Weekly Review",
+      "sublabel": "LLM \u2192 operator todos",
+      "stage": 4,
+      "row": 2,
+      "tag": "7 days"
+    },
+    {
+      "id": "costs",
+      "type": "frontend",
+      "label": "GET /costs",
+      "sublabel": "costsCsv",
+      "stage": 4,
+      "row": 3,
+      "tag": "admin"
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-log",
+      "from": "decide",
+      "to": "decisions",
+      "label": "logDecision",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "f-label",
+      "from": "training",
+      "to": "decisions",
+      "label": "human labels \u00b7 seed=true",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          530,
+          271
+        ]
+      ]
+    },
+    {
+      "id": "f-manual",
+      "from": "manual",
+      "to": "metrics",
+      "label": "insertMetrics",
+      "route": "straight"
+    },
+    {
+      "id": "f-collect",
+      "from": "collect",
+      "to": "metrics",
+      "label": "pulled stats",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          530,
+          437
+        ]
+      ],
+      "labelSegment": 0
+    },
+    {
+      "id": "f-export",
+      "from": "decisions",
+      "to": "dataset",
+      "label": "toExample",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "f-signal",
+      "from": "metrics",
+      "to": "analytics",
+      "label": "roll-up",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "f-outcome",
+      "from": "analytics",
+      "to": "dataset",
+      "label": "outcome",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "via": [
+        [
+          745,
+          271
+        ],
+        [
+          960,
+          271
+        ]
+      ]
+    },
+    {
+      "id": "f-review",
+      "from": "analytics",
+      "to": "weekly",
+      "label": "signals",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "f-cost",
+      "from": "paid",
+      "to": "costEvents",
+      "label": "costScoped",
+      "variant": "security",
+      "route": "straight"
+    },
+    {
+      "id": "f-csv",
+      "from": "costEvents",
+      "to": "costs",
+      "label": "CSV by range",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Decision log",
+      "items": [
+        "LLM teaches; Jev runs alongside and is logged used=false (shadow)",
+        "Jev answers first only when primary and above minConfidence",
+        "Unreviewed QC seeds never enter the training export"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Label strength",
+      "items": [
+        "outcome 3 > human 2 > teacher 1 as per-example weight",
+        "Jev vs LLM disagreements go to the Training queue first"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cost ledger",
+      "items": [
+        "Every paid call inserts one cost_events row via onCost",
+        "Untagged calls are recorded as feature 'untagged'"
+      ]
+    }
+  ]
+}

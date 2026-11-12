@@ -13,7 +13,7 @@ import { report } from '../health.ts';
 const run = promisify(execFile);
 
 // Prints one JSON line: { text, segments: [{start,end,text}], lang, duration }.
-const WHISPER_PY = `
+export const WHISPER_PY = `
 import sys, json
 from faster_whisper import WhisperModel
 def run(device):

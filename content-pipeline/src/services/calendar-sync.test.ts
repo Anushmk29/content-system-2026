@@ -4,6 +4,7 @@ import { createTestDb } from '../db/test-db.ts';
 import { createContentItems } from '../db/content-items.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import { planItem } from './board-service.ts';
+import { bookItem } from './calendar-sync-service.ts';
 import { createPostiz } from '../adapters/postiz.ts';
 
 const db = await createTestDb();
@@ -11,12 +12,12 @@ const items = createContentItems(db);
 const DAY = 86_400_000;
 
 /** A fake Postiz: records calls; `fail` makes the next schedule or delete throw. */
-function fakePostiz() {
+function fakePostiz(prefix = "pz") {
   const calls: string[] = [];
   let n = 0;
   const p = {
     configured: true, fail: '' as '' | 'schedule' | 'remove',
-    async schedule(i: { scheduledAt: string }) { if (p.fail === 'schedule') throw new Error('Postiz 500'); calls.push(`schedule ${i.scheduledAt}`); return { postizId: `pz${++n}` }; },
+    async schedule(i: { scheduledAt: string }) { if (p.fail === 'schedule') throw new Error('Postiz 500'); calls.push(`schedule ${i.scheduledAt}`); return { postizId: `${prefix}${++n}` }; },
     async remove(id: string) { if (p.fail === 'remove') throw new Error('Postiz 404'); calls.push(`remove ${id}`); },
   };
   return { p, calls };
@@ -90,4 +91,20 @@ test('Postiz remove: DELETE /public/v1/posts/:id with the key', async () => {
   } finally {
     globalThis.fetch = real;
   }
+});
+
+test('bookItem: two bookings at once reach Postiz once; a pulled item is never booked', async () => {
+  const { p, calls } = fakePostiz('book');
+  const ctx = ctxWith(false, p);
+  const id = await approved();
+  const at = new Date(Date.now() + DAY);
+  const [a, b] = await Promise.all([bookItem(ctx, id, at), bookItem(ctx, id, at)]);
+  assert.equal([a, b].filter(Boolean).length, 1);
+  assert.equal(calls.length, 1);
+  assert.equal((await row(id)).status, 'queued');
+
+  const pulled = await approved();
+  await db.query(`update content.content_items set status = 'draft' where id = $1`, [pulled]);
+  assert.equal(await bookItem(ctx, pulled, at), null);
+  assert.equal(calls.length, 1);
 });

@@ -5,9 +5,10 @@ import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
 import { createRepo, type ContentItemRow } from '../db/repo.ts';
 import { generateCreative, type GenerateResult } from './style-service.ts';
-import { isPlacement } from '../creative.ts';
+import { isPlacement, isRasterImage } from '../creative.ts';
 import { EDITABLE_STATUSES } from '../../core/src/index.ts';
 import { splitSlides } from '../slides.ts';
+import { VISUAL_FORMATS } from '../prompts/platform-playbooks.ts';
 
 type AssetMime = 'image/png' | 'image/jpeg' | 'video/mp4';
 interface AssetInfo { idx: number; mime: AssetMime; source: 'generated' | 'upload'; style_id: string | null; size: number; created_at: string }
@@ -20,7 +21,9 @@ const MAX_IMAGES = 10;
  * slide text already; LinkedIn/Facebook bodies with "---" breaks become a carousel; otherwise
  * (and on X, where "---" splits a thread) one slide with the hook.
  */
-export function creativeText(item: Pick<ContentItemRow, 'platform' | 'title' | 'hook' | 'body'>): string {
+export function creativeText(item: Pick<ContentItemRow, 'platform' | 'title' | 'hook' | 'body'> & { format?: string | null }): string {
+  // Single image: its headline, then the caption for the design's other text blocks.
+  if (item.format === 'quote_card') return [(item.hook || item.title).trim(), item.body?.trim()].filter(Boolean).join('\n\n');
   const slides = splitSlides(item.body ?? '');
   if (item.platform !== 'x' && slides.length > 1) return slides.join('\n---\n');
   if (item.platform === 'instagram' && slides.length === 1) return slides[0]!;
@@ -46,22 +49,24 @@ async function replace(ctx: ModuleContext, itemId: string, files: { buf: Buffer;
   });
 }
 
-/** Make the post's creative from a saved style and attach it (replacing what was there). */
-export async function saveItemCreative(ctx: ModuleContext, itemId: string, input: { styleId: string; fresh?: boolean }): Promise<GenerateResult> {
+/** Make the post's creative from a saved example (or one-off reference images) and attach it, replacing what was there. */
+export async function saveItemCreative(ctx: ModuleContext, itemId: string, input: { styleId?: string; refs?: Buffer[] }): Promise<GenerateResult> {
   const item = await editableItem(ctx, itemId);
   const placement = isPlacement(item.platform) ? item.platform : null;
   if (!placement) throw new Error('Blog posts don’t carry a creative.');
   // The creative's button: the post's CTA when it's button-sized, else none (the caption carries the link).
   const cta = item.cta && item.cta.length <= 28 ? item.cta : undefined;
-  const r = await generateCreative(ctx, { styleId: input.styleId, placement, text: creativeText(item), cta, fresh: input.fresh, brief: item.title });
-  await replace(ctx, itemId, r.images.map((buf) => ({ buf, mime: 'image/png' as const })), 'generated', input.styleId);
+  const r = await generateCreative(ctx, { styleId: input.styleId, refs: input.refs, placement, text: creativeText(item), cta, brief: item.title });
+  await replace(ctx, itemId, r.images.map((buf) => ({ buf, mime: 'image/png' as const })), 'generated', input.styleId ?? null);
   return r;
 }
 
-const sniff = (b: Buffer): AssetMime | null =>
+// MP4: an `ftyp` box whose major brand is a real MP4 one, not just any 4 bytes after it.
+const MP4_BRANDS = ['isom', 'iso2', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'dash'];
+export const sniff = (b: Buffer): AssetMime | null =>
   b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) ? 'image/png'
   : b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) ? 'image/jpeg'
-  : b.subarray(4, 8).toString('latin1') === 'ftyp' ? 'video/mp4'
+  : b.subarray(4, 8).toString('latin1') === 'ftyp' && MP4_BRANDS.includes(b.subarray(8, 12).toString('latin1')) ? 'video/mp4'
   : null;
 
 /** The client's own media: up to 10 images (other image types become PNG), or one MP4 video. */
@@ -72,7 +77,8 @@ export async function uploadItemAssets(ctx: ModuleContext, itemId: string, files
   for (const buf of files) {
     const mime = sniff(buf);
     if (mime) { out.push({ buf, mime }); continue; }
-    try { out.push({ buf: await sharp(buf).rotate().png().toBuffer(), mime: 'image/png' }); }
+    if (!isRasterImage(buf)) throw new Error('Use PNG, JPG or WebP images, or an MP4 video.');
+    try { out.push({ buf: await sharp(buf, { limitInputPixels: 4e7 }).rotate().png().toBuffer(), mime: 'image/png' }); }
     catch { throw new Error('Use PNG, JPG or WebP images, or an MP4 video.'); }
   }
   const videos = out.filter((f) => f.mime === 'video/mp4').length;
@@ -92,6 +98,27 @@ export async function listItemAssets(ctx: ModuleContext, itemId: string): Promis
   return (await ctx.db.query<AssetInfo>(
     `select idx, mime, source, style_id, octet_length(bytes) as size, created_at from content.content_assets where item_id = $1 order by idx`, [itemId],
   )).rows.map((r) => ({ ...r, size: Number(r.size) }));
+}
+
+/** Design desk: every carousel / image post not yet live. 'needs' = no visual yet, 'made' = has one and
+ *  can still change, 'locked' = approved with the copy (scheduled or about to be). */
+export type DesignStage = 'needs' | 'made' | 'locked';
+export interface DesignRow {
+  id: string; platform: string; format: string; title: string; hook: string | null; body: string | null;
+  status: string; scheduled_at: string | null; created_at: string; stage: DesignStage;
+  assets: { idx: number; mime: string; source: string; created_at: string }[];
+}
+export async function listDesignQueue(ctx: ModuleContext): Promise<DesignRow[]> {
+  return (await ctx.db.query<DesignRow>(
+    `select ci.id, ci.platform::text, ci.format::text, ci.title, ci.hook, ci.body, ci.status::text,
+       ci.scheduled_at::text, ci.created_at::text,
+       coalesce((select json_agg(json_build_object('idx', a.idx, 'mime', a.mime, 'source', a.source, 'created_at', a.created_at) order by a.idx)
+                 from content.content_assets a where a.item_id = ci.id), '[]'::json) as assets,
+       case when ci.status::text <> all($2) then 'locked'
+            when exists (select 1 from content.content_assets a where a.item_id = ci.id) then 'made' else 'needs' end as stage
+     from content.content_items ci
+     where ci.format::text = any($1) and ci.status in ('idea','draft','qc_passed','needs_approval','approved','queued')
+     order by ci.scheduled_at nulls last, ci.created_at`, [VISUAL_FORMATS, EDITABLE_STATUSES])).rows;
 }
 
 export async function getItemAsset(ctx: ModuleContext, itemId: string, idx: number): Promise<{ mime: AssetMime; bytes: Buffer } | null> {

@@ -7,7 +7,7 @@ export const maxDuration = 600;
 
 // POST /content/api/videos/:id → transcribe (or retry) one decoded video now.
 //   { analyze: true, fresh? } → why it worked + two ideas (one LLM call + Jev).
-//   { useIdea: 0 | 1 }       → that idea becomes an Ideas signal.
+//   { useIdea: 0 | 1 }       → that idea drafted as our script + post, through QC, into Approvals (~1-3 min).
 export const POST = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { analyze?: boolean; fresh?: boolean; useIdea?: unknown };

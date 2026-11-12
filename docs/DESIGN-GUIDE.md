@@ -284,6 +284,27 @@ active toggle, with add/edit inline. Each run picks competitors, platforms and a
   FB pages, IG profiles, X profiles). That keeps us within the earlier public-pages posture.
 - Apify spend is shown next to AI cost in the lime cell as `$ ai + $ apify`.
 
+### 6f. Page order: answer first (revised 2026-11-08)
+
+The reel's order (numbers → map → formats) made people hunt for what to do. The Decode page now
+reads **answer → why → evidence**, and this overrides §6–§6e where they disagree:
+
+1. **Scan bar** replaces the KPI strip: four steps (Watch → Scan → Read → Make, filled from
+   `run.stage`), a real `decoded / total` progress line while running, the last scan's settings
+   and cost on one mono line, `scan settings` in a popover (it starts from the last run's values),
+   and "who we watch" opening inline from `watching N competitors · edit`.
+2. **Make this next** is the page's one lime tile: the top two formats with ≥ 2 posts that we
+   haven't posted (then the best ones we have), plus their best non-paid post. One main button
+   (`make my version`) per card; `Save to Ideas` and the counter-angle sit in a `⋯` menu.
+3. **What's working** merges "Which formats win?" and "What they do that we don't": a `new to you`
+   badge on the row, a bar for the median vs their usual, and rows built on one post faded.
+4. **The evidence**: map and post pane side by side (the top-posts grid is gone; ←/→ still walk
+   the ranking). Map points are plain squares in the format's colour. Lane and hook chips sit
+   under `more filters`, and formats with no posts are hidden.
+
+While a run is live the map comes first so the fly-in is visible. When it finishes, Make this next
+fades in (150ms). That's the only motion added, because it reports a real change.
+
 ## 7. Motion rules (apply everywhere)
 
 1. Motion only reports something real, such as a count changing, a row arriving or the selection
@@ -306,6 +327,23 @@ active toggle, with add/edit inline. Each run picks competitors, platforms and a
 **Measured vs estimated:** the *behaviours* above were seen in frames sampled every 0.5s (stream
 of cards, shrink on landing, grey blurred cloud, ring around an enlarged thumb, colour on filter,
 stop→decode). The exact *millisecond values* are my estimates. Tune them by eye against the reel.
+
+### 8a. Less text, one next step (revised 2026-11-08)
+
+People were reading paragraphs to work out what to do. Every page follows these rules:
+
+1. **Header:** the title, then a lede of one short line (about 12 words). No breadcrumb and no
+   "data as of" stamp. The steps live folded under "How this page works".
+2. **Next bar:** `PageHead next={{ text, action }}` names the one thing to do now, in a sentence
+   with one button, worked out from the page's own data (e.g. Approvals: "6 drafts waiting. Start
+   with the oldest." + **Review it →**). Leave it out only when there is truly nothing to do.
+3. **Sections:** one heading (the title, or the eyebrow when there's no title). A string `meta` is
+   explanation, so it becomes a **?** (`Hint`); a counted list puts its count in the heading.
+4. **Cards and rows:** a name, one number and one main button. Descriptions go in a `title`
+   tooltip; quieter actions go behind **⋯**; long plans, breakdowns and transcripts fold.
+5. **KPI tiles:** a label and a number. Add a sub-line only when it changes what you'd do.
+6. **Errors:** say what happened in plain words and fold the engine message ("details").
+7. **Long lists:** show the best 6, then "Show N more".
 
 ## 8. Every page in this language
 

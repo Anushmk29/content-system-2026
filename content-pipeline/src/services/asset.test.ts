@@ -14,6 +14,7 @@ test('creativeText: carousel bodies become slides, X threads and plain posts use
   assert.equal(creativeText({ ...base, platform: 'linkedin', body: 'One long post' }), 'The hook');
   assert.equal(creativeText({ ...base, platform: 'x', body: 'tweet 1\n---\ntweet 2' }), 'The hook');
   assert.equal(creativeText({ ...base, platform: 'instagram', body: 'Only slide' }), 'Only slide');
+  assert.equal(creativeText({ ...base, platform: 'instagram', format: 'quote_card', body: 'A caption' }), 'The hook\n\nA caption'); // image: headline, then caption
   assert.equal(creativeText({ title: 'Title', hook: null, platform: 'facebook', body: null }), 'Title');
 });
 
@@ -31,7 +32,7 @@ test('a creative saved on a post is stored, served, locked on approval, and publ
     adapters: {
       claude: {
         spentUsd: 0,
-        async complete() { return '{"style_prompt":"Navy poster with a coral circle top right, bold sans headline","palette":["#14183a"],"text_zones":[{"role":"headline","x":0.08,"y":0.2,"w":0.6,"h":0.1}]}'; },
+        async complete() { return '{"description":"Navy poster with a coral circle top right, bold sans headline","has_person":false}'; },
         async generateImage() { return sharp({ create: { width: 1080, height: 1350, channels: 3, background: '#14183a' } }).png().toBuffer(); },
       },
       postiz: { configured: true, async schedule(i: (typeof sent)[number]) { sent.push(i); return { postizId: `p${sent.length}` }; } },
@@ -75,4 +76,13 @@ test('a creative saved on a post is stored, served, locked on approval, and publ
   assert.deepEqual(byPlat.linkedin!.media!.map((m) => m.mime), ['image/png', 'image/png', 'image/png']);
   assert.equal(byPlat.linkedin!.title, 'Cash flow');
   assert.deepEqual(byPlat.facebook!.media!.map((m) => [m.mime, m.name.endsWith('.mp4')]), [['video/mp4', true]]);
+});
+
+test('uploads: only PNG/JPEG/WebP/GIF bytes reach the image decoder; SVG is refused', async () => {
+  const { isRasterImage } = await import('../creative.ts');
+  assert.ok(isRasterImage(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])));
+  assert.ok(isRasterImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0])));
+  assert.ok(isRasterImage(Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1')));
+  assert.ok(!isRasterImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')));
+  assert.ok(!isRasterImage(Buffer.from('<?xml version="1.0"?><svg/>')));
 });

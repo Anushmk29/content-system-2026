@@ -12,7 +12,8 @@
 
 services:
   postiz:
-    image: ghcr.io/gitroomhq/postiz-app:latest
+    # Pin a tested release in .env (POSTIZ_VERSION=v2.x.y) so a restart never pulls a breaking image.
+    image: ghcr.io/gitroomhq/postiz-app:${POSTIZ_VERSION:-latest}
     container_name: postiz
     restart: unless-stopped
     environment:
@@ -28,7 +29,7 @@ services:
       TEMPORAL_ADDRESS: "temporal:7233"
       IS_GENERAL: "true"
       RUN_CRON: "true"
-      DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-false}"  # set true after you create your account
+      DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-true}"  # set false in .env only while creating your account
       STORAGE_PROVIDER: "local"
       UPLOAD_DIRECTORY: "/uploads"
       NEXT_PUBLIC_UPLOAD_DIRECTORY: "/uploads"
@@ -44,7 +45,8 @@ services:
       - postiz-config:/config/
       - postiz-uploads:/uploads/
     ports:
-      - "5000:5000"
+      # Local only: reach it through the reverse proxy (or an SSH tunnel), never straight from the internet.
+      - "127.0.0.1:5000:5000"
     depends_on:
       postiz-redis:
         condition: service_healthy

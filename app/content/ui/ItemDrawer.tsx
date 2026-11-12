@@ -1,11 +1,11 @@
 // Post detail drawer (?item=<id> on any page): platform tabs, live preview, copy editing
 // before approval, claims, approve/changes/reject, posting time, metrics and history.
 import Link from 'next/link';
-import { getContext, getItemDetail, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS, humanScore, HUMAN_MIN } from '@pratapai/content-pipeline';
+import { getContext, getItemDetail, platformChannels, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS, humanScore, HUMAN_MIN } from '@pratapai/content-pipeline';
 import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
-import { ApprovalActions, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
-import { EscTo } from './actions';
+import { ApprovalActions, ChannelPicker, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
+import { EscTo, ApiButton } from './actions';
 import { PLATFORM, STATUS_COLOR, ago, when, prettyPillar, compact, times } from './format';
 
 export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; closeHref: string; linkFor: (id: string) => string }) {
@@ -28,6 +28,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
   const [assets, styles] = hasCreative
     ? await Promise.all([listItemAssets(getContext(), item.id).catch(() => []), editable ? listStyles(getContext()).catch(() => []) : []])
     : [[], []];
+  const channels = live ? null : await platformChannels(getContext(), item.platform);
   // Hooks for this platform (any platform for a blog); the used one is looked up even if it's not in the top list.
   const forPlat = item.platform === 'blog' ? undefined : [item.platform];
   const [hooks, used] = await Promise.all([
@@ -76,7 +77,8 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
             <h3>Creative</h3>
             <CreativePanel key={item.id} itemId={item.id} platform={item.platform} editable={editable}
               assets={assets.map((x) => ({ idx: x.idx, mime: x.mime, source: x.source, created_at: String(x.created_at) }))}
-              styles={styles.map((s) => ({ id: s.id, name: s.name }))} />
+              styles={styles.map(({ id, name, kind, pages, has_person }) => ({ id, name, kind, pages, has_person }))}
+              want={item.format === 'quote_card' ? 'image' : item.format === 'carousel' ? 'carousel' : undefined} />
           </section>
         )}
 
@@ -118,6 +120,13 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
         {item.status === 'needs_approval' && (
           <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} reasons={[...CHANGE_REASONS]} /></section>
         )}
+        {item.status === 'draft' && (
+          <section>
+            <h3>Step 2 · Send back for review</h3>
+            <p className="faint" style={{ margin: '0 0 8px', fontSize: 12.5 }}>This is a draft again (changes were requested). Fix the words above, then send it back. Approve and Reject come back once it&apos;s in the queue.</p>
+            <ApiButton path={`/content/api/items/${item.id}`} method="PATCH" body={{ resubmit: true }} label="↩ Send back for review" busyLabel="checking…" className="btn btn-ink" />
+          </section>
+        )}
 
         <section>
           <h3>Claims {claims.length ? `(${claims.length})` : ''}</h3>
@@ -138,6 +147,9 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
 
         <section>
           <h3>Publishing</h3>
+          {channels && (channels.length
+            ? <ChannelPicker itemId={item.id} channels={channels} chosen={item.channels ?? null} />
+            : <p className="faint" style={{ margin: '0 0 8px', fontSize: 12.5 }}>No {p?.label ?? item.platform} channel is connected in Postiz, so this post can’t go out. Connect one in Postiz.</p>)}
           <ul className="row-list">
             <li className="row"><span className="grow faint">Posting time</span><span className="mono">{item.scheduled_at ? `${when(item.scheduled_at)} (${ago(item.scheduled_at)})` : 'not set'}</span></li>
             <li className="row"><span className="grow faint">Postiz</span><span className="mono">{item.postiz_id ? `sent · ${item.postiz_id}` : 'not sent'}</span></li>

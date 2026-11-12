@@ -44,14 +44,23 @@ export const analyticsModule: Module = {
     const rows = await repo.publishedWithMetrics();
 
     const signals: Record<string, number> = {};
+    let captureFailed = 0;
     for (const row of rows) {
-      const signal = performanceSignal(row);
-      signals[signal] = (signals[signal] ?? 0) + 1;
-      await items.transition(row.id, { event: 'capture', signal });
+      try {
+        const signal = performanceSignal(row);
+        await items.transition(row.id, { event: 'capture', signal });
+        signals[signal] = (signals[signal] ?? 0) + 1;
+      } catch (e) {
+        captureFailed++;
+        ctx.logger.warn(`capture ${row.id}: ${(e as Error).message}`);
+      }
     }
 
     const summary = Object.entries(signals).map(([k, v]) => `${v} ${k}`).join(', ');
-    const message = rows.length ? `${pullNote}; captured ${rows.length} item(s): ${summary}` : `${pullNote}; none ready to capture`;
-    return ok(pulled + rows.length, message, { pulled, failed, signals, captured: rows.length });
+    const captured = rows.length - captureFailed;
+    const message = (rows.length ? `${pullNote}; captured ${captured} item(s): ${summary}` : `${pullNote}; none ready to capture`)
+      + (captureFailed ? `; ${captureFailed} capture(s) failed` : '');
+    const meta = { pulled, failed, signals, captured, captureFailed };
+    return captureFailed ? { status: 'degraded', itemsProcessed: pulled + captured, message, meta } : ok(pulled + captured, message, meta);
   },
 };

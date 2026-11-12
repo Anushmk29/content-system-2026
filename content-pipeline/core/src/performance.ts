@@ -2,10 +2,10 @@
 // the result on the item (content_items.performance_signal); readers prefer that stored value.
 export type PerformanceSignal = 'repurpose' | 'awareness_only' | 'improve_hook' | 'archive';
 
-export const HIGH_REACH = 1000;
+const HIGH_REACH = 1000;
 // Engaged = beat your own usual (vs_usual ≥ 1, from own-account results); before those exist,
 // a fixed bar on hand-entered qualified engagement.
-export const HIGH_ENGAGEMENT = 20;
+const HIGH_ENGAGEMENT = 20;
 
 export function performanceSignal(r: {
   reach?: number | string | null; impressions?: number | string | null; qualified_engagement?: number | string | null;

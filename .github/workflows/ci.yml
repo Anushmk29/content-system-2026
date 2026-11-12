@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            content-pipeline/package-lock.json
+      - run: npm ci --prefix content-pipeline && npm ci
+      - run: npm --prefix content-pipeline run typecheck
+      - run: npm run build # builds the engine first (prebuild), then the app; type-checks the app
+      - run: npm test # app tests + engine tests (in-process Postgres, no services needed)
+      - run: npm audit --omit=dev --audit-level=high

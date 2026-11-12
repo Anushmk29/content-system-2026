@@ -1,0 +1,10 @@
+# HTTPS (automatic certificates) in front of the app. Caddy replaces any X-Forwarded-For a client
+# sends with the real client IP, which is what the app's rate limiter trusts (CONTENT_PROXY_HOPS=1).
+# No response timeout: a dashboard-triggered full run can take many minutes.
+{$DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 60MB
+	}
+	reverse_proxy app:3000
+}

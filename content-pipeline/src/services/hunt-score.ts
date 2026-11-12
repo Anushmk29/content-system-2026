@@ -22,7 +22,7 @@ function pct(x: number | null, xs: number[]): number {
   return xs.filter((v) => v < x).length / (xs.length - 1);
 }
 
-export const engagementRate = (p: HuntInput) =>
+const engagementRate = (p: HuntInput) =>
   p.views ? (p.reactions + p.comments + p.shares) / p.views : null;
 
 export function jevFit(a: Record<string, JevAnswer>, postedAt: string | null, now: Date): number {

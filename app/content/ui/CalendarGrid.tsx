@@ -6,7 +6,10 @@ import Link from 'next/link';
 import { useAction } from './actions';
 import { PLATFORM, STATUS_COLOR, STATUS_LABEL } from './format';
 
-export interface CalItem { id: string; title: string; platform: string; status: string; at: string | null; movable: boolean }
+export interface CalItem { id: string; title: string; platform: string; format?: string; status: string; at: string | null; movable: boolean }
+
+/** Formats worth a badge on the calendar (a text post needs none). */
+const FORMAT_BADGE: Record<string, string> = { carousel: 'carousel', quote_card: 'image', reel_script: 'reel', short_script: 'video' };
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -54,6 +57,7 @@ export function CalendarGrid({ view, anchor, items, unplanned }: {
       title={`${it.title} · ${PLATFORM[it.platform]?.label ?? it.platform} · ${STATUS_LABEL[it.status] ?? it.status}${it.at ? ` · ${new Date(it.at).toLocaleString()}` : ''}${it.movable ? ' · drag to reschedule' : it.status === 'queued' ? ' · already in Postiz' : ''}`}>
       <span className="plat" style={{ '--c': PLATFORM[it.platform]?.color ?? 'var(--faint)', fontSize: 10 } as React.CSSProperties}>{PLATFORM[it.platform]?.glyph ?? '?'}</span>
       {it.at && <span className="mono faint">{new Date(it.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>}
+      {it.format && FORMAT_BADGE[it.format] && <span className="mono faint" style={{ fontSize: 10 }}>{FORMAT_BADGE[it.format]}</span>}
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
       {!it.movable && it.status === 'queued' && <span className="faint" aria-label="locked">·sent</span>}
     </Link>

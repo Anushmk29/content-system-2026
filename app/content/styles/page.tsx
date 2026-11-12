@@ -1,31 +1,38 @@
-// Styles — reusable visual references. Upload an example creative once; it's analysed into a
-// saved style prompt + blank template, so future creatives reuse it without re-analysing.
-import { getContext, listStyles, PLACEMENTS, type StyleRow } from '@pratapai/content-pipeline';
+// Examples — designs you like (an image, or a carousel's pages), kept as they are. The image model
+// recreates one with your words and brand: here with "Make one", or on any post's creative panel.
+import { getContext, listStyles, ensureStarterExamples, POST_FORMATS, type StyleRow } from '@pratapai/content-pipeline';
 import { PageHead, Section, NeedsDb } from '../ui/viz';
-import { StyleUpload, StyleCard, type PlacementOpt } from '../ui/Styles';
+import { StyleUpload, StyleCard, type VisualTargets } from '../ui/Styles';
 
-const PLACEMENT_OPTS: PlacementOpt[] = Object.entries(PLACEMENTS).map(([id, p]) => ({ id, label: p.label, w: p.w, h: p.h }));
+const LABEL: Record<string, string> = { linkedin: 'LinkedIn', instagram: 'Instagram', facebook: 'Facebook', x: 'X' };
+const targets = (k: 'image' | 'carousel') => Object.entries(POST_FORMATS)
+  .filter(([, fs]) => fs.some((f) => f.id === k)).map(([id]) => ({ id, label: LABEL[id] ?? id }));
+const TARGETS: VisualTargets = { image: targets('image'), carousel: targets('carousel') };
 
 export default async function StylesPage() {
   let styles: StyleRow[] | null = null;
   let error: string | null = null;
-  try { styles = await listStyles(getContext()); } catch (e) { error = (e as Error).message; }
+  try {
+    const ctx = getContext();
+    await ensureStarterExamples(ctx).catch((e) => console.warn('starter examples', (e as Error).message));
+    styles = await listStyles(ctx);
+  } catch (e) { error = (e as Error).message; }
   const head = (
-    <PageHead crumb="styles" title="Styles."
-      sub="Upload a post you like. It’s rebuilt once as your own template, with the same fonts, colours and layout and room for your words. Check it against the example, say what to fix, and every post after that costs nothing to make." />
+    <PageHead title="Design examples"
+      sub="Designs you like. The AI recreates them with your words and brand." />
   );
   if (!styles) return (<>{head}<NeedsDb error={error} /></>);
   return (
     <>
       {head}
-      <Section eyebrow="New" title="Add a style" meta="PNG, JPG or WebP · up to 15 MB · about 10–40¢ once">
+      <Section eyebrow="New" title="Add an example" meta="PNG, JPG or WebP: one image, or every page of a carousel. About 1¢, once.">
         <StyleUpload />
       </Section>
-      <Section eyebrow="Library" title="Saved styles" meta={`${styles.length} saved`}>
+      <Section eyebrow="Library" title={`Your examples (${styles.length})`}>
         {styles.length === 0
-          ? <p className="muted">No styles yet.</p>
+          ? <p className="muted">No examples yet.</p>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 20 }}>
-              {styles.map((s) => <StyleCard key={`${s.id}:${s.name}`} s={s} placements={PLACEMENT_OPTS} />)}
+              {styles.map((s) => <StyleCard key={`${s.id}:${s.name}`} s={s} targets={TARGETS} />)}
             </div>}
       </Section>
     </>

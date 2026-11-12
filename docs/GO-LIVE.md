@@ -1,7 +1,8 @@
 # Go-Live & Test Guide
 
 > **2026-10 note:** Telegram approvals and lead triage were removed. Approvals happen on the
-> dashboard **Approvals** page; ignore the Telegram steps further down this guide.
+> dashboard **Approvals** page; ignore the Telegram and leads steps further down this guide.
+> **Deploying?** Use `docs/DEPLOY.md` (VPS + Docker). Serverless hosting is not supported.
 
 Everything in the Bible is **built and tested**. What's left is **wiring** — giving the
 engine real accounts (database, LLM, publishing, approvals) and pointing a scheduler at
@@ -9,9 +10,9 @@ it. This guide is the operator's checklist: what you provide, how to test each l
 exactly what to expect.
 
 > TL;DR for the impatient:
-> 1. Create a Postgres DB → run `db/schema.sql` + `db/seed.sql`.
-> 2. Copy `.env.content.example` → `.env.content`, fill in `CONTENT_DATABASE_URL` + `CONTENT_OPENROUTER_API_KEY`.
-> 3. `cd content-pipeline && npm install && npm test` → expect **48 passing**.
+> 1. Copy `.env.example` → `.env`, fill in `CONTENT_DATABASE_URL` + `CONTENT_OPENROUTER_API_KEY`.
+> 2. Create a Postgres DB → `npm run migrate` (+ `db/seed.sql` for demo data, never in production).
+> 3. `npm test` → expect everything passing.
 > 4. Drop the package into your Next app (INTEGRATION.md) and open **`/content`** — run the
 >    pipeline and do every human step (capture signals, select topics, approve drafts,
 >    record results, see leads) from the dashboard. No command line needed.
@@ -218,7 +219,7 @@ curl -X POST https://<host>/content/api/leads \
 # record a performance snapshot for a published item
 curl -X POST https://<host>/content/api/metrics \
   -H 'content-type: application/json' -H 'x-content-secret: <CONTENT_RUN_SECRET>' \
-  -d '{"contentItemId":"<uuid>","impressions":4200,"comments":11,"qualifiedEngagement":6}'
+  -d '{"itemId":"<uuid>","impressions":4200,"comments":11,"qualifiedEngagement":6}'
 ```
 Then run the pipeline:
 - `lead_triage` → scores the lead, flags it high-intent, pings Telegram. `OK lead_triage 1× — 1 lead(s) triaged, 1 high-intent`.
@@ -228,9 +229,10 @@ Then run the pipeline:
   the frequent cron.
 
 ### 4.6 Automate it
-Point Vercel Cron / GitHub Actions / any cron at:
+The Docker setup runs the pipeline hourly on its own (`docs/DEPLOY.md` §3). From an external
+cron on a long-running server instead:
 ```
-POST /content/api/run      (header: x-content-secret: <CONTENT_RUN_SECRET>)
+POST /content/api/run      (header: x-content-secret: <CONTENT_CRON_SECRET>)
 ```
 Recommended cadence: run the full pipeline a few times a day for the steady stages, and
 trigger `POST /content/api/modules/weekly_review/run` once a week.
@@ -241,20 +243,19 @@ trigger `POST /content/api/modules/weekly_review/run` once a week.
 
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
-| `/content/api/health` | GET | — | system + module + adapter health |
-| `/content/api/pipeline` | GET | — | status counts + recent items |
+| `/content/api/healthz` | GET | none | 200 if the database answers, else 503 (uptime monitors) |
+| `/content/api/health` | GET | login | system + module + adapter health |
+| `/content/api/pipeline` | GET | login | status counts + recent items |
 | `/content/api/run` | POST | `x-content-secret` | run the whole pipeline |
 | `/content/api/modules/:id/run` | POST | `x-content-secret` | run one module |
 | `/content/api/signals` | POST | — | capture a raw research signal (dashboard) |
 | `/content/api/topics/:id` | PATCH | — | select/drop a scored topic (dashboard) |
 | `/content/api/approvals/:id` | PATCH | — | approve/changes/reject a draft (dashboard) |
 | `/content/api/console/metrics` | POST | — | record performance (dashboard) |
-| `/content/api/leads` | POST | — | capture an inbound lead |
-| `/content/api/metrics` | POST | `x-content-secret` | record a performance snapshot (external webhook) |
-| `/content/api/telegram/webhook` | POST | secret token | approve/changes/reject taps |
+| `/content/api/metrics` | POST | `x-content-secret` | record a performance snapshot (`{ itemId, ... }`) |
 | `/content/api/todos` `/todos/:id` | POST/PATCH/DELETE | — | operator todo tracker |
 
-(Auth headers only enforced when the matching secret env var is set.)
+(Everything except `/healthz` and login needs a login cookie or `x-content-secret`. Outside `next dev` the app refuses to serve until the secrets are set.)
 
 ---
 
@@ -282,8 +283,7 @@ trigger `POST /content/api/modules/weekly_review/run` once a week.
 
 1. **Honest-numbers gate** — an item with an unproven claim cannot publish (`v_publish_ready` + `core.canPublish`).
 2. **Escalate-only approval** — a risk lane can never be lowered (`core.escalateLane`).
-3. **Approval-gated by default** — `safe_auto` is OFF unless you set
-   `CONTENT_ALLOW_SAFE_AUTO=true`, and even then only for template-based content derived
+3. **Approval-gated by default** — `safe_auto` is never proposed: every item goes to a human. Planned later, only for template-based content derived
    from already-approved work (Bible §17 phase 6).
 4. **Fault isolation** — one module failing never stops the others; every run is recorded.
 5. **No silent failure** — missing integrations show as `degraded`, not crashes.

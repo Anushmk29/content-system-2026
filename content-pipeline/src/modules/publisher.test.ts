@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { nextSlot, pickSlot, postParts } from './publisher.module.ts';
-import { pickIntegration, settingsFor, toMetrics } from '../adapters/postiz.ts';
+import { pickIntegration, settingsFor, toMetrics, connectedTo, targetsFor } from '../adapters/postiz.ts';
 
 test('posting slots: today if still ahead, else tomorrow; never twice a day per platform', () => {
   const at = (s: string) => new Date(s);
@@ -27,6 +27,11 @@ test('post parts: X thread with the link last, Instagram caption only, others bo
   assert.deepEqual(postParts({ platform: 'instagram', title: 't', hook: 'Hook line', body: 's1\n---\ns2', cta: 'Save this' }, utm),
     ['Hook line\n\nSave this']);
   assert.deepEqual(postParts({ platform: 'facebook', title: 't', body: 'post', cta: null }, utm), [`post\n\n${utm}`]);
+  // A single image on Instagram: the body is the caption. A LinkedIn carousel: the slides aren't the caption.
+  assert.deepEqual(postParts({ platform: 'instagram', format: 'quote_card', title: 't', hook: 'Headline', body: 'Caption', cta: 'Save this' }, utm),
+    ['Caption\n\nSave this']);
+  assert.deepEqual(postParts({ platform: 'linkedin', format: 'carousel', title: 't', hook: 'Hook line', body: 's1\n---\ns2', cta: 'Thoughts?' }, utm),
+    [`Hook line\n\nThoughts? ${utm}`]);
 });
 
 test('Postiz: first live matching channel, and the settings each channel requires', () => {
@@ -51,4 +56,15 @@ test('post stats: each platform label lands in our field, newest running total w
     { label: 'Clicks', data: pt(12) }, { label: 'Engagement', data: pt(9) }, { label: 'Likes', data: pt('x' as never) },
   ]), { impressions: 500, reach: 300, clicks: 12 });
   assert.deepEqual(toMetrics([]), {});
+});
+
+test('connectedTo: only platforms with an enabled Postiz channel', () => {
+  const on = connectedTo([{ id: '1', identifier: 'linkedin-page' }, { id: '2', identifier: 'x', disabled: true }, { id: '3', identifier: 'reddit' }]);
+  assert.deepEqual(on.filter((p) => p !== 'linkedin-page'), ['linkedin', 'reddit']);
+});
+
+test('targetsFor: chosen channels only, all of the platform when none chosen', () => {
+  const all = [{ id: 'me', identifier: 'linkedin' }, { id: 'page', identifier: 'linkedin-page' }, { id: 'fb', identifier: 'facebook' }, { id: 'off', identifier: 'linkedin', disabled: true }];
+  assert.deepEqual(targetsFor(all, 'linkedin', null).map((i) => i.id), ['me', 'page']);
+  assert.deepEqual(targetsFor(all, 'linkedin', ['page', 'fb', 'off']).map((i) => i.id), ['page']);
 });

@@ -32,7 +32,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Search
 
   const csv = withParams('/content/api/costs', { range, ...(range === 'custom' ? custom : {}) }, {});
   const head = (
-    <PageHead crumb="costs" title="Where the money goes." sub="Every paid call (AI, images, scrapes, Jev), what it was for, and whether it matches the providers’ bills.">
+    <PageHead title="Costs" sub="Every paid call and what it was for.">
       <nav className="seg" aria-label="Range">
         {COST_RANGES.filter((r) => r !== 'custom').map((r) => (
           <Link key={r} href={`/content/costs?range=${r}`} aria-current={r === range ? 'page' : undefined}>{RANGE_LABEL[r]}</Link>

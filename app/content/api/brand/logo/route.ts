@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getContext, getLogo, setLogo } from '@pratapai/content-pipeline';
-import { denied, handle } from '../../guard';
+import { handle } from '../../guard';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -21,9 +21,7 @@ export const POST = handle(async (req: Request) => {
 });
 
 // DELETE /content/api/brand/logo → no logo on creatives.
-export async function DELETE(req: Request) {
-  const no = denied(req);
-  if (no) return no;
-  await setLogo(getContext(), null).catch(() => {});
+export const DELETE = handle(async () => {
+  await setLogo(getContext(), null);
   return NextResponse.json({ ok: true, message: 'Logo removed' });
-}
+});

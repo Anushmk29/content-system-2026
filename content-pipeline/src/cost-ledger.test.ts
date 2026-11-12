@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestDb } from './db/test-db.ts';
 import { createLogger } from './logger.ts';
-import { costRecorder, costScoped, withCostScope, type CostEvent } from './cost-ledger.ts';
+import { costRecorder, costScoped, withCostScope, budgetGuard, gate, BudgetExceeded, type CostEvent } from './cost-ledger.ts';
 import { createClaude } from './adapters/claude.ts';
 import { runCostUsd } from './adapters/apify.ts';
 import { getCosts, costsCsv, costDays } from './services/cost-service.ts';
@@ -79,4 +79,22 @@ test('costDays: ranges are IST days', () => {
   assert.deepEqual(costDays('7d', now), ['2026-10-01', '2026-10-07']);
   assert.deepEqual(costDays('month', now), ['2026-10-01', '2026-10-07']);
   assert.deepEqual(costDays('custom', now, { from: '2026-10-05', to: '2026-10-01' }), ['2026-10-01', '2026-10-05']);
+});
+
+test('daily budget: calls stop once the last 24h reach the cap; no cap = never blocks', async () => {
+  const fresh = await createTestDb();
+  await fresh.query(`insert into content.cost_events (provider, kind, feature, cost_usd, ok) values ('openrouter','llm','t',4.5,true)`);
+  let calls = 0;
+  const llm = { complete: async () => { calls++; return 'x'; } };
+  await gate(llm, ['complete'], budgetGuard(fresh, 10, createLogger('test'))).complete();
+  assert.equal(calls, 1);
+  const capped = gate({ complete: async () => { calls++; return 'x'; } }, ['complete'], budgetGuard(fresh, 4, createLogger('test')));
+  await assert.rejects(capped.complete(), BudgetExceeded);
+  assert.equal(calls, 1, 'the paid call never ran');
+  await budgetGuard(fresh, undefined, createLogger('test'))();
+});
+
+test('daily budget: an unreadable ledger blocks the paid call', async () => {
+  const down = { query: async () => { throw new Error('connection refused'); } } as unknown as Parameters<typeof budgetGuard>[0];
+  await assert.rejects(budgetGuard(down, 3, createLogger('test'))(), BudgetExceeded);
 });

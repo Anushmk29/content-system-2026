@@ -9,8 +9,17 @@ import { ItemDrawer } from '../ui/ItemDrawer';
 import { ago, when, prettyPillar, withParams, STATUS_LABEL, STATUS_COLOR, PILLAR_COLOR, PLATFORM, TONE } from '../ui/format';
 
 const NEXT_STEP: Record<string, string> = {
-  idea: 'Draft it', draft: 'Waiting on QC Gate', qc_passed: 'Route to approval', needs_approval: 'Waiting on you',
-  approved: 'Ready to schedule', queued: 'Scheduled in Postiz', published: 'Add results', performance_captured: 'Measured', archived: 'Archived',
+  idea: 'draft it on Ideas', draft: 'quality check on the next run', qc_passed: 'moving to Approvals', needs_approval: 'approve or ask for changes',
+  approved: 'gets scheduled on the next run', queued: 'posts at its planned time', published: 'results come in by themselves',
+  performance_captured: 'measured', archived: 'archived',
+};
+/** Stages that wait on a person; everything else the system moves on by itself. */
+const YOURS = new Set(['idea', 'needs_approval']);
+/** One line under each column title: what the column means. */
+const COL_SUB: Record<string, string> = {
+  idea: 'Picked ideas not written yet.', draft: 'Written by the AI, not checked yet.', qc_passed: 'Passed the quality check.',
+  needs_approval: 'Read these and approve them.', approved: 'Approved, waiting for a time slot.', queued: 'In Postiz with a time set.',
+  published: 'Live on the platform.', performance_captured: 'Live, with numbers in.',
 };
 
 export default async function BoardPage({ searchParams }: { searchParams: SearchParams }) {
@@ -19,7 +28,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   let error: string | null = null;
   try { board = await getIdeaBoard(getContext()); } catch (e) { error = (e as Error).message; }
   const pillars = pillarSlugs(await loadBrand(getContext()));
-  if (!board) return (<><PageHead crumb="board" title="Every idea, by stage." /><NeedsDb error={error} /></>);
+  if (!board) return (<><PageHead title="All posts" /><NeedsDb error={error} /></>);
 
   const q = (sp.q ?? '').toLowerCase();
   const match = (i: IdeaCard) =>
@@ -39,8 +48,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
   return (
     <>
-      <PageHead crumb="board" title="Every idea, by stage."
-        sub={`${ideas.length} idea${ideas.length === 1 ? '' : 's'}${filtered ? ' match the filter' : ''}. Each card is one idea with its platform copies, in the column where work is still owed.`}>
+      <PageHead title="All posts"
+        sub={`${ideas.length} idea${ideas.length === 1 ? '' : 's'}${filtered ? ' match the filter' : ''}, each in the column of its step.`}>
         <nav className="seg" aria-label="View">
           <Link href={withParams('/content/board', sp, { view: null, item: null })} aria-current={view === 'board' ? 'page' : undefined}>board</Link>
           <Link href={withParams('/content/board', sp, { view: 'list', item: null })} aria-current={view === 'list' ? 'page' : undefined}>list</Link>
@@ -50,7 +59,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       <KpiStrip items={[
         { label: 'In flight', value: n('idea', 'draft', 'qc_passed', 'needs_approval', 'approved', 'queued'), sub: 'not yet live' },
         { label: 'Drafts', value: n('draft'), href: '/content/board?stage=draft' },
-        { label: 'In QC', value: n('qc_passed'), href: '/content/board?stage=qc_passed' },
+        { label: 'Checked', value: n('qc_passed'), href: '/content/board?stage=qc_passed' },
         { label: 'Awaiting you', value: n('needs_approval'), href: '/content/approvals' },
         { label: 'Live', value: n('published', 'performance_captured'), href: '/content/board?stage=published' },
       ]} />
@@ -79,26 +88,30 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
           {columns.map((c) => (
             <section key={c.status} className="col" aria-label={STATUS_LABEL[c.status]}>
               <div className="col-head">
-                <span className="dot" style={{ '--c': STATUS_COLOR[c.status] ?? TONE.faint } as React.CSSProperties} />
-                {STATUS_LABEL[c.status]}
-                <span className="mono faint" style={{ marginLeft: 'auto' }}>{c.ideas.length}</span>
+                <span className="col-name">
+                  <span className="dot" style={{ '--c': STATUS_COLOR[c.status] ?? TONE.faint } as React.CSSProperties} />
+                  {STATUS_LABEL[c.status]}
+                  <span className="col-count">{c.ideas.length}</span>
+                </span>
+                <span className={`col-who${YOURS.has(c.status) ? ' is-you' : ''}`}>{YOURS.has(c.status) ? 'Needs you' : 'Moves by itself'}</span>
+                {COL_SUB[c.status] && <span className="col-sub">{COL_SUB[c.status]}</span>}
               </div>
               {c.ideas.map((i) => <IdeaCardView pillars={pillars} key={i.id} idea={i} href={openFor(i)} />)}
-              {!c.ideas.length && <p className="empty" style={{ fontSize: 12 }}>—</p>}
+              {!c.ideas.length && <p className="col-empty">Nothing here right now</p>}
             </section>
           ))}
         </div>
       ) : (
         <div style={{ overflowX: 'auto', borderTop: '1px solid var(--rule)', paddingTop: 12 }}>
           <table className="table">
-            <thead><tr><th>Idea</th><th>Platforms</th><th>Stage</th><th>Next step</th><th>Pillar</th><th>Updated</th></tr></thead>
+            <thead><tr><th>Idea</th><th>Platforms</th><th>Stage</th><th>Next step</th><th>Theme</th><th>Updated</th></tr></thead>
             <tbody>
               {ideas.map((i) => (
                 <tr key={i.id}>
                   <td><Link href={openFor(i)} scroll={false}>{i.title}</Link></td>
                   <td><span style={{ display: 'inline-flex', gap: 4 }}>{i.pieces.map((p) => <Plat key={p.id} p={p.platform} status={p.status} />)}</span></td>
                   <td><StatusChip status={i.stage} /></td>
-                  <td className="muted">{NEXT_STEP[i.stage]}</td>
+                  <td className={YOURS.has(i.stage) ? "bcard-you" : "muted"}>{YOURS.has(i.stage) ? "Your turn: " : "Next: "}{NEXT_STEP[i.stage]}</td>
                   <td className="muted">{prettyPillar(i.pillar)}</td>
                   <td className="faint" title={when(i.updatedAt)}>{ago(i.updatedAt)}</td>
                 </tr>
@@ -116,18 +129,20 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
 
 function IdeaCardView({ idea, href, pillars }: { idea: IdeaCard; href: string; pillars: string[] }) {
   const pi = pillars.indexOf(idea.pillar ?? '');
-  const waiting = idea.stage === 'needs_approval';
+  const you = YOURS.has(idea.stage);
   return (
-    <Link href={href} scroll={false} className="card" style={waiting ? { background: 'var(--hilite)' } : undefined}>
-      <div className="t">{idea.title}</div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+    <Link href={href} scroll={false} className={`bcard${you ? ' is-you' : ''}`}>
+      <span className="bcard-t">{idea.title}</span>
+      <span className="bcard-plats" aria-label={`${idea.pieces.length} platform version${idea.pieces.length === 1 ? '' : 's'}`}>
         {idea.pieces.map((p) => <Plat key={p.id} p={p.platform} status={p.status} />)}
-      </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {idea.pillar && <Chip color={PILLAR_COLOR[pi] ?? TONE.muted}>{prettyPillar(idea.pillar)}</Chip>}
-        <span className="faint mono" style={{ fontSize: 11, marginLeft: 'auto' }} title={when(idea.updatedAt)}>{ago(idea.updatedAt)}</span>
-      </div>
-      <div className="mono" style={{ marginTop: 8, fontSize: 11, color: waiting ? 'var(--warn)' : 'var(--faint)' }}>→ {NEXT_STEP[idea.stage]}</div>
+      </span>
+      {idea.pillar && (
+        <span className="bcard-theme"><i className="dot" style={{ '--c': PILLAR_COLOR[pi] ?? TONE.muted } as React.CSSProperties} />{prettyPillar(idea.pillar)}</span>
+      )}
+      <span className="bcard-foot">
+        <span className={you ? 'bcard-you' : 'faint'}>{you ? 'Your turn: ' : 'Next: '}{NEXT_STEP[idea.stage]}</span>
+        <span className="faint mono" title={when(idea.updatedAt)}>{ago(idea.updatedAt)}</span>
+      </span>
     </Link>
   );
 }

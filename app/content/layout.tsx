@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Inter, JetBrains_Mono } from 'next/font/google';
-import { getContext, getOperatorConsole, getTrainingOverview, listScripts, readBrand, brand as activeBrand, type Brand } from '@pratapai/content-pipeline';
+import { getContext, getOperatorConsole, getTrainingOverview, listScripts, listDesignQueue, readBrand, brand as activeBrand, type Brand } from '@pratapai/content-pipeline';
 import { loadHealth } from './data';
 import { openMode } from './auth';
 import { Nav, type NavBadges } from './ui/Nav';
 import { RunControls } from './ui/RunControls';
+import { Loader3D } from './ui/actions';
 import { CommandPalette, PaletteButton } from './ui/CommandPalette';
 import { Dot } from './ui/viz';
 import { HEALTH_COLOR, ago, healthIssue } from './ui/format';
@@ -22,7 +23,7 @@ export default async function ContentLayout({ children }: { children: ReactNode 
   // Set by middleware.ts from the login cookie; absent only on the login page itself.
   const h = await headers();
   const role = h.get('x-content-role');
-  const bare = <div className={`${inter.variable} ${jet.variable}`}>{children}</div>;
+  const bare = <div className={`${inter.variable} ${jet.variable}`}>{children}<Loader3D /></div>;
   if (role !== 'client' && role !== 'admin') return bare;
   const admin = role === 'admin';
   const viewOnly = admin && !openMode(); // see api/guard.ts
@@ -31,12 +32,13 @@ export default async function ContentLayout({ children }: { children: ReactNode 
   // A client starts with the guided setup until it's finished; the setup itself has no sidebar.
   // Only a kit actually read as unfinished redirects; a DB hiccup must not bounce a client into setup.
   if ((h.get('x-content-path') ?? '').startsWith('/content/setup')) return bare;
-  const [brand, health, console_, training, scripts] = await Promise.all([
+  const [brand, health, console_, training, scripts, design] = await Promise.all([
     readBrand(ctx).catch((): Brand | null => null),
     loadHealth(), // never throws
     getOperatorConsole(ctx).catch(() => null),
     admin ? getTrainingOverview(ctx).catch(() => null) : null,
     listScripts(ctx).catch(() => []),
+    listDesignQueue(ctx).catch(() => []),
   ]);
   if (!admin && brand && !brand.onboardedAt) redirect('/content/setup');
   const brandName = (brand ?? activeBrand()).saved ? (brand ?? activeBrand()).name : '';
@@ -49,6 +51,7 @@ export default async function ContentLayout({ children }: { children: ReactNode 
     training: training?.queue.length ?? 0,
     systemBroken: issues,
     scripts: scripts.filter((s) => s.stage === 'to_film' || s.stage === 'filmed').length,
+    design: design.filter((d) => d.stage === 'needs').length,
   };
   const modules = health.modules.map((m) => ({ id: m.id, title: m.title, lastStatus: m.lastStatus }));
 
@@ -71,6 +74,7 @@ export default async function ContentLayout({ children }: { children: ReactNode 
         {children}
       </div>
       <CommandPalette modules={modules} admin={admin} />
+      <Loader3D />
     </div>
   );
 }

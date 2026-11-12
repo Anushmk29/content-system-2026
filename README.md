@@ -2,7 +2,7 @@
 
 A **content-to-pipeline engine**, not a "post everywhere" machine.
 Turns expertise → ranked topics → platform-native drafts → quality/risk gate →
-one-tap approval → Postiz scheduling → published posts → leads → weekly learning.
+one-tap approval → Postiz scheduling → published posts → weekly learning.
 
 Governing reference: **`Content_Pipeline_Bible_Final.docx`** (v3). This repo implements it.
 
@@ -21,7 +21,7 @@ others keep running and the dashboard shows it. Nothing fails silently.
 | Concern | Implementation |
 |---|---|
 | Source of truth / data model (Bible §16.3) | **Postgres** in a dedicated **`content` schema** — `db/schema.sql` |
-| Safety-critical logic (scoring, lanes, claims, approvals, leads, UTM) | **`content-pipeline/core/`** — pure, **29 unit tests** |
+| Safety-critical logic (scoring, lanes, claims, approvals, UTM) | **`content-pipeline/core/`** — pure, unit tested |
 | Pipeline stages | **`content-pipeline/src/modules/`** — each a fault-isolated `Module` |
 | Orchestration | **`content-pipeline/src/modules/orchestrator.ts`** — `Promise.allSettled`, records every run |
 | Writing (drafts, angles, research, review) | **LLM** adapter (`adapters/claude.ts`) — Claude via OpenRouter (default) or Anthropic |
@@ -56,28 +56,26 @@ INTEGRATION.md         How to drop into an existing Next.js app non-destructivel
 This repo includes a minimal Next.js host so you can open the dashboard with no extra setup:
 ```bash
 # 1. Database (dedicated Postgres; everything lives in the `content` schema)
-psql "$CONTENT_DATABASE_URL" -f db/schema.sql
-psql "$CONTENT_DATABASE_URL" -f db/seed.sql      # optional sample data
+cp .env.example .env                             # fill in CONTENT_DATABASE_URL + CONTENT_OPENROUTER_API_KEY
+npm ci --prefix content-pipeline && npm ci
+npm run migrate                                   # applies db/schema.sql in one transaction
+psql "$CONTENT_DATABASE_URL" -f db/seed.sql      # optional sample data — never in production
 
-# 2. Config
-cp .env.local.example .env.local                 # fill in CONTENT_DATABASE_URL + CONTENT_OPENROUTER_API_KEY
-
-# 3. Install + run (the engine builds automatically via predev)
-npm install
-npm run dev                                       # → open http://localhost:3000/content
+# 2. Run (the engine builds automatically via predev)
+npm run dev                                       # → open http://localhost:3001/content
 ```
 From `/content` you run the pipeline and do every human step (signals, topic selection,
-approvals, metrics, leads) — no command line. To drop it into an **existing** Next app
+approvals, metrics) — no command line. To drop it into an **existing** Next app
 instead, see INTEGRATION.md.
 
 ```bash
-# Headless alternative (no dashboard): fill .env.content, then
-cd content-pipeline && npm install && npm test   # 48 tests
-npm run pipeline                                  # runs all 9 modules against your DB
+# Headless alternative (no dashboard)
+npm test                                          # app + engine tests
+npm run pipeline                                  # runs every module once against your DB
 ```
 
-> **Setting it up for real?** Follow **`docs/GO-LIVE.md`** — what you provide, how to
-> test each layer, and exactly what to expect at every step.
+> **Setting it up for real?** Deploy with **`docs/DEPLOY.md`** (VPS + Docker, scheduling,
+> backups, monitoring, runbook); **`docs/GO-LIVE.md`** covers each integration and how to test it.
 
 ## What the dashboard does (`/content`)
 The dashboard is the **control room** — you can run the whole loop here without a terminal:
@@ -102,7 +100,9 @@ The dashboard is the **control room** — you can run the whole loop here withou
 POST /content/api/run                  # run the whole pipeline
 POST /content/api/modules/:id/run      # run one module
 ```
-Point a scheduler at these with the `x-content-secret: $CONTENT_CRON_SECRET` header.
+The Docker setup (`infra/app`) already runs the pipeline hourly. An external scheduler can call
+these with the `x-content-secret: $CONTENT_CRON_SECRET` header instead. A module that is already
+running is skipped, never run twice. See `docs/DEPLOY.md`.
 
 See **`docs/GO-LIVE.md`** (setup + testing), **`docs/BUILD-SPEC.md`** (technical),
 and **`docs/STRATEGY-PLAYBOOK.md`** (operator).

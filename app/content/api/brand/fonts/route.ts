@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getContext, uploadFont, deleteFont } from '@pratapai/content-pipeline';
-import { denied, handle } from '../../guard';
+import { handle } from '../../guard';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -18,11 +18,9 @@ export const POST = handle(async (req: Request) => {
 });
 
 // DELETE /content/api/brand/fonts?family=… → remove every weight of that family.
-export async function DELETE(req: Request) {
-  const no = denied(req);
-  if (no) return no;
+export const DELETE = handle(async (req: Request) => {
   const family = new URL(req.url).searchParams.get('family');
   if (!family) return NextResponse.json({ ok: false, error: 'family is required' }, { status: 400 });
   await deleteFont(getContext(), family);
   return NextResponse.json({ ok: true, message: 'Removed' });
-}
+});

@@ -6,7 +6,7 @@
 //   0. Nobody: this subject was already decided on exactly this input text (e.g. QC on a
 //      draft that came back unchanged) — the applied answer is reused, no model is called.
 //   1. Jev, when this task runs Jev-primary (CONTENT_JEV_MODE=primary, or the task is in
-//      CONTENT_JEV_PRIMARY_TASKS) and its weakest answer >= minConfidence.
+//      CONTENT_JEV_PRIMARY_TASKS) and its weakest answer >= minConfidence (any, for trustJev tasks).
 //   2. The LLM, when configured (otherwise Jev runs alongside and is only logged).
 //   3. With no LLM: Jev at any confidence, else it throws.
 import type { ModuleContext } from './module.ts';
@@ -48,7 +48,7 @@ export async function decide<S, T>(ctx: ModuleContext, def: DecisionTaskDef<S, T
 
   if (jevFirst(ctx, def.task)) {
     const r = await jevRun;
-    if (r && minConfidence(r.answers) >= jev.minConfidence) return useJev(r);
+    if (r && (def.trustJev || minConfidence(r.answers) >= jev.minConfidence)) return useJev(r);
   }
 
   if (!claude.configured) {

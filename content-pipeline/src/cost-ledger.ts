@@ -7,7 +7,7 @@ import type { Db } from './db/client.ts';
 import type { Logger } from './logger.ts';
 
 export interface CostEvent {
-  provider: 'openrouter' | 'anthropic' | 'apify' | 'jev';
+  provider: 'openrouter' | 'apify' | 'jev';
   kind: 'llm' | 'image' | 'scrape' | 'decision';
   model?: string;
   inputTokens?: number;
@@ -50,4 +50,39 @@ export function costRecorder(db: Db, logger: Logger): (e: CostEvent) => Promise<
       logger.error('cost ledger insert failed', (err as Error).message);
     }
   };
+}
+
+export class BudgetExceeded extends Error { override name = 'BudgetExceeded'; }
+
+/** Throws BudgetExceeded once the last 24h of cost_events reach `dailyUsd` (unset/0 = no cap).
+ *  Checked before every paid call; the total is cached 10s so a busy run doesn't query per call.
+ *  A failed read blocks the call: with no ledger we can't know what's been spent.
+ *  ponytail: per-process cache (web and scheduler each keep one), so parallel calls can overshoot by
+ *  one burst; a shared reservation table if this ever runs on several instances. */
+export function budgetGuard(db: Db, dailyUsd: number | undefined, logger: Logger): () => Promise<void> {
+  let spent = 0, readAt = 0;
+  return async () => {
+    if (!dailyUsd) return;
+    if (Date.now() - readAt > 10_000) {
+      try {
+        const r = await db.query<{ usd: string | null }>(
+          `select sum(cost_usd)::text as usd from content.cost_events where at > now() - interval '1 day'`);
+        spent = Number(r.rows[0]?.usd ?? 0);
+        readAt = Date.now();
+      } catch (e) {
+        logger.warn('budget check failed', (e as Error).message);
+        throw new BudgetExceeded('budget check failed — paid calls are paused until the database answers');
+      }
+    }
+    if (spent >= dailyUsd) throw new BudgetExceeded(`daily budget reached: $${spent.toFixed(2)} of $${dailyUsd} in the last 24h (CONTENT_DAILY_BUDGET_USD)`);
+  };
+}
+
+/** Put `guard` in front of the named methods of an adapter (mutates and returns it). */
+export function gate<T extends object>(adapter: T, methods: (keyof T)[], guard: () => Promise<void>): T {
+  for (const m of methods) {
+    const fn = adapter[m] as unknown as (...a: unknown[]) => Promise<unknown>;
+    (adapter as Record<keyof T, unknown>)[m] = async (...a: unknown[]) => { await guard(); return fn.apply(adapter, a); };
+  }
+  return adapter;
 }

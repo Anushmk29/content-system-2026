@@ -20,8 +20,8 @@ export default async function HooksPage() {
     ]);
   } catch (e) { error = (e as Error).message; }
   const head = (
-    <PageHead crumb="hooks" title="Openings that worked."
-      sub="Every first line Decode broke down, ranked by hunt score and by how far the post beat that account’s usual. New drafts borrow the shape of the winners automatically; open any post to rewrite it with one." />
+    <PageHead title="Opening lines"
+      sub="The first lines that worked best for competitors. New drafts borrow their shape." />
   );
   if (!hooks) return (<>{head}<NeedsDb error={error} /></>);
   return (
@@ -47,7 +47,7 @@ export default async function HooksPage() {
       <div style={{ height: 16 }} />
       {hooks.length
         ? <Hooks hooks={hooks} styles={styles} />
-        : <p className="empty">No hooks yet. Run a Decode on your competitors and their opening lines land here.</p>}
+        : <p className="empty">No opening lines yet. Scan your competitors on Competitors and their opening lines land here.</p>}
     </>
   );
 }

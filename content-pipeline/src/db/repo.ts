@@ -1,5 +1,6 @@
 // Typed data access over the `content` schema. Thin, explicit SQL — no ORM.
 // Content item status/approval writes are NOT here: they go through content-items.ts.
+import type { PlatformFit } from '../modules/decision-tasks.ts';
 import type { Db } from './client.ts';
 import { APPROVED_STATUSES, EDITABLE_STATUSES } from '../../core/src/index.ts';
 
@@ -19,6 +20,8 @@ export interface ContentItemRow {
   platform: string;
   format: string;
   status: string;
+  /** Postiz integration ids to post on; null = every connected channel of the platform. */
+  channels?: string[] | null;
   risk_level: string | null;
   approval_lane: string | null;
   approval_status: string;
@@ -82,8 +85,8 @@ export interface TopicRow {
   score_proof?: number | null;
   score_repurpose?: number | null;
   created_at?: string;
-  /** Jev's probability per platform that the idea works there natively (platform_fit decision). */
-  platform_fit?: Record<string, number> | null;
+  /** Jev's probability per platform that the idea works there natively, plus its format + framework picks. */
+  platform_fit?: PlatformFit | null;
   /** The operator's platform pick; null = follow Jev's, else the default set. */
   platforms?: string[] | null;
   /** Writing framework id per platform (prompts/platform-playbooks.ts). */
@@ -138,13 +141,16 @@ export interface PerformanceRow {
   performance_signal?: string | null;
 }
 
+/** Failures before a topic or signal is no longer picked up by scheduled runs. */
+const MAX_ATTEMPTS = 3;
+
 export function createRepo(db: Db) {
   return {
     // --- research inputs ---------------------------------------------------
     unprocessedResearchInputs: () =>
       db.query<ResearchInputRow>(
         `select id, channel, raw_text, source_url, status
-           from content.research_inputs where status = 'new' order by created_at`,
+           from content.research_inputs where status = 'new' and attempts < ${MAX_ATTEMPTS} order by created_at`,
       ).then((r) => r.rows),
 
     /** Operator adds a raw signal from the dashboard; Research module turns it into a topic. */
@@ -173,6 +179,12 @@ export function createRepo(db: Db) {
       db.query(`update content.research_inputs set status = 'dropped', processed_at = now() where id = $1 and status = 'new'`, [id])
         .then((r) => (r.rowCount ?? 0) > 0),
 
+    /** A pipeline step failed on this row again; after MAX_ATTEMPTS the runs stop retrying it
+     *  (and stop paying for it) until someone fixes it and resets attempts. */
+    noteFailure: (table: 'topics' | 'research_inputs', id: string, error: string) =>
+      db.query(`update content.${table} set attempts = attempts + 1, last_error = $2 where id = $1`, [id, error.slice(0, 500)])
+        .then(() => undefined, () => undefined), // bookkeeping must never mask the real error
+
     markResearchProcessed: (id: string, topicId: string) =>
       db.query(
         `update content.research_inputs set status = 'processed', topic_id = $2, processed_at = now() where id = $1`,
@@ -198,7 +210,7 @@ export function createRepo(db: Db) {
         `select id, title, pillar, funnel_stage, source, source_detail, customer_language, market_context,
                 angles, angle_idx, priority_band, score_total, status
            from content.topics
-          where status = 'new' and score_lead_intent is null
+          where status = 'new' and score_lead_intent is null and attempts < ${MAX_ATTEMPTS}
           order by created_at`,
       ).then((r) => r.rows),
 
@@ -215,7 +227,7 @@ export function createRepo(db: Db) {
         [id, s.leadIntent, s.reach, s.brandFit, s.proof, s.repurpose, s.pillar ?? null, s.funnelStage ?? null],
       ),
 
-    setTopicFit: (id: string, fit: Record<string, number>) =>
+    setTopicFit: (id: string, fit: PlatformFit) =>
       db.query(`update content.topics set platform_fit = $2 where id = $1`, [id, JSON.stringify(fit)]),
 
     setTopicPlan: (id: string, plan: { platforms?: string[] | null; frameworks?: Record<string, string> | null }) =>
@@ -247,7 +259,7 @@ export function createRepo(db: Db) {
                 priority_band, score_total, status,
                 to_jsonb(t) -> 'platform_fit' as platform_fit, to_jsonb(t) -> 'platforms' as platforms,
                 to_jsonb(t) -> 'frameworks' as frameworks -- to_jsonb: still loads before the migration adds them
-           from content.topics t where status = 'selected'
+           from content.topics t where status = 'selected' and attempts < ${MAX_ATTEMPTS}
           order by score_total desc, created_at`,
       ).then((r) => r.rows),
 
@@ -300,17 +312,30 @@ export function createRepo(db: Db) {
       ).then((r) => new Map(r.rows.map((x) => [x.platform, new Date(x.at)]))),
 
     // --- module runs ---------------------------------------------------------
+    /** A 'running' row at the start, so a run killed midway (deploy, crash, timeout) is still visible. */
+    startRun: (moduleId: string, startedAt: string) =>
+      db.query<{ id: string }>(
+        `insert into content.module_runs (module_id, status, started_at, message) values ($1, 'running', $2, 'running') returning id`,
+        [moduleId, startedAt],
+      ).then((r) => r.rows[0]!.id),
+
+    /** The finished run: fills in the 'running' row when there is one (`runId`), else a new row. */
     recordRun: (r: {
+      runId?: string | null;
       moduleId: string; status: string; startedAt: string; finishedAt: string; durationMs: number;
       itemsProcessed: number; message: string; error?: string | null; meta?: Record<string, unknown> | null;
-    }) =>
-      db.query(
-        `insert into content.module_runs
-           (module_id, status, started_at, finished_at, duration_ms, items_processed, message, error, meta)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [r.moduleId, r.status, r.startedAt, r.finishedAt, r.durationMs, r.itemsProcessed, r.message,
-         r.error ?? null, r.meta ? JSON.stringify(r.meta) : null],
-      ),
+    }) => {
+      const vals = [r.moduleId, r.status, r.startedAt, r.finishedAt, r.durationMs, r.itemsProcessed, r.message,
+        r.error ?? null, r.meta ? JSON.stringify(r.meta) : null];
+      return r.runId
+        ? db.query(
+          `update content.module_runs set module_id = $1, status = $2, started_at = $3, finished_at = $4, duration_ms = $5,
+                  items_processed = $6, message = $7, error = $8, meta = $9 where id = $10`, [...vals, r.runId])
+        : db.query(
+          `insert into content.module_runs
+             (module_id, status, started_at, finished_at, duration_ms, items_processed, message, error, meta)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, vals);
+    },
 
     /** When a module last did real work (status ok, items > 0) within `days`, else null. */
     lastProductiveRun: (moduleId: string, days: number) =>
@@ -319,6 +344,14 @@ export function createRepo(db: Db) {
           where module_id = $1 and status = 'ok' and items_processed > 0
             and started_at > now() - make_interval(days => $2)`,
         [moduleId, days],
+      ).then((r) => r.rows[0]?.at ?? null),
+
+    /** Latest finished run of a module in the last `hours`, whatever its outcome (so failures back off too). */
+    lastAttempt: (moduleId: string, hours: number) =>
+      db.query<{ at: string | null }>(
+        `select max(started_at)::text as at from content.module_runs
+          where module_id = $1 and status <> 'running' and started_at > now() - make_interval(hours => $2)`,
+        [moduleId, hours],
       ).then((r) => r.rows[0]?.at ?? null),
 
     moduleHealth: () =>

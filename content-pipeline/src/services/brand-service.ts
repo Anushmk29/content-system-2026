@@ -6,7 +6,7 @@ import type { ModuleContext } from '../modules/module.ts';
 import { DECODE_PLATFORMS, type DecodePlatform } from '../adapters/apify.ts';
 import { DEFAULT_BRAND, brand, setBrand, slugify, type Brand, type BrandOffer, type BrandPillar, type LogoCorner } from '../brand.ts';
 import { fetchGoogleFont, fontInfo, registerFonts } from '../fonts.ts';
-import type { Look } from '../creative.ts';
+import { isRasterImage, type Look } from '../creative.ts';
 
 interface KitRow {
   name: string; tagline: string; audience: string; audience_beliefs: string[]; voice_prompt: string; voice_samples: string[];
@@ -209,9 +209,8 @@ export async function deleteFont(ctx: ModuleContext, family: string): Promise<vo
 
 /** Any image → a PNG at most 1000px on its long side; null removes the logo. */
 export async function setLogo(ctx: ModuleContext, image: Buffer | null): Promise<void> {
-  // SVG can reference external files and runs through librsvg; logos are raster only.
-  if (image && /<svg[\s>]/i.test(image.subarray(0, 2048).toString('utf8'))) throw new Error('Upload the logo as PNG, JPG or WebP (not SVG).');
-  const png = image && await sharp(image).resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+  if (image && !isRasterImage(image)) throw new Error('Upload the logo as PNG, JPG or WebP (not SVG).');
+  const png = image && await sharp(image, { limitInputPixels: 4e7 }).resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
   const r = await ctx.db.query(`update content.brand_kit set logo_png = $1 where id`, [png]);
   if (!r.rowCount) throw new Error('Save your brand name first.');
 }
@@ -219,6 +218,21 @@ export async function setLogo(ctx: ModuleContext, image: Buffer | null): Promise
 export async function getLogo(ctx: ModuleContext): Promise<Buffer | null> {
   const r = await ctx.db.query<{ logo_png: Uint8Array | null }>(`select logo_png from content.brand_kit where id`);
   return r.rows[0]?.logo_png ? Buffer.from(r.rows[0].logo_png) : null;
+}
+
+/** Headshots (1-4) put into examples that have a person in them; [] removes them. */
+export async function setPhotos(ctx: ModuleContext, images: Buffer[]): Promise<void> {
+  if (images.length > 4) throw new Error('At most 4 photos.');
+  if (images.some((b) => !isRasterImage(b))) throw new Error('Upload photos as PNG, JPG or WebP.');
+  const pngs = await Promise.all(images.map((b) => sharp(b, { limitInputPixels: 4e7 }).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).png().toBuffer()));
+  const r = await ctx.db.query(`update content.brand_kit set photos = $1 where id`, [pngs.length ? pngs : null]);
+  if (!r.rowCount) throw new Error('Save your brand name first.');
+}
+
+export async function getPhotos(ctx: ModuleContext): Promise<Buffer[]> {
+  const r = await ctx.db.query<{ photos: Uint8Array[] | null }>(`select photos from content.brand_kit where id`).catch((e: { code?: string }) =>
+    e.code === '42703' ? { rows: [] as { photos: null }[] } : Promise.reject(e)); // schema not applied yet → no photos
+  return (r.rows[0]?.photos ?? []).map((p) => Buffer.from(p));
 }
 
 /** What creatives need from the brand: fonts registered with the renderer, plus the logo. */

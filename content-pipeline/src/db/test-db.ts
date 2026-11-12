@@ -21,10 +21,17 @@ export async function createTestDb(): Promise<Db> {
   const pg = new PGlite();
   await pg.exec(SCHEMA);
   const healthCheck = async () => report('database', 'ok', 'pglite');
+  const held = new Set<string>(); // one process in tests: an in-memory stand-in for advisory locks
+  const tryLock = async <T>(key: string, fn: () => Promise<T>): Promise<T | null> => {
+    if (held.has(key)) return null;
+    held.add(key);
+    try { return await fn(); } finally { held.delete(key); }
+  };
   const on = (q: Queryable): Db => {
     const db: Db = {
       query: (text, params) => run(q, text, params),
       healthCheck,
+      tryLock,
       tx: q === pg ? (fn) => pg.transaction((t) => fn(on(t))) : (fn) => fn(db),
     };
     return db;

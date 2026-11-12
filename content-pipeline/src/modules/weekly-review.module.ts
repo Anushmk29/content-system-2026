@@ -40,6 +40,9 @@ export const weeklyReviewModule: Module = {
     // (otherwise every run is an LLM call plus duplicate todos).
     const last = await repo.lastProductiveRun('weekly_review', 7);
     if (last) return skipped(`already reviewed this week (${last.slice(0, 10)}); next review 7 days after that`);
+    // A review that failed or came back empty is retried once a day, not on every hourly run.
+    const tried = await repo.lastAttempt('weekly_review', 24);
+    if (tried) return skipped(`last attempt ${tried.slice(0, 16)} produced nothing; retrying 24h after it`);
 
     // Only review items that have actually been out in the world (the view includes drafts).
     const perf = (await repo.performance()).filter(
