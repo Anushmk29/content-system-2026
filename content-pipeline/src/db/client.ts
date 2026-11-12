@@ -46,13 +46,16 @@ export function sslFor(url: string): false | { rejectUnauthorized: boolean; ca?:
   return isLocal ? false : { rejectUnauthorized: false };
 }
 
-export function createDb(databaseUrl: string | undefined): Db {
-  let poolPromise: Promise<Pool> | null = null;
+// One pool per database URL for the whole process. `next dev` re-evaluates this module on reloads;
+// a pool per evaluation stacked up past Supabase's 15 session clients (EMAXCONNSESSION).
+const POOLS = ((globalThis as { __contentPools?: Map<string, Promise<Pool>> }).__contentPools ??= new Map());
 
+export function createDb(databaseUrl: string | undefined): Db {
   async function getPool(): Promise<Pool> {
     if (!databaseUrl) throw new Error('CONTENT_DATABASE_URL is not set');
+    let poolPromise = POOLS.get(databaseUrl);
     if (!poolPromise) {
-      poolPromise = (async () => {
+      POOLS.set(databaseUrl, poolPromise = (async () => {
         const { default: pg } = await import('pg');
         const pool = new pg.Pool({
           connectionString: databaseUrl,
@@ -66,7 +69,7 @@ export function createDb(databaseUrl: string | undefined): Db {
         // An idle connection dropped by the server emits 'error'; unhandled, that kills the process.
         pool.on('error', (e) => console.error('[content] db pool error:', e.message));
         return pool;
-      })();
+      })());
     }
     return poolPromise;
   }
