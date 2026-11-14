@@ -1,4 +1,4 @@
-// Decode — the competitor spy (docs/DESIGN-GUIDE.md §6e, §9). A run goes through these
+// Decode — the competitor spy (docs/development/DESIGN-GUIDE.md §6e, §9). A run goes through these
 // stages, each resumable, and the dashboard polls it while it works:
 //   scraping      Apify (YouTube: the Data API) pulls each active competitor's public posts; every
 //                 post is scored against that competitor's own median for that platform and post

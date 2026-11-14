@@ -1,5 +1,5 @@
 # Content Studio: the Next.js dashboard + the engine, one image. Used by infra/app/docker-compose.yml
-# for both the web app and the scheduler (same image, different command). See docs/DEPLOY.md.
+# for both the web app and the scheduler (same image, different command). See docs/operations/DEPLOY.md.
 # Transcription (yt-dlp + faster-whisper) is not in this image; Decode works without it.
 FROM node:24-slim AS build
 WORKDIR /app

@@ -1,4 +1,4 @@
-// Phases 1-6 of docs/breezy-tinkering-catmull.md: the pure pieces, plus the learning loop on real SQL.
+// Phases 1-6 of docs/plans/COST-VIDEO-ROADMAP.md: the pure pieces, plus the learning loop on real SQL.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { huntScores, jevFit, type HuntInput } from './services/hunt-score.ts';

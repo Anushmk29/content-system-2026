@@ -3,6 +3,9 @@
 // rhythm 20, passive voice 20, hedging 15, em dashes 10, paragraph variety 10. No model call, so
 // it runs on every draft. The rules the drafts are written to live in prompts/brand-context.ts.
 // ponytail: fixed word lists (the skill's 2026-06 checklist); refresh them when new tells show up.
+// Plus the instagram-agent-skill lexicon (ig-human/slop.json: 154 stock words/phrases, 16 structural
+// tells), read from assets so editing that file tunes the check.
+import { igSlop } from './prompts/ig-skills.ts';
 
 const AI_WORDS = [
   'delve', 'landscape', 'crucial', 'vital', 'pivotal', 'leverage', 'robust', 'comprehensive', 'holistic',
@@ -25,6 +28,9 @@ const VAGUE_AUTHORITY = [
   'leading brands', 'it has been shown', 'according to research', 'data suggests', 'evidence suggests',
 ] as const;
 
+let vocabList: readonly string[] | undefined;
+const aiList = () => (vocabList ??= [...new Set([...AI_WORDS, ...igSlop().terms])]);
+
 const PASSIVE = [/\b(is|are|was|were|be|been|being)\s+(being\s+)?\w+ed\b/gi, /\b(can|could|should|would|may|might|must)\s+be\s+\w+ed\b/gi];
 
 export interface HumanScore {
@@ -36,7 +42,7 @@ export interface HumanScore {
 }
 
 /** Whole word or phrase, simple inflections included ("ensures", "leveraging"); "-" also matches a space. */
-const phraseRe = (p: string) => new RegExp(`\\b${p.replace(/-/g, '[- ]')}(s|d|ed|es|ing)?\\b`, 'gi');
+const phraseRe = (p: string) => new RegExp(`\\b${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/-/g, '[- ]')}(s|d|ed|es|ing)?(?!\\w)`, 'gi');
 const hits = (text: string, list: readonly string[]) => list.filter((p) => phraseRe(p).test(text));
 const count = (text: string, list: readonly string[]) => list.reduce((n, p) => n + (text.match(phraseRe(p))?.length ?? 0), 0);
 const sd = (xs: number[]) => {
@@ -50,10 +56,12 @@ export function humanScore(raw: string): HumanScore {
   const words = Math.max(1, text.match(/\b\w+\b/g)?.length ?? 0);
   const tells: string[] = [];
 
-  const ai = hits(text, AI_WORDS);
-  const aiN = count(text, AI_WORDS);
+  const ai = hits(text, aiList());
+  const shapes = igSlop().structures.filter((x) => { x.re.lastIndex = 0; return x.re.test(text); });
+  const aiN = count(text, aiList()) + shapes.length;
   const vocab = aiN === 0 ? 25 : aiN <= 2 ? 20 : aiN <= 5 ? 14 : aiN <= 10 ? 8 : aiN <= 15 ? 3 : 0;
-  if (aiN) tells.push(`AI words: ${ai.join(', ')}`);
+  if (ai.length) tells.push(`AI words: ${ai.join(', ')}`);
+  for (const x of shapes) tells.push(`${x.name}: ${x.fix}`);
 
   const sentences = text.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 3);
   const spread = sentences.length < 3 ? null : sd(sentences.map((s) => s.split(/\s+/).length));

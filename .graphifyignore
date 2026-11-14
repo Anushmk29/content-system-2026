@@ -1,5 +1,5 @@
 # generated diagram bundles + test screenshots (JSON specs are kept)
-docs/diagrams/*.html
-docs/diagrams/*.png
-docs/diagrams/*.visual-check.json
+docs/architecture/diagrams/*.html
+docs/architecture/diagrams/*.png
+docs/architecture/diagrams/*.visual-check.json
 graphify-out/

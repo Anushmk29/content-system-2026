@@ -114,7 +114,7 @@ export function buildQcPrompt(state: string): string {
 ${state}`;
 }
 
-// === Seed QC examples (docs/DECISION-DATASET.md §4c) ========================
+// === Seed QC examples (docs/development/DECISION-DATASET.md §4c) ========================
 // Practice drafts so the QC checks have training examples before real history
 // exists. Each is reviewed by the operator before it is ever trained on.
 export const seedQcSystem = (b: Brand = brand()) => `You write realistic short social drafts for ${who(b)} to train a content-risk checker. Make them varied

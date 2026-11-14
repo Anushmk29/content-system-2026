@@ -1,5 +1,5 @@
 // Public API of @pratapai/content-pipeline.
-// The Next.js layer (app/content) imports ONLY from here.
+// The Next.js layer (src/app/content) imports ONLY from here.
 
 // runtime
 export { buildContext, getContext } from './context.ts'; // buildContext: scripts/run.ts
@@ -14,8 +14,7 @@ export { getSystemHealth, getRunHistory, getActivity, getActions, logAction } fr
 export { listTodos, createTodo, updateTodo, deleteTodo } from './services/todo-service.ts';
 export { applyApprovalDecision, resubmitItem } from './services/approval-service.ts';
 export { CHANGE_REASONS } from './prompts/feedback.ts';
-export { humanScore, HUMAN_MIN, type HumanScore } from './humanizer.ts';
-export { refreshLessons } from './services/feedback-service.ts';
+export { humanScore, HUMAN_MIN } from './humanizer.ts';
 export {
   exportDataset, recordHumanLabel, getTrainingOverview,
   type TrainingExample, type TrainingOverview,
@@ -45,8 +44,7 @@ export {
   listStyles, getStyleImage, renameStyle, deleteStyle, ensureStarterExamples,
   type StyleRow,
 } from './services/style-service.ts';
-export { isVisualKind, type VisualKind, type MakeResult } from './services/make-service.ts';
-export { PLACEMENTS, isPlacement, toPdf } from './creative.ts';
+export { isVisualKind } from './services/make-service.ts';
 export { uploadItemAssets, removeItemAssets, listItemAssets, getItemAsset, listDesignQueue, type DesignRow, type DesignStage } from './services/asset-service.ts';
 export { EDITABLE_STATUSES } from '../core/src/index.ts';
 export {
@@ -54,7 +52,7 @@ export {
   type BrandPatch, type FontRow,
 } from './services/brand-service.ts';
 export { brand, pillarSlugs, type Brand } from './brand.ts';
-export { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS, POST_FORMATS, VISUAL_FORMATS, type DraftPlatform, type Framework } from './prompts/platform-playbooks.ts';
+export { DRAFT_PLATFORMS, DEFAULT_DRAFT_PLATFORMS, PLATFORM_FRAMEWORKS, SCRIPT_TARGETS, POST_FORMATS } from './prompts/platform-playbooks.ts';
 export { CURATED_FONTS } from './fonts.ts';
 export { DECODE_PLATFORMS, type DecodePlatform } from './adapters/apify.ts';
 
@@ -64,7 +62,7 @@ import { costScoped } from './cost-ledger.ts';
 import { seedQcExamples as seedQc } from './services/dataset-service.ts';
 import { useDecode as use_, stealFormat as steal } from './services/decode-service.ts';
 import { rewriteWithHook as rewrite } from './services/hook-service.ts';
-import { createStyle as create, generateCreative as generate } from './services/style-service.ts';
+import { createStyle as create } from './services/style-service.ts';
 import { makeFromExample as fromExample } from './services/make-service.ts';
 import { saveItemCreative as itemCreative } from './services/asset-service.ts';
 import { extractVoice as voice, importOwnPosts as importOwn } from './services/brand-service.ts';
@@ -73,7 +71,6 @@ export const useDecode = costScoped('decode_use', use_);
 export const stealFormat = costScoped('steal_format', steal);
 export const rewriteWithHook = costScoped('hook_rewrite', rewrite, 'content_item');
 export const createStyle = costScoped('style_analyze', create);
-export const generateCreative = costScoped('style_generate', generate);
 export const makeFromExample = costScoped('style_make', fromExample);
 export const saveItemCreative = costScoped('style_generate', itemCreative, 'content_item');
 export const extractVoice = costScoped('brand_voice', voice);
@@ -91,7 +88,7 @@ export const analyzeVideo = costScoped('video_analysis', analyze_, 'decoded_post
 import { transcribeVideo as transcribe_ } from './services/videos-service.ts';
 export const transcribeVideo = costScoped('transcribe', transcribe_, 'decoded_post');
 export { withCostScope } from './cost-ledger.ts';
-export { getCosts, costsCsv, COST_RANGES, type Costs, type CostRange } from './services/cost-service.ts';
+export { getCosts, costsCsv, costRange, COST_RANGES, type Costs, type CostRange } from './services/cost-service.ts';
 
 // Creative Check: its own tab, tables and job queue (src/creative-check/). startCheck tags its
 // own cost scope per run, so it isn't wrapped in costScoped here.

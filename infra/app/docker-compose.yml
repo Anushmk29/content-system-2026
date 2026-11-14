@@ -1,5 +1,5 @@
 # Content Studio on one VPS: Caddy (HTTPS) → the Next.js app, plus a scheduler that runs the
-# pipeline every hour. Postiz runs from infra/postiz/ on the same host. Full steps: docs/DEPLOY.md.
+# pipeline every hour. Postiz runs from infra/postiz/ on the same host. Full steps: docs/operations/DEPLOY.md.
 #   cd infra/app && docker compose up -d --build
 # Env comes from the repo-root .env (copy .env.example). DOMAIN is the public hostname.
 services:

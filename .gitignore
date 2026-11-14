@@ -14,8 +14,7 @@ next-env.d.ts
 
 # node / next
 node_modules/
-.next/
-.next-prod/
+.next*/
 dist/
 build/
 

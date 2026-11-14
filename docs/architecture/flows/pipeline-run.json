@@ -1,0 +1,251 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Running the Content Pipeline",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "api",
+      "label": "Dashboard API (src/app/content/api)"
+    },
+    {
+      "id": "engine",
+      "label": "Orchestrator + Postgres"
+    },
+    {
+      "id": "stages",
+      "label": "Pipeline modules (MODULES order)"
+    },
+    {
+      "id": "human",
+      "label": "Human approval",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "run",
+    "orch",
+    "find",
+    "draft",
+    "qc",
+    "approve",
+    "publish",
+    "learn"
+  ],
+  "nodes": [
+    {
+      "id": "run",
+      "lane": "api",
+      "col": 0,
+      "type": "frontend",
+      "label": "POST /content/api/run",
+      "sublabel": "runModules(MODULES)",
+      "tag": "x-content-secret",
+      "width": 184
+    },
+    {
+      "id": "modrun",
+      "lane": "api",
+      "col": 1,
+      "type": "frontend",
+      "label": "POST /modules/[id]/run",
+      "sublabel": "getModule(id) or 404",
+      "width": 184
+    },
+    {
+      "id": "board",
+      "lane": "api",
+      "col": 4,
+      "type": "frontend",
+      "label": "GET /pipeline",
+      "sublabel": "getPipelineBoard",
+      "width": 184
+    },
+    {
+      "id": "health",
+      "lane": "api",
+      "col": 5,
+      "type": "frontend",
+      "label": "GET /health",
+      "sublabel": "getSystemHealth",
+      "width": 184
+    },
+    {
+      "id": "orch",
+      "lane": "engine",
+      "col": 0,
+      "type": "backend",
+      "label": "runModule",
+      "sublabel": "never throws",
+      "tag": "fault isolation",
+      "width": 184
+    },
+    {
+      "id": "db",
+      "lane": "engine",
+      "col": 5,
+      "type": "database",
+      "label": "Postgres content.*",
+      "sublabel": "module_runs, items",
+      "width": 184
+    },
+    {
+      "id": "find",
+      "lane": "stages",
+      "col": 0,
+      "type": "backend",
+      "label": "1-3 Find topics",
+      "sublabel": "signals, research, scoring",
+      "width": 184
+    },
+    {
+      "id": "draft",
+      "lane": "stages",
+      "col": 1,
+      "type": "backend",
+      "label": "4 draft_generator",
+      "sublabel": "Claude drafts",
+      "width": 184
+    },
+    {
+      "id": "qc",
+      "lane": "stages",
+      "col": 2,
+      "type": "security",
+      "label": "5 qc_gate",
+      "sublabel": "honest-numbers",
+      "width": 184
+    },
+    {
+      "id": "publish",
+      "lane": "stages",
+      "col": 4,
+      "type": "backend",
+      "label": "6 publisher",
+      "sublabel": "v_publish_ready",
+      "width": 184
+    },
+    {
+      "id": "learn",
+      "lane": "stages",
+      "col": 5,
+      "type": "backend",
+      "label": "7-9 Learn",
+      "sublabel": "own_results, analytics, review",
+      "width": 184
+    },
+    {
+      "id": "approve",
+      "lane": "human",
+      "col": 3,
+      "type": "security",
+      "label": "Approve in dashboard",
+      "sublabel": "human gate",
+      "width": 184
+    }
+  ],
+  "edges": [
+    {
+      "id": "run-orch",
+      "from": "run",
+      "to": "orch",
+      "variant": "emphasis"
+    },
+    {
+      "id": "modrun-orch",
+      "from": "modrun",
+      "to": "orch",
+      "label": "one module",
+      "variant": "default",
+      "role": "branch"
+    },
+    {
+      "id": "orch-find",
+      "from": "orch",
+      "to": "find",
+      "variant": "emphasis"
+    },
+    {
+      "id": "find-draft",
+      "from": "find",
+      "to": "draft",
+      "variant": "default"
+    },
+    {
+      "id": "draft-qc",
+      "from": "draft",
+      "to": "qc",
+      "variant": "default"
+    },
+    {
+      "id": "qc-approve",
+      "from": "qc",
+      "to": "approve",
+      "label": "to approval",
+      "variant": "security"
+    },
+    {
+      "id": "approve-publish",
+      "from": "approve",
+      "to": "publish",
+      "label": "approved",
+      "variant": "emphasis"
+    },
+    {
+      "id": "publish-learn",
+      "from": "publish",
+      "to": "learn",
+      "variant": "default"
+    },
+    {
+      "id": "orch-db",
+      "from": "orch",
+      "to": "db",
+      "label": "recordRun: ok or error",
+      "variant": "dashed",
+      "role": "async"
+    },
+    {
+      "id": "db-health",
+      "from": "db",
+      "to": "health",
+      "label": "last run",
+      "variant": "default"
+    },
+    {
+      "id": "db-board",
+      "from": "db",
+      "to": "board",
+      "label": "recent items",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Order",
+      "items": [
+        "MODULES runs 9 stages in sequence so one /run carries a signal from research to analytics",
+        "Publisher reads only v_publish_ready: approved and proof-complete"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Fault isolation",
+      "items": [
+        "runModule catches every error and records it to content.module_runs",
+        "A failed module never stops the ones after it"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Read side",
+      "items": [
+        "GET /health: 200 always; non-admins see only the overall state",
+        "GET /pipeline: 25 recent content items, 503 on DB error"
+      ]
+    }
+  ]
+}

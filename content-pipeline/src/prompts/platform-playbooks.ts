@@ -72,9 +72,10 @@ export const PLATFORM_SHAPE = `PER-PLATFORM SHAPE (Bible §11.2) — never the s
   examples, a short FAQ, and a CTA.
 - x: a thread of 5-7 tweets, each under 270 characters. Concise, native, end with a
   question. Separate each tweet with a line containing only "---".
-- instagram: a 6-slide carousel that earns saves. Slide 1 is the hook, the last slide
-  the CTA; at most 20 words per slide, one idea per slide. Separate each slide with a
-  line containing only "---". Put only the slide text in body.
+- instagram: a 6-10 slide carousel that earns saves (ig-carousel). Slide 1 is the cover:
+  a hook of 6 words or fewer. Slide 2 the stake, then one idea per slide (a 3-7 word
+  headline, at most 25 words), a recap slide, and a last slide with one CTA. Separate each
+  slide with a line containing only "---". Put only the slide text in body.
 - facebook: a warm, educational post, 80-150 words, slightly more conversational than
   LinkedIn. End with a simple question to invite comments.
 - reddit: a value-first post, 150-400 words, written as a member of the community, never

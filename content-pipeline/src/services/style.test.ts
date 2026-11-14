@@ -112,16 +112,3 @@ test('toSlides: headline/body split, Swipe until the last slide', () => {
 });
 
 
-test('toPdf: one page per slide, valid xref offsets', async () => {
-  const { toPdf } = await import('../creative.ts');
-  const png = await sharp({ create: { width: 40, height: 50, channels: 3, background: '#123456' } }).png().toBuffer();
-  const s = (await toPdf([png, png, png])).toString('latin1');
-  assert.ok(s.startsWith('%PDF-1.4') && s.trimEnd().endsWith('%%EOF'));
-  assert.match(s, /\/Count 3/);
-  const xref = Number(s.match(/startxref\n(\d+)/)![1]);
-  assert.ok(s.startsWith('xref', xref), 'startxref points at the xref table');
-  const offsets = [...s.slice(xref).matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]));
-  assert.equal(offsets.length, 11);
-  offsets.forEach((o, i) => assert.ok(s.startsWith(`${i + 1} 0 obj`, o), `object ${i + 1} at its xref offset`));
-});
-

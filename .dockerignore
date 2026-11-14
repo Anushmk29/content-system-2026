@@ -5,7 +5,7 @@
 node_modules
 content-pipeline/node_modules
 content-pipeline/dist
-.next
+.next*
 graphify-out
 docs
 db/*backup*

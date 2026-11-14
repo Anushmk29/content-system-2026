@@ -1,6 +1,7 @@
 // Weekly review prompt.
 import { brand, type Brand } from '../brand.ts';
 import { brandBrief } from './brand-context.ts';
+import { igSkill } from './ig-skills.ts';
 
 // === Weekly Review (Bible §14.1) ============================================
 export const reviewSystem = (b: Brand = brand()) => `You are the weekly review agent for ${b.name}'s content
@@ -19,7 +20,12 @@ this account's own median on that platform, when known; reach; engagement = like
 qualified engagement) plus pillar usage:
 
 ${performanceSummary}
-
+${/instagram/i.test(performanceSummary) ? `
+For the Instagram items, judge them and plan next week with these skills (at most two of the
+recommendations are Instagram ones):
+${igSkill('ig-audit')}
+${igSkill('ig-plan')}
+` : ''}
 Respond with ONLY JSON:
 { "summary": string (2-3 sentences),
   "recommendations": string[] (3-7 concrete actions for next week) }`;

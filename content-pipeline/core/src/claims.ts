@@ -3,10 +3,4 @@
 // publish gate itself is the v_publish_ready SQL view.
 import type { Claim } from './types.ts';
 
-function isProven(c: Claim): boolean {
-  return typeof c.proofUrl === 'string' && c.proofUrl.trim().length > 0;
-}
-
-export function hasUnprovenClaims(claims: Claim[]): boolean {
-  return claims.some((c) => !isProven(c));
-}
+export const hasUnprovenClaims = (claims: Claim[]): boolean => claims.some((c) => !c.proofUrl?.trim());

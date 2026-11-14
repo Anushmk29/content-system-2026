@@ -10,7 +10,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "engine:test": "npm --prefix content-pipeline test",
-    "test": "node --test app/content/*.test.ts && npm run engine:test",
+    "test": "node --test src/app/content/_lib/*.test.ts && npm run engine:test",
     "migrate": "npm --prefix content-pipeline run migrate",
     "pipeline": "npm --prefix content-pipeline run pipeline"
   },

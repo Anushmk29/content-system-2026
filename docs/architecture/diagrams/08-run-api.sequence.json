@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Run API: dashboard → orchestrator → module_runs + cost_events",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      649
+    ]
+  },
+  "participants": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Dashboard UI",
+      "sublabel": "RunControls"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API route",
+      "sublabel": "denied() guard"
+    },
+    {
+      "id": "orch",
+      "type": "backend",
+      "label": "orchestrator",
+      "sublabel": "runModule"
+    },
+    {
+      "id": "mod",
+      "type": "backend",
+      "label": "Module",
+      "sublabel": "module.run(ctx)"
+    },
+    {
+      "id": "adp",
+      "type": "external",
+      "label": "Adapters",
+      "sublabel": "LLM, Postiz, Apify…"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Postgres",
+      "sublabel": "content schema"
+    }
+  ],
+  "segments": [
+    {
+      "from": 164,
+      "to": 220,
+      "label": "Auth"
+    },
+    {
+      "from": 224,
+      "to": 472,
+      "label": "Run"
+    },
+    {
+      "from": 476,
+      "to": 558,
+      "label": "Board read"
+    }
+  ],
+  "messages": [
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 180,
+      "label": "POST /run or /modules/[id]/run",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "y": 208,
+      "label": "denied() → audit_log",
+      "variant": "dashed"
+    },
+    {
+      "from": "api",
+      "to": "orch",
+      "y": 236,
+      "label": "runModules / runModule",
+      "variant": "emphasis"
+    },
+    {
+      "from": "orch",
+      "to": "mod",
+      "y": 264,
+      "label": "withCostScope → run(ctx)",
+      "variant": "default"
+    },
+    {
+      "from": "mod",
+      "to": "adp",
+      "y": 292,
+      "label": "complete / schedule / …",
+      "variant": "default"
+    },
+    {
+      "from": "adp",
+      "to": "db",
+      "y": 320,
+      "label": "onCost → cost_events",
+      "variant": "dashed"
+    },
+    {
+      "from": "mod",
+      "to": "db",
+      "y": 348,
+      "label": "read / write content.*",
+      "variant": "default"
+    },
+    {
+      "from": "mod",
+      "to": "orch",
+      "y": 376,
+      "label": "ModuleResult",
+      "variant": "return"
+    },
+    {
+      "from": "orch",
+      "to": "db",
+      "y": 404,
+      "label": "recordRun → module_runs",
+      "variant": "default"
+    },
+    {
+      "from": "orch",
+      "to": "api",
+      "y": 432,
+      "label": "RunRecord[]",
+      "variant": "return"
+    },
+    {
+      "from": "api",
+      "to": "ui",
+      "y": 460,
+      "label": "JSON → summarizeRun",
+      "variant": "return"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "y": 488,
+      "label": "GET /content/api/pipeline",
+      "variant": "default"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "y": 516,
+      "label": "allItems(25)",
+      "variant": "default"
+    },
+    {
+      "from": "api",
+      "to": "ui",
+      "y": 544,
+      "label": "{ recent } or 503",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 180,
+      "to": 460,
+      "type": "backend"
+    },
+    {
+      "participant": "orch",
+      "from": 236,
+      "to": 432,
+      "type": "backend"
+    },
+    {
+      "participant": "mod",
+      "from": 264,
+      "to": 376,
+      "type": "backend"
+    },
+    {
+      "participant": "adp",
+      "from": 292,
+      "to": 320,
+      "type": "external"
+    },
+    {
+      "participant": "api",
+      "from": 488,
+      "to": 544,
+      "type": "backend"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Routes and cost scope",
+      "items": [
+        "POST /content/api/run → runModules(MODULES); /modules/[id]/run → one module, unknown id 404",
+        "src/middleware.ts sets x-content-role; admin login is view-only (403 on POST)",
+        "withCostScope tags each paid call (feature = module.id, refType module_run) in cost_events",
+        "GET /content/api/pipeline is read by CommandPalette, not RunControls"
+      ]
+    }
+  ]
+}

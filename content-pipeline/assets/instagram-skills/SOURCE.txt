@@ -1,0 +1,4 @@
+Vendored unchanged from https://github.com/Jakeschincariol/instagram-agent-skill (MIT, see LICENSE)
+commit d03c56bb598be770c60b201f94237e5d1a4268a6, copied 2026-11-14.
+To update: re-copy skills/, templates/, LICENSE, README.md from a newer commit and change this line.
+Read at run time by content-pipeline/src/prompts/ig-skills.ts.

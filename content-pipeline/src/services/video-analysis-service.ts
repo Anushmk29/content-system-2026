@@ -6,7 +6,7 @@ import type { ModuleContext } from '../modules/module.ts';
 import type { JevQuestion } from '../adapters/jev.ts';
 import { createRepo } from '../db/repo.ts';
 import { parseJsonObject } from '../modules/llm-json.ts';
-import { brandAudienceLine, minConfidence } from '../modules/decision-tasks.ts';
+import { audience, minConfidence } from '../modules/decision-tasks.ts';
 import { buildVideoAnalysisPrompt, videoAnalysisSystem } from '../prompts/video.ts';
 import { loadBrand } from './brand-service.ts';
 import { makePosts, type MakeResult } from './make-service.ts';
@@ -60,9 +60,9 @@ export function parseVideoAnalysis(raw: string): Omit<VideoAnalysis, 'jev' | 'an
 
 /** Jev's three brand-fit calls on the video (the decisions); built per call from the Brand Kit. */
 const fitQuestions = (): Record<string, JevQuestion> => ({
-  fits_brand: { type: 'noul', instructions: `${brandAudienceLine()} Would this audience care about this video's subject and approach?` },
-  adaptable: { type: 'noul', instructions: `${brandAudienceLine()} Could the brand make its own version of this video without copying it: no celebrity, big budget or the creator's personal story needed?` },
-  risky: { type: 'noul', instructions: `${brandAudienceLine()} Does the video's approach rely on hype, fear, or claims the brand could not back up?` },
+  fits_brand: { type: 'noul', instructions: `${audience()} Would this audience care about this video's subject and approach?` },
+  adaptable: { type: 'noul', instructions: `${audience()} Could the brand make its own version of this video without copying it: no celebrity, big budget or the creator's personal story needed?` },
+  risky: { type: 'noul', instructions: `${audience()} Does the video's approach rely on hype, fear, or claims the brand could not back up?` },
 });
 
 /** Analyse one decoded video (needs its transcript). Cached by URL unless `fresh`. */

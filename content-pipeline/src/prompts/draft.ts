@@ -3,6 +3,7 @@ import { FUNNEL_STAGES } from '../../core/src/index.ts';
 import { brand, pillarSlugs, type Brand } from '../brand.ts';
 import { HOOK_PATTERN_KEYS } from '../hook-patterns.ts';
 import { who } from './brand-context.ts';
+import { igSkill } from './ig-skills.ts';
 import { DEFAULT_DRAFT_PLATFORMS, PIECE_NAME, frameworkBlock, formatShapeBlock, type DraftPlatform } from './platform-playbooks.ts';
 
 interface DraftBriefInput {
@@ -26,6 +27,21 @@ interface DraftBriefInput {
   frameworks?: Partial<Record<DraftPlatform, string>>;
   /** Non-default post format per platform (POST_FORMATS id, e.g. { linkedin: 'image' }). */
   formats?: Partial<Record<DraftPlatform, string>>;
+}
+
+/** The Instagram piece follows the instagram-agent-skill rules. Our IG caption is hook + cta
+ *  (publisher postParts), so the skill's caption maps onto those two fields. */
+function igDraftBlock(format?: string): string {
+  const carousel = !format || format === 'carousel';
+  return `INSTAGRAM PIECE — apply these skills to the "instagram" piece only.
+${carousel
+    ? `In our JSON its caption is "hook" + "cta": "hook" is caption line 1 (the skill's Job B, at most 125
+characters, no greeting, hashtag or emoji first)`
+    : `It is a single image: "body" is the caption, and its first line is the hook (the skill's Job B, at most
+125 characters, no greeting, hashtag or emoji first)`}; "cta" is the one ask followed by up to 5 specific
+hashtags on their own line. It stands on its own: never refer to the anchor post ("as I wrote…").
+${carousel ? `\n${igSkill('ig-carousel')}\n` : ''}
+${igSkill('ig-caption')}`;
 }
 
 /** Build the user prompt that asks for the anchor + its repurposed drafts as JSON. */
@@ -67,6 +83,7 @@ ${order}
 
 ${frameworkBlock(all, input.frameworks)}
 ${formatShapeBlock(Object.fromEntries(all.flatMap((p) => (input.formats?.[p] ? [[p, input.formats[p]]] : []))))}
+${all.includes('instagram') ? igDraftBlock(input.formats?.instagram) : ''}
 
 Respond with ONLY a JSON object (no markdown fences, no prose) of this exact shape:
 {

@@ -3,6 +3,7 @@
 import { brand, type Brand } from '../brand.ts';
 import { HOOK_PATTERN_KEYS } from '../hook-patterns.ts';
 import { brandBrief } from './brand-context.ts';
+import { igHooks, igSkill } from './ig-skills.ts';
 
 export const BEAT_TAGS = ['hook', 'setup', 'proof', 'offer', 'method', 'benefit', 'other', 'cta'] as const;
 export type BeatTag = (typeof BEAT_TAGS)[number];
@@ -22,7 +23,7 @@ For each format count how many of OUR posts already use it, and write its SKELET
 - value_template: how the value is delivered, e.g. "[3-5 numbered steps], each one line + one proof"
 - cta_template: how it ends, e.g. "Comment [word] and I'll send [resource]"
 Templates copy STRUCTURE, never their words or topics.
-Return {"formats":[{"name":"short lowercase name","description":"one plain sentence","our_posts":0,"hook_template":"…","value_template":"…","cta_template":"…"}]}`;
+${sample.some((p) => p.platform === 'instagram') ? `For the Instagram posts, read them with this skill and name each hook_template after the hook formula it uses:\n${igSkill('ig-viral')}\n${igHooks()}\n` : ''}Return {"formats":[{"name":"short lowercase name","description":"one plain sentence","our_posts":0,"hook_template":"…","value_template":"…","cta_template":"…"}]}`;
 }
 
 export function buildBreakdownPrompt(

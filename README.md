@@ -4,7 +4,7 @@ A **content-to-pipeline engine**, not a "post everywhere" machine.
 Turns expertise → ranked topics → platform-native drafts → quality/risk gate →
 one-tap approval → Postiz scheduling → published posts → weekly learning.
 
-Governing reference: **`Content_Pipeline_Bible_Final.docx`** (v3). This repo implements it.
+Governing reference: **`docs/product/reference/Content_Pipeline_Bible_Final.docx`** (v3). This repo implements it.
 
 > **The rule that shapes everything:** start *approval-gated*, never auto-publish.
 > Prove what works under human review, then automate only safe, proven templates.
@@ -28,10 +28,14 @@ others keep running and the dashboard shows it. Nothing fails silently.
 | Decisions (scores, QC signals, competitor judging) | **Jev** (`adapters/jev.ts`) routed by `modules/decide.ts`, LLM fallback |
 | Publishing rail (Bible §12) | **Postiz**, self-hosted — `infra/postiz/` + `adapters/postiz.ts` |
 | Approval queue (Bible §10) | Dashboard **Approvals** page |
-| Dashboard | **Next.js** under `app/content/` |
+| Dashboard | **Next.js** under `src/app/content/` |
 | Brand brain (voice, audience, pillars, offers) | **Brand Kit** in `content.brand_kit`, edited at `/content/brand`; prompts in `content-pipeline/src/prompts/` |
 
 ## Repo layout
+
+Start with the [project navigation guide](docs/development/PROJECT-STRUCTURE.md) or the
+[documentation index](docs/README.md).
+
 ```
 content-pipeline/      The isolated engine (own package + deps)
   core/                Pure safety-critical logic + tests
@@ -44,12 +48,23 @@ content-pipeline/      The isolated engine (own package + deps)
                        decide.ts + decision-tasks.ts = the single road for typed decisions
     services/          what the dashboard calls (brand, decode, styles, today, approvals, …)
     db/                pg client (scoped to `content` schema) + typed repo
-app/content/           Next.js dashboard pages, ui/ components, api/ routes
-  api/guard.ts         role check for every write route; middleware.ts = login, rate limits, CSRF
+src/app/content/      Dashboard pages and API routes (URLs stay under /content)
+  _components/        Shared dashboard UI
+  _lib/               Auth, API guard, data loading and formatting + tests
+  _styles/            Dashboard theme
+  <feature>/          Page and its private _components/ when needed
+  api/                HTTP handlers calling the engine's public exports
+src/middleware.ts     Login, role headers, rate limits and CSRF
 db/                    schema.sql (content schema) + seed.sql
 infra/postiz/          Self-hosted Postiz (Docker)
-docs/                  GO-LIVE, AUDIT, platform guide, strategy playbook, build spec
-INTEGRATION.md         How to drop into an existing Next.js app non-destructively
+docs/
+  development/         Structure, integration, design and build guides
+  operations/          Deployment, go-live, platform and strategy guides
+  product/             Product requirements and original Word references
+  architecture/        System diagrams and workflow sources
+  plans/               Proposals and roadmaps
+  reports/             Dated audits
+  archive/             Historical deployment notes
 ```
 
 ## Quick start (run the dashboard locally)
@@ -66,7 +81,7 @@ npm run dev                                       # → open http://localhost:30
 ```
 From `/content` you run the pipeline and do every human step (signals, topic selection,
 approvals, metrics) — no command line. To drop it into an **existing** Next app
-instead, see INTEGRATION.md.
+instead, see the [integration guide](docs/development/INTEGRATION.md).
 
 ```bash
 # Headless alternative (no dashboard)
@@ -74,8 +89,8 @@ npm test                                          # app + engine tests
 npm run pipeline                                  # runs every module once against your DB
 ```
 
-> **Setting it up for real?** Deploy with **`docs/DEPLOY.md`** (VPS + Docker, scheduling,
-> backups, monitoring, runbook); **`docs/GO-LIVE.md`** covers each integration and how to test it.
+> **Setting it up for real?** Deploy with **`docs/operations/DEPLOY.md`** (VPS + Docker, scheduling,
+> backups, monitoring, runbook); **`docs/operations/GO-LIVE.md`** covers each integration and how to test it.
 
 ## What the dashboard does (`/content`)
 The dashboard is the **control room** — you can run the whole loop here without a terminal:
@@ -102,7 +117,7 @@ POST /content/api/modules/:id/run      # run one module
 ```
 The Docker setup (`infra/app`) already runs the pipeline hourly. An external scheduler can call
 these with the `x-content-secret: $CONTENT_CRON_SECRET` header instead. A module that is already
-running is skipped, never run twice. See `docs/DEPLOY.md`.
+running is skipped, never run twice. See `docs/operations/DEPLOY.md`.
 
-See **`docs/GO-LIVE.md`** (setup + testing), **`docs/BUILD-SPEC.md`** (technical),
-and **`docs/STRATEGY-PLAYBOOK.md`** (operator).
+See **`docs/operations/GO-LIVE.md`** (setup + testing), **`docs/development/BUILD-SPEC.md`** (technical),
+and **`docs/operations/STRATEGY-PLAYBOOK.md`** (operator).

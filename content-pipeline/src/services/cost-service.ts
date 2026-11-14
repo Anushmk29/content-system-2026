@@ -4,6 +4,7 @@ import type { ModuleContext } from '../modules/module.ts';
 
 export const COST_RANGES = ['today', 'yesterday', '7d', '30d', 'month', 'custom'] as const;
 export type CostRange = (typeof COST_RANGES)[number];
+export const costRange = (s: string | null | undefined): CostRange => (COST_RANGES as readonly string[]).includes(s ?? '') ? (s as CostRange) : '7d';
 // ponytail: one install = one Indian client, so days are IST. Make it a CONTENT_* setting when that changes.
 const TZ = 'Asia/Kolkata';
 /** Provider-side total and ledger total this far apart (and above a cent) is worth a look. */

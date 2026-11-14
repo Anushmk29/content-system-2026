@@ -1,6 +1,6 @@
 // Local transcription for Decode: yt-dlp pulls a public video's audio, faster-whisper (Python)
 // turns it into text. Free, no API key, but it needs a real host with both installed — not a
-// serverless function (docs/GO-LIVE.md). Video hooks become the actual spoken first lines.
+// serverless function (docs/operations/GO-LIVE.md). Video hooks become the actual spoken first lines.
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';

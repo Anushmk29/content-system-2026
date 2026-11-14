@@ -11,7 +11,7 @@ import {
   MARKET_CHECK_SOURCES_SYSTEM, buildMarketCheckFromSources,
 } from '../prompts/decisions.ts';
 import { parseExtractedTopic } from './topic-extract.ts';
-import { brandAudienceLine } from './decision-tasks.ts';
+import { audience } from './decision-tasks.ts';
 
 const DEFAULT_RESEARCH_MODEL = 'perplexity/sonar';
 // Topic extraction is a short structured reply (~100 tokens): a cheap model does it as well as
@@ -96,7 +96,7 @@ async function relevant(ctx: ModuleContext, input: ResearchInputRow): Promise<bo
   const t0 = Date.now();
   try {
     const r = await jev.decide(state, { relevant: { type: 'noul', instructions:
-      `${brandAudienceLine()} Would this audience want to read a post about this? When in doubt, answer yes.` } });
+      `${audience()} Would this audience want to read a post about this? When in doubt, answer yes.` } });
     const p = r.answers.relevant?.noul ?? 1;
     await createRepo(ctx.db).logDecision({ task: 'signal_relevance', subjectId: input.id, state, source: 'jev', model: r.model,
       answer: r.answers, used: true, latencyMs: Date.now() - t0, confidence: Math.max(p, 1 - p) }).catch(() => {});

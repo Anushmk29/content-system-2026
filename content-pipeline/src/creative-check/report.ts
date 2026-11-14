@@ -140,6 +140,14 @@ export function measureFacts(i: FactInput): Fact[] {
   if (ease !== null) add('reading_ease', 'Reading ease', `${ease} / 100`, ease >= 60 ? 'Plain and easy to read.' : ease >= 40 ? 'Fairly hard: long sentences or words.' : 'Hard to read: long sentences and long words.');
   const asks = ASKS.filter(([, re]) => re.test(ctaText(i))).map(([n]) => n);
   add('asks', 'Asks in CTA', asks.length ? `${asks.length} (${asks.join(', ')})` : '0', asks.length === 0 ? 'No clear ask.' : asks.length === 1 ? 'One clear ask.' : 'Several asks compete; one usually works better.');
+  if (i.platform === 'instagram') {
+    // ig-caption: only ~125 characters show before "… more"; Instagram caps hashtags at 5 (Dec 2025).
+    const caption = [i.hook, i.body, i.cta].filter((t) => t.trim()).join('\n\n');
+    const first = caption.trim().split('\n')[0] ?? '';
+    add('before_more', 'Before "… more"', `${first.length} characters`, first.length <= 125 ? 'The whole first line shows in the feed.' : `Cut after 125 characters: the feed hides the last ${first.length - 125}.`);
+    const tags = caption.match(/(^|\s)#[\p{L}\p{N}_]+/gu)?.length ?? 0;
+    add('hashtags', 'Hashtags', String(tags), tags <= 5 ? 'Within Instagram’s limit of 5.' : `Over Instagram’s limit of 5 by ${tags - 5}.`);
+  }
   add('human_score', 'Human score', `${humanScore([i.hook, i.body, i.cta].join('\n\n')).score} / 100`, 'How much the copy reads like a person wrote it (AI phrases, rhythm, hedging).');
   return out;
 }

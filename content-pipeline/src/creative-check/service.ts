@@ -1,4 +1,4 @@
-// Creative Check: its own creatives, media, runs and job queue (docs/creative-check-prd.md).
+// Creative Check: its own creatives, media, runs and job queue (docs/product/creative-check-prd.md).
 // Nothing here reads or writes the posting pipeline's tables or waits on its runs, so a stuck
 // pipeline/Decode job can't block a check and a check can't block them. Every function takes
 // (ctx, …) and returns plain JSON, so an MCP tool or a route can call it directly.

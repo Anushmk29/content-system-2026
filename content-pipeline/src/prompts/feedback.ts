@@ -1,6 +1,7 @@
 // Prompts that turn the founder's feedback into work: a revision of one post, and the standing
 // rules every later draft follows (brand-context.ts adds them to the brand block).
 import { PIECE_NAME, type DraftPlatform } from './platform-playbooks.ts';
+import { igSlop } from './ig-skills.ts';
 
 /** One-click reasons on "Request changes" (the note is optional when one is picked). */
 export const CHANGE_REASONS = [
@@ -23,7 +24,10 @@ CURRENT HOOK: ${i.hook || '(none)'}
 CURRENT BODY:
 ${i.body ?? ''}
 CURRENT CTA: ${i.cta || '(none)'}
-
+${i.platform === 'instagram' ? `
+INSTAGRAM TELLS (ig-human): leave none of these in, and none of its stock words (${igSlop().terms.slice(-30).join(', ')}).
+${igSlop().structures.map((x) => `- ${x.name}: ${x.fix}`).join('\n')}
+` : ''}
 Respond with ONLY JSON: { "hook": string, "body": string, "cta": string }
 Every " inside a string value MUST be escaped as \\".`;
 }
