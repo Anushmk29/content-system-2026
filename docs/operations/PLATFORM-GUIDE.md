@@ -142,11 +142,15 @@ What's inside, top to bottom:
 | **Creative** | Make an image or carousel from a saved **Style**, tick "Add a new picture" for a fresh visual (a few cents), or **Use my own image or video**. Remove it if you don't want one. Not shown for blogs. |
 | **Preview** | How it will look on that platform. If the opening line was borrowed from a winning hook, it says which one. |
 | **Step 1 · Fix the words** | Edit the hook (first line), body and call to action before approving. Optional: "Want a stronger first line?" lets the AI rewrite the opening in the style of a post that did well. |
-| **Step 2 · Decide** | **Approve**, **Changes** or **Reject**. A note is required for Changes and Reject. |
-| **Claims** | Every factual claim the AI spotted. Green = has a proof link. Red = "no proof · blocks publish". |
+| **Claims** | Save a proof link for each factual claim, or use **Correct or remove this claim** to save revised copy and resolve an outdated claim. Missing proof blocks publication. |
+| **Step 2 · Decide / Send for review** | Drafts have **Send for review**. Posts that pass QC appear in Approvals, with **Approve**, **Changes** or **Reject**. A note is required for Changes and Reject. |
 | **Publishing** | Posting time, whether it was sent to Postiz, the live link and the tracked link. For approved posts, pick a posting time here. |
 | **Results** | For live posts: the numbers so far, plus a form to type in new numbers (impressions, reach, likes, comments, shares, saves, clicks, qualified engagement). Each save is a new snapshot. |
 | **History** | Every decision on this post: who, when, and the note. |
+
+To resolve a claim, paste its supporting URL and click **Save proof**. If the statement is wrong or no longer applies, open **Correct or remove this claim**, revise the hook/body/call to action, explain the change, and confirm that the claim is no longer made. **Save corrected copy and remove claim** saves both changes together; it leaves every other claim intact.
+
+Claim changes return an approved post to draft and preserve the reason in History. Resolve all remaining claims, then click **Send for review** and approve the post again. These controls apply to the current platform copy and are locked after the post is sent for publishing. Saving a proof link does not verify that the source supports the statement; the reviewer still checks it.
 
 ---
 
@@ -161,9 +165,9 @@ card says what has to happen next.
 |---|---|---|---|
 | **Signal** | A raw idea: a customer's question, a trend, a result, a competitor post. | **Research** turns signals into topics. | You (Ideas page) or the **Market Signals** step automatically. |
 | **Topic** (new → scored) | A possible post, scored 1–25. | You click **Select to draft** or **Drop**. | You, on **Ideas** or **Today**. |
-| **Selected** | Chosen for drafting. | **Draft Generator** writes it. | Button "Draft them now" on Ideas, or run pipeline. |
+| **Selected** | Chosen for drafting. | **Draft Generator** writes it and runs QC. Eligible posts go to Approvals; posts needing proof remain in Draft. | Button "Draft them now" on Ideas, or run pipeline. |
 | **Idea** | An idea card with no draft yet. | Draft it. | Draft Generator. |
-| **Draft** | Copy written for each platform. | **QC + Risk Gate** checks it. | Automatic (pipeline). |
+| **Draft** | Copy needs evidence, correction or another quality check. | Resolve claims or edit the copy, then click **Send for review** in the drawer. | You; QC also retries drafts on pipeline runs. |
 | **QC passed** | Passed the quality check. | Routed to approval. | Automatic. |
 | **Needs approval** | Waiting on a human. | You **Approve**, ask for **Changes**, or **Reject**. | You, on **Approvals** (or Telegram, if set up). |
 | **Approved** | Signed off. | Gets a posting time, then **Postiz Scheduler** sends it. | You set the time (drawer or Calendar drag), or the scheduler picks the next free day. |

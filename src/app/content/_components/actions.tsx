@@ -1,7 +1,7 @@
 'use client';
 // One client-side action path for every button in the dashboard: call an API route,
 // show the result (tone-coloured), send to login on 401, then refresh server data.
-import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Hologram, type OrbState, type Shape } from './Hologram';
 
@@ -12,13 +12,24 @@ const RUN_TONE: Record<string, Tone> = { ok: 'ok', degraded: 'warn', error: 'dan
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = any;
 
-export function useAction() {
+const ReadOnlyActions = createContext(false);
+
+export function ActionScope({ viewOnly, children }: { viewOnly: boolean; children: ReactNode }) {
+  return <ReadOnlyActions.Provider value={viewOnly}>{children}</ReadOnlyActions.Provider>;
+}
+
+export function useAction({ reload = false }: { reload?: boolean } = {}) {
+  const viewOnly = useContext(ReadOnlyActions);
   const router = useRouter();
   const [refreshing, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; tone: Tone } | null>(null);
 
   async function call(key: string, method: string, path: string, body?: unknown, okText?: (d: Json) => string, title?: string): Promise<Json | null> {
+    if (viewOnly && method !== 'GET') {
+      setMsg({ text: 'This admin session is view only.', tone: 'faint' });
+      return null;
+    }
     setBusy(key); setMsg(null);
     const load = startLoad(title ?? titleFor(method, path));
     try {
@@ -35,7 +46,10 @@ export function useAction() {
       const text = ok ? (okText?.(data) ?? data?.message ?? 'Done') : (data?.message ?? data?.error ?? (res.status >= 500 ? `The server failed (${res.status}). Try again; if it repeats, check System.` : `error ${res.status}`));
       setMsg({ text, tone });
       load.end(ok, text, Array.isArray(data) ? data.map((r: Json) => String(r.moduleId ?? '')).filter(Boolean) : []);
-      if (ok) start(() => router.refresh());
+      if (ok) {
+        if (reload) window.location.reload();
+        else start(() => router.refresh());
+      }
       return ok ? data : null;
     } catch (e) {
       setMsg({ text: (e as Error).message, tone: 'danger' });
@@ -47,7 +61,7 @@ export function useAction() {
   }
 
   const feedback: ReactNode = msg && <span role="status" style={{ fontSize: 12.5, color: TONE_COLOR[msg.tone] }}>{msg.text}</span>;
-  return { call, busy, pending: busy !== null || refreshing, msg, feedback, clear: () => setMsg(null) };
+  return { call, busy, pending: viewOnly || busy !== null || refreshing, viewOnly, msg, feedback, clear: () => setMsg(null) };
 }
 
 // ---- 3D loader: every call() that runs past SHOW_AFTER_MS opens one shared modal --------
@@ -144,11 +158,11 @@ export function Loader3D() {
 }
 
 /** A single-shot button bound to an API route. */
-export function ApiButton({ path, method = 'POST', body, label, busyLabel = '…', okText, className = 'btn' }: {
+export function ApiButton({ path, method = 'POST', body, label, busyLabel = '…', okText, className = 'btn', reload = false }: {
   path: string; method?: string; body?: unknown; label: ReactNode; busyLabel?: ReactNode;
-  okText?: (d: Json) => string; className?: string;
+  okText?: (d: Json) => string; className?: string; reload?: boolean;
 }) {
-  const a = useAction();
+  const a = useAction({ reload });
   return (
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <button type="button" className={className} disabled={a.pending} onClick={() => a.call('b', method, path, body, okText, typeof label === 'string' ? label : undefined)}>

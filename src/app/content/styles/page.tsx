@@ -1,6 +1,7 @@
 // Examples — designs you like (an image, or a carousel's pages), kept as they are. The image model
 // recreates one with your words and brand: here with "Make one", or on any post's creative panel.
 import { getContext, listStyles, ensureStarterExamples, POST_FORMATS, type StyleRow } from '@pratapai/content-pipeline';
+import Link from 'next/link';
 import { PageHead, Section, NeedsDb } from '@/app/content/_components/viz';
 import { StyleUpload, StyleCard, type VisualTargets } from '@/app/content/styles/_components/Styles';
 
@@ -19,7 +20,9 @@ export default async function StylesPage() {
   } catch (e) { error = (e as Error).message; }
   const head = (
     <PageHead title="Design examples"
-      sub="Designs you like. The AI recreates them with your words and brand." />
+      sub="Designs you like. The AI recreates them with your words and brand.">
+      <Link href="/content/design" className="btn btn-primary">Create visuals</Link>
+    </PageHead>
   );
   if (!styles) return (<>{head}<NeedsDb error={error} /></>);
   return (

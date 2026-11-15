@@ -13,6 +13,7 @@ export { suggestedPlatforms } from './modules/decision-tasks.ts';
 export { getSystemHealth, getRunHistory, getActivity, getActions, logAction } from './services/health-service.ts';
 export { listTodos, createTodo, updateTodo, deleteTodo } from './services/todo-service.ts';
 export { applyApprovalDecision, resubmitItem } from './services/approval-service.ts';
+export { updateClaim } from './services/claim-service.ts';
 export { CHANGE_REASONS } from './prompts/feedback.ts';
 export { humanScore, HUMAN_MIN } from './humanizer.ts';
 export {

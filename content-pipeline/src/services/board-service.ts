@@ -7,6 +7,7 @@ import {
 } from '../db/repo.ts';
 import { CONTENT_STATUSES } from '../../core/src/index.ts';
 import { syncPlanned, connectedPlatforms } from './calendar-sync-service.ts';
+import { isManual } from '../prompts/platform-playbooks.ts';
 
 interface IdeaPiece {
   id: string;
@@ -121,20 +122,24 @@ export async function planItem(ctx: ModuleContext, id: string, at: unknown): Pro
 export interface CalendarData {
   /** Items with a planned, scheduled or published time in [from, to). */
   dated: (ContentItemRow & { at: string })[];
-  /** Approved, not yet timed: drag onto a day to plan. */
+  /** Approved posts needing a new time, including expired plans. */
   unplanned: ContentItemRow[];
 }
 
 export async function getCalendar(ctx: ModuleContext, from: Date, to: Date): Promise<CalendarData> {
   const items = await createRepo(ctx.db).allItems(1000);
+  const now = Date.now();
+  const unplanned = items.filter((i) => i.status === 'approved' && !i.postiz_id && !isManual(i)
+    && (!i.scheduled_at || new Date(i.scheduled_at).getTime() <= now));
+  const unplannedIds = new Set(unplanned.map((i) => i.id));
   const dated: CalendarData['dated'] = [];
   for (const it of items) {
+    if (unplannedIds.has(it.id)) continue;
     const raw = it.published_at ?? it.scheduled_at;
     if (!raw) continue;
     const t = new Date(raw);
     if (t >= from && t < to) dated.push({ ...it, at: t.toISOString() });
   }
-  const unplanned = items.filter((i) => i.status === 'approved' && !i.scheduled_at && !i.postiz_id);
   return { dated: dated.sort((a, b) => (a.at < b.at ? -1 : 1)), unplanned };
 }
 

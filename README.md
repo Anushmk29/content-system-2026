@@ -92,6 +92,8 @@ npm run pipeline                                  # runs every module once again
 > **Setting it up for real?** Deploy with **`docs/operations/DEPLOY.md`** (VPS + Docker, scheduling,
 > backups, monitoring, runbook); **`docs/operations/GO-LIVE.md`** covers each integration and how to test it.
 
+For Hostinger VPS, follow the [Hostinger deployment guide](docs/operations/HOSTINGER.md).
+
 ## What the dashboard does (`/content`)
 The dashboard is the **control room** — you can run the whole loop here without a terminal:
 - **Modules** — every stage with last run, duration, items processed, and health.

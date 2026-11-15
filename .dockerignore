@@ -11,6 +11,7 @@ docs
 db/*backup*
 *.docx
 *.tsbuildinfo
+*.log
 .claude
 .impeccable
 infra

@@ -5,7 +5,7 @@ import { createRepo, type NewContentItem } from '../db/repo.ts';
 import { createContentItems } from '../db/content-items.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import type { SystemHealth } from './health-service.ts';
-import { getIdeaBoard, editItemCopy, planItem, getItemDetail } from './board-service.ts';
+import { getIdeaBoard, editItemCopy, planItem, getItemDetail, getCalendar } from './board-service.ts';
 import { getToday, weekStart, runwayDays } from './today-service.ts';
 import { recordMetrics, getAnalytics } from './analytics-service.ts';
 
@@ -65,6 +65,32 @@ test('planning a time: only approved + not yet in Postiz, only in the future', a
   assert.equal((await planItem(ctx, b!, future)).ok, false, 'already in Postiz');
 });
 
+test('calendar recovers expired approvals without moving booked posts or manual scripts', async () => {
+  const calendarDb = await createTestDb();
+  const calendarItems = createContentItems(calendarDb);
+  const topic = await calendarDb.query<{ id: string }>(`insert into content.topics (title, status) values ('calendar', 'selected') returning id`);
+  const ids = await calendarItems.createDraftSet(topic.rows[0]!.id, [
+    piece('linkedin', 'founder_post'), piece('x', 'thread'), piece('linkedin', 'founder_post'),
+    piece('x', 'thread'), piece('youtube', 'short_script'),
+  ], []);
+  for (const id of ids) {
+    await calendarItems.transition(id, { event: 'submit', lane: 'review' });
+    await calendarItems.transition(id, { event: 'approve' });
+  }
+  const day = 86_400_000;
+  const now = Date.now();
+  const past = new Date(now - day).toISOString();
+  const future = new Date(now + day).toISOString();
+  await calendarDb.query('update content.content_items set scheduled_at = $2 where id = $1', [ids[1], past]);
+  await calendarDb.query('update content.content_items set scheduled_at = $2 where id = $1', [ids[2], future]);
+  await calendarItems.transition(ids[3]!, { event: 'schedule', postizId: 'booked', utmUrl: 'u', scheduledAt: past });
+  const calendar = await getCalendar({ db: calendarDb } as unknown as ModuleContext, new Date(now - 2 * day), new Date(now + 2 * day));
+  assert.deepEqual(calendar.unplanned.map((i) => i.id).sort(), ids.slice(0, 2).sort());
+  assert.deepEqual(new Set(calendar.dated.map((i) => i.id)), new Set([ids[2], ids[3]]));
+  const savedPlan = (await createRepo(calendarDb).getItem(ids[1]!))!.scheduled_at!;
+  assert.equal(new Date(savedPlan).toISOString(), past, 'display recovery does not change the saved plan');
+});
+
 test('today: unproven claim on an approved item is blocked; mix counts ideas not copies', async () => {
   const ids = await draftSet(['saved 10 hours a week']);
   for (const id of ids) await approve(id);
@@ -85,6 +111,46 @@ test('week starts Monday UTC; runway is days of content at target pace', () => {
   assert.equal(weekStart(new Date('2026-10-04T23:00Z')).toISOString(), '2026-09-28T00:00:00.000Z'); // Sun
   assert.equal(runwayDays(5, 5), 7);
   assert.equal(runwayDays(0, 5), 0);
+});
+
+test('today separates ready approvals from confirmed schedules and missing metrics from zero', async () => {
+  const isolatedDb = await createTestDb();
+  const isolatedItems = createContentItems(isolatedDb);
+  const isolatedRepo = createRepo(isolatedDb);
+  const isolatedCtx = { db: isolatedDb } as unknown as ModuleContext;
+  const now = new Date();
+  const day = 86_400_000;
+  const topic = await isolatedDb.query<{ id: string }>(`insert into content.topics (title, status) values ('schedule checks', 'selected') returning id`);
+  const ids = await isolatedItems.createDraftSet(topic.rows[0]!.id, [
+    piece('linkedin', 'founder_post'), piece('x', 'thread'), piece('linkedin', 'founder_post'),
+    piece('x', 'thread'), piece('linkedin', 'founder_post'), piece('youtube', 'short_script'),
+  ], []);
+  for (const id of ids) {
+    await isolatedItems.transition(id, { event: 'submit', lane: 'review' });
+    await isolatedItems.transition(id, { event: 'approve' });
+  }
+  // A planned date on an approval is not a confirmed publishing slot.
+  await isolatedDb.query('update content.content_items set scheduled_at = $2 where id = $1', [ids[0], new Date(now.getTime() + day).toISOString()]);
+  for (const [index, days] of [[1, 2], [2, 8], [3, -1]] as const) {
+    await isolatedItems.transition(ids[index]!, { event: 'schedule', postizId: `schedule-${index}`, utmUrl: 'u', scheduledAt: new Date(now.getTime() + days * day).toISOString() });
+  }
+  const unmeasured = await getToday(isolatedCtx, health, now);
+  assert.equal(unmeasured.kpis.readyToSchedule, 2, 'only publish-ready, automatic approvals count');
+  assert.equal(unmeasured.kpis.scheduled7d, 1, 'ignore planned approvals, past slots and slots beyond seven days');
+  assert.equal(unmeasured.kpis.clicks7d, null);
+  assert.equal(unmeasured.kpis.qualifiedEngagement7d, null);
+
+  await isolatedItems.goLiveDue();
+  assert.equal((await recordMetrics(isolatedCtx, ids[3]!, { clicks: 0, qualifiedEngagement: 0 })).ok, true);
+  const measured = await getToday(isolatedCtx, health, now);
+  assert.equal(measured.kpis.clicks7d, 0, 'a measured zero remains a number');
+  assert.equal(measured.kpis.qualifiedEngagement7d, 0);
+  const urgentTask = await isolatedRepo.createTodo({ title: 'Follow up on the winning post', priority: 2 });
+  assert.ok((await getToday(isolatedCtx, health, now)).actions.some((a) => a.todoId === urgentTask.id));
+  await isolatedRepo.updateTodo(urgentTask.id, { status: 'in_progress' });
+  assert.ok((await getToday(isolatedCtx, health, now)).actions.some((a) => a.todoId === urgentTask.id), 'important work stays visible after starting it');
+  await isolatedRepo.updateTodo(urgentTask.id, { status: 'done' });
+  assert.ok(!(await getToday(isolatedCtx, health, now)).actions.some((a) => a.todoId === urgentTask.id), 'completed work leaves the daily actions');
 });
 
 test('metrics: only for live items, whole numbers; analytics picks them up', async () => {

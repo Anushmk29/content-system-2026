@@ -3,6 +3,7 @@
 // their own version. The pattern table is the learning loop: what each kind of opening earns on
 // the client's own published posts.
 import { getContext, listHooks, listStyles, hookPatternWeights, HOOK_PATTERNS, type HookRow, type PatternWeight } from '@pratapai/content-pipeline';
+import Link from 'next/link';
 import { PageHead, NeedsDb, Tile, Chip } from '@/app/content/_components/viz';
 import { Hooks } from '@/app/content/hooks/_components/Hooks';
 import { TONE } from '@/app/content/_lib/format';
@@ -21,7 +22,9 @@ export default async function HooksPage() {
   } catch (e) { error = (e as Error).message; }
   const head = (
     <PageHead title="Opening lines"
-      sub="The first lines that worked best for competitors. New drafts borrow their shape." />
+      sub="The first lines that worked best for competitors. New drafts borrow their shape.">
+      <Link href="/content/ideas" className="btn btn-primary">Choose an idea</Link>
+    </PageHead>
   );
   if (!hooks) return (<>{head}<NeedsDb error={error} /></>);
   return (

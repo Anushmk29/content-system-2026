@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-15",
+  "fullRegressionRun": {
+    "passed": 188,
+    "failed": 0
+  },
+  "finalFocusedRegressionRun": {
+    "passed": 9,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "hostTypeScript": "passed",
+  "browser": {
+    "checks": [
+      {
+        "name": "Approved blocked post exposes proof controls; invalid proof is rejected",
+        "status": "pass"
+      },
+      {
+        "name": "Saving proof through the browser revokes approval and persists evidence",
+        "status": "pass"
+      },
+      {
+        "name": "Send for review moves the resolved post into Approvals without model calls",
+        "status": "pass"
+      },
+      {
+        "name": "Claim removal requires corrected copy, reason and explicit confirmation",
+        "status": "pass"
+      },
+      {
+        "name": "An unrelated unresolved claim still blocks submission",
+        "status": "pass"
+      },
+      {
+        "name": "Remaining proof can be saved and the corrected post resubmitted",
+        "status": "pass"
+      },
+      {
+        "name": "Request changes displays the refreshed draft editing controls",
+        "status": "pass"
+      },
+      {
+        "name": "Manual copy editing saves and refreshes the preview before review",
+        "status": "pass"
+      },
+      {
+        "name": "Claim updates reject the admin view-only role",
+        "status": "pass"
+      },
+      {
+        "name": "New claim controls fit a narrow phone viewport",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "drawerWidth": 390
+        }
+      }
+    ],
+    "runtimeErrors": [],
+    "openRouterRequests": 0,
+    "cleaned": true,
+    "remainingFixtures": 0
+  },
+  "conditions": {
+    "openRouterKey": "empty in test server",
+    "jev": "off",
+    "postiz": "disabled in test server",
+    "testServerDatabasePool": 1
+  },
+  "developmentServer": "http://localhost:3001/content"
+}

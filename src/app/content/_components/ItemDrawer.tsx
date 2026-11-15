@@ -5,6 +5,7 @@ import { getContext, getItemDetail, platformChannels, loadBrand, listItemAssets,
 import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
 import { ApprovalActions, ChannelPicker, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
+import { ClaimEditor } from './ClaimEditor';
 import { EscTo, ApiButton } from './actions';
 import { PLATFORM, STATUS_COLOR, ago, when, prettyPillar, compact, times } from '@/app/content/_lib/format';
 
@@ -24,6 +25,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
   const live = (LIVE_STATUSES as readonly string[]).includes(item.status);
   const p = PLATFORM[item.platform];
   const editable = EDITABLE_STATUSES.includes(item.status);
+  const claimsEditable = ['draft', 'needs_approval', 'approved'].includes(item.status) && !item.postiz_id;
   const hasCreative = item.platform !== 'blog';
   const [assets, styles] = hasCreative
     ? await Promise.all([listItemAssets(getContext(), item.id).catch(() => []), editable ? listStyles(getContext()).catch(() => []) : []])
@@ -117,33 +119,36 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
           </section>
         )}
 
-        {item.status === 'needs_approval' && (
-          <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} reasons={[...CHANGE_REASONS]} /></section>
-        )}
-        {item.status === 'draft' && (
-          <section>
-            <h3>Step 2 · Send back for review</h3>
-            <p className="faint" style={{ margin: '0 0 8px', fontSize: 12.5 }}>This is a draft again (changes were requested). Fix the words above, then send it back. Approve and Reject come back once it&apos;s in the queue.</p>
-            <ApiButton path={`/content/api/items/${item.id}`} method="PATCH" body={{ resubmit: true }} label="↩ Send back for review" busyLabel="checking…" className="btn btn-ink" />
-          </section>
-        )}
-
         <section>
           <h3>Claims {claims.length ? `(${claims.length})` : ''}</h3>
+          {claimsEditable && claims.length > 0 && <p style={{ fontSize: 12.5 }}>Attach evidence for each claim, or correct the copy and resolve a claim that no longer applies. Changes require fresh review.</p>}
           {claims.length === 0 ? <p className="empty">No factual claims flagged.</p> : (
             <ul className="row-list">
               {claims.map((c) => (
-                <li key={c.id} className="row">
+                <li key={c.id} className="row" style={claimsEditable ? { display: 'block', padding: '14px 0' } : undefined}>
+                  {claimsEditable ? <ClaimEditor key={`${c.id}-${new Date(item.updated_at ?? item.created_at).toISOString()}`} itemId={item.id} claim={c} hook={item.hook ?? ''} body={item.body ?? ''} cta={item.cta ?? ''} /> : <>
                   <span className="dot" style={{ '--c': c.proof_url ? 'var(--ok)' : 'var(--danger)' } as React.CSSProperties} />
                   <span className="grow" style={{ fontSize: 13 }}>{c.claim_text}</span>
                   {c.proof_url
                     ? <a href={c.proof_url} target="_blank" rel="noreferrer" className="chip" style={{ '--c': 'var(--ok)' } as React.CSSProperties}>proof ↗</a>
                     : <Chip color="var(--danger)">no proof · blocks publish</Chip>}
+                  </>}
                 </li>
               ))}
             </ul>
           )}
         </section>
+
+        {item.status === 'needs_approval' && (
+          <section><h3>{editable ? 'Step 2 · Decide' : 'Decision'}</h3><ApprovalActions itemId={item.id} unproven={unproven} reasons={[...CHANGE_REASONS]} /></section>
+        )}
+        {item.status === 'draft' && (
+          <section>
+            <h3>Step 2 · Send for review</h3>
+            <p style={{ margin: '0 0 8px', fontSize: 12.5 }}>When the copy is ready and every claim is resolved, send this post through the quality check. It will appear in Approvals for a human decision.</p>
+            <ApiButton path={`/content/api/items/${item.id}`} method="PATCH" body={{ resubmit: true }} label="Send for review" busyLabel="checking…" className="btn btn-ink" reload />
+          </section>
+        )}
 
         <section>
           <h3>Publishing</h3>

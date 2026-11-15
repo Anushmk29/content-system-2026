@@ -1,5 +1,9 @@
 # Deploying and running Content Studio
 
+For Hostinger, start with [the VPS deployment guide](HOSTINGER.md). Run the commands below
+from the repository root. Always pass `--env-file .env`: service `env_file` supplies the
+container settings, while this option also supplies Compose's `DOMAIN` and scheduler interval.
+
 The supported production setup is **one Linux VPS with Docker**. Serverless hosting (Vercel and
 similar) is not supported:
 - Pipeline runs and Decode take minutes.
@@ -22,7 +26,11 @@ internet ──443──▶ Caddy (HTTPS) ──▶ app (Next.js, port 3000)
 2. **Settings.** `cp .env.example .env`, then fill in the REQUIRED block and `DOMAIN`.
    - Generate secrets with `openssl rand -hex 32`.
    - Both passwords need 16+ characters, and `CONTENT_SESSION_KEY` needs 32+, or the app answers every request with a 503 that says what is missing.
-3. **Schema.** `npm ci --prefix content-pipeline && npm run migrate`.
+3. **Build and schema.** Build the image, then run the migration from it (Node.js is not needed on the VPS):
+   ```sh
+   docker compose --env-file .env -f infra/app/docker-compose.yml build
+   docker compose --env-file .env -f infra/app/docker-compose.yml run --rm --no-deps app npm run migrate
+   ```
    - The whole of `db/schema.sql` is applied in one transaction: it all applies or nothing changes.
    - The version is recorded in `content.schema_version`.
    - Never run `db/seed.sql` against production. It is demo data, and it duplicates itself on every run.
@@ -30,16 +38,23 @@ internet ──443──▶ Caddy (HTTPS) ──▶ app (Next.js, port 3000)
    - Set `DISABLE_REGISTRATION=false` only while you create your account.
    - Pin `POSTIZ_VERSION`.
    - Put the API key in `CONTENT_POSTIZ_API_KEY`.
-5. **App.** `cd infra/app && docker compose up -d --build`.
+5. **App.** `docker compose --env-file .env -f infra/app/docker-compose.yml up -d app caddy`.
    - Point DNS for `DOMAIN` at the server first; Caddy gets the certificate on its own.
-6. **Check.** `curl https://$DOMAIN/content/api/healthz` should return `{"ok":true}`. Then log in at `https://$DOMAIN/content`.
+6. **Check.** `curl --fail https://studio.example.com/content/api/healthz` should return `{"ok":true}`.
+   Replace `studio.example.com` with your hostname, then log in at `https://YOUR_HOSTNAME/content`.
+7. **Scheduler.** Once setup and integrations are verified, start hourly runs:
+   `docker compose --env-file .env -f infra/app/docker-compose.yml up -d scheduler`.
 
 ## 2. Updating
 
 ```sh
 git pull
-npm run migrate                                   # safe to re-run; all-or-nothing
-cd infra/app && docker compose up -d --build
+docker compose --env-file .env -f infra/app/docker-compose.yml stop scheduler
+docker compose --env-file .env -f infra/app/docker-compose.yml build
+docker compose --env-file .env -f infra/app/docker-compose.yml run --rm --no-deps app npm run migrate
+docker compose --env-file .env -f infra/app/docker-compose.yml up -d app caddy
+# If you use the hourly scheduler, restart it after checking the app:
+docker compose --env-file .env -f infra/app/docker-compose.yml up -d scheduler
 ```
 Run the migration **before** the new containers start. New code may read columns the old schema
 lacks.
@@ -69,7 +84,7 @@ $CONTENT_CRON_SECRET`, and remove the scheduler service.
   - Set `CONTENT_ALERT_WEBHOOK` (Slack or Discord incoming webhook) to get a message whenever a module run ends in `error`.
   - The System page shows every module's last run.
   - A run killed midway stays visible as `running`.
-- **Logs:** `docker compose logs -f app scheduler`. In production every line is one JSON object (`t`, `level`, `scope`, `msg`); module lines carry `module#runid`.
+- **Logs:** `docker compose --env-file .env -f infra/app/docker-compose.yml logs -f app scheduler`. In production every line is one JSON object (`t`, `level`, `scope`, `msg`); module lines carry `module#runid`.
 
 ## 6. Backups and restore
 
@@ -92,9 +107,9 @@ Supabase, point-in-time recovery on a paid plan covers the database part.
 
 | Symptom | Check | Fix |
 |---|---|---|
-| Every page answers 503 with a message | The message names the missing setting | Set it in `.env`, then `docker compose up -d` |
-| Module stuck on `running` | `docker compose logs scheduler`; the run was killed (deploy, crash, OOM) | Nothing to clean up: the lock died with the process, and the next run proceeds |
+| Every page answers 503 with a message | The message names the missing setting | Set it in `.env`, then `docker compose --env-file .env -f infra/app/docker-compose.yml up -d` |
+| Module stuck on `running` | Scheduler logs (see Monitoring); the run was killed (deploy, crash, OOM) | Nothing to clean up: the lock died with the process, and the next run proceeds |
 | "daily budget reached" | Costs page | Wait, or raise `CONTENT_DAILY_BUDGET_USD` |
 | Topic never drafts | `select title, attempts, last_error from content.topics where attempts >= 3` | Fix the cause, then `update content.topics set attempts = 0 where id = ...` |
 | Post missing in Postiz | Item's `postiz_id`; Postiz UI; logs for `orphaned Postiz post` | Requeue: set the item back to `approved` with `postiz_id = null` |
-| Rotate a password | Change it in `.env`, then `docker compose up -d` | Every session is signed with it, so everyone is logged out |
+| Rotate a password | Change it in `.env`, then `docker compose --env-file .env -f infra/app/docker-compose.yml up -d` | Every session is signed with it, so everyone is logged out |

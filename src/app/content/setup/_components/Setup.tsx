@@ -4,6 +4,7 @@
 // The rail on the left is the sequence; the preview under it fills in as each step is saved.
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { Brand, CompetitorRow, FontRow } from '@pratapai/content-pipeline';
 import { IdentitySection, VoiceSection, AudienceSection, OffersSection, LookSection, BrandProof, Card, kitDone } from '@/app/content/brand/_components/BrandKit';
 import { Competitors } from '@/app/content/_components/Competitors';
@@ -31,6 +32,7 @@ export function Setup({ kit, fonts, curated, competitors }: { kit: Brand; fonts:
         <p className="setup-kicker">Content Studio</p>
         <h1>Set up your studio</h1>
         <p className="setup-sub">About ten minutes. You can change any of it later in Brand kit.</p>
+        {kit.onboardedAt && <Link href="/content" className="btn btn-sm setup-exit">Back to studio</Link>}
         <ol className="setup-steps">
           {STEPS.map((s, i) => (
             <li key={s}>

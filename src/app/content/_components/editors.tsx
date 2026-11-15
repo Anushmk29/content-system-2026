@@ -7,7 +7,7 @@ import { ExamplePicker, firstFor, type ExampleOpt } from './ExamplePicker';
 
 // ---- approve / changes / reject ---------------------------------------------
 export function ApprovalActions({ itemId, unproven = 0, reasons = [] }: { itemId: string; unproven?: number; reasons?: string[] }) {
-  const a = useAction();
+  const a = useAction({ reload: true });
   const [note, setNote] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [warn, setWarn] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function ApprovalActions({ itemId, unproven = 0, reasons = [] }: { itemId
 
 // ---- edit copy (pre-approval) -------------------------------------------------
 export function CopyEditor({ itemId, hook, body, cta }: { itemId: string; hook: string; body: string; cta: string }) {
-  const a = useAction();
+  const a = useAction({ reload: true });
   const [v, setV] = useState({ hook, body, cta });
   const dirty = v.hook !== hook || v.body !== body || v.cta !== cta;
   return (
@@ -233,24 +233,25 @@ export function MakeAll({ itemIds, styles }: { itemIds: string[]; styles: Exampl
   const run = async () => {
     setResult('');
     let n = 0;
-    for (const id of itemIds) {
-      setDone(n);
+    for (const [index, id] of itemIds.entries()) {
+      setDone(index);
       if (await a.call('all', 'POST', `/content/api/items/${id}/asset`, { styleId })) n++;
     }
     setDone(null);
     a.clear();
-    setResult(`${n} of ${itemIds.length} visuals made.`);
+    setResult(`${n} of ${itemIds.length} visuals created.${n < itemIds.length ? ' Review the remaining posts and retry.' : ''}`);
   };
   if (!itemIds.length || !styles.length) return null;
   return (
     <div className="next-step">
       <div>
-        <b title="Each post gets the same example with its own words, about a minute each.">Make all {itemIds.length} at once</b>
+        <b>Create {itemIds.length} visuals</b>
+        <p>Each post uses this example with its own words. Allow about a minute per post.</p>
       </div>
       <div className="cr-row">
-        <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} />
-        <button type="button" className="btn btn-primary" disabled={a.pending || !styleId} onClick={run}>
-          {done !== null ? `Making ${done + 1} of ${itemIds.length}…` : `Make all ${itemIds.length}`}
+        <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} disabled={done !== null || a.pending} />
+        <button type="button" className="btn btn-primary" disabled={done !== null || a.pending || !styleId} onClick={run}>
+          {done !== null ? `Creating ${done + 1} of ${itemIds.length}…` : `Create ${itemIds.length} visuals`}
         </button>
         {done === null && result && <span role="status" style={{ fontSize: 12.5 }}>{result}</span>}
       </div>
@@ -271,6 +272,9 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
   const a = useAction();
   const [styleId, setStyleId] = useState(() => firstFor(styles, want));
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const currentIndex = Math.min(previewIndex, Math.max(0, assets.length - 1));
+  const previewAssets = bare ? assets.slice(currentIndex, currentIndex + 1) : assets;
   const url = `/content/api/items/${itemId}/asset`;
   const v = encodeURIComponent(assets[0]?.created_at ?? '');
   const make = async () => {
@@ -287,17 +291,15 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
   };
   const busy = a.pending;
   const extra = <>
-    <label className="btn btn-sm" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : 'Use my own image or video'}
-      <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
-    {assets.length > 0 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirm('Remove the creative from this post?') && a.call('rm', 'DELETE', url)}>Remove</button>}
+    <label className="btn btn-sm cr-upload" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : bare ? 'Upload media' : 'Use my own image or video'}
+      <input type="file" aria-label="Upload your own images or video" accept="image/png,image/jpeg,image/webp,video/mp4" multiple disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
+    {assets.length > 0 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirm('Remove the creative from this post?') && a.call('rm', 'DELETE', url)}>{bare ? 'Remove visual' : 'Remove'}</button>}
   </>;
-  // Design cards (bare) keep one main button; the quieter actions sit behind ⋯ beside it.
-  const more = <details className="make-mine dc-more"><summary className="btn btn-sm" aria-label="More actions" title="More actions">⋯</summary><div className="make-pop">{extra}</div></details>;
   return (
     <div className="cr">
       {assets.length > 0 ? (
         <div className="cr-strip" data-p={platform}>
-          {assets.map((x) => x.mime.startsWith('video/')
+          {previewAssets.map((x) => x.mime.startsWith('video/')
             ? <video key={x.idx} src={`${url}?i=${x.idx}&v=${v}`} controls preload="metadata" />
             // eslint-disable-next-line @next/next/no-img-element
             : <a key={x.idx} href={`${url}?i=${x.idx}&v=${v}`} target="_blank" rel="noreferrer" title={`Open slide ${x.idx + 1} full size`}><img src={`${url}?i=${x.idx}&v=${v}`} alt={`Slide ${x.idx + 1}`} loading="lazy" /></a>)}
@@ -308,20 +310,24 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
             : platform === 'instagram' ? 'No creative. It goes out with plain text slides.' : 'No creative. It goes out as text only.'}
         </p>
       )}
+      {bare && assets.length > 1 && <div className="cr-preview-nav" aria-label="Visual pages">
+        <button type="button" className="btn btn-sm" disabled={currentIndex === 0} onClick={() => setPreviewIndex(currentIndex - 1)}>Previous</button>
+        <span aria-live="polite">{currentIndex + 1} of {assets.length}</span>
+        <button type="button" className="btn btn-sm" disabled={currentIndex === assets.length - 1} onClick={() => setPreviewIndex(currentIndex + 1)}>Next</button>
+      </div>}
       {assets.length > 0 && <p className="cr-meta">{assets.length} {assets[0]!.mime.startsWith('video/') ? 'video' : assets.length === 1 ? 'image' : 'slides'} · {assets[0]!.source === 'upload' ? 'your own' : 'made from an example'}{editable ? '' : ' · locked with the approved copy'}</p>}
       {editable && (
         <div className="cr-tools">
           {styles.length > 0 ? (
-            <div className="cr-row">
-              <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} want={want} />
-              <button type="button" className="btn btn-ink" disabled={busy || !styleId} onClick={make}>
-                {a.busy === 'make' ? 'Making… (about a minute)' : assets.length ? 'Make again' : 'Make creative'}
+            <div className={bare ? 'cr-create' : 'cr-row'}>
+              {bare && <span className="cr-example-label">Design example</span>}
+              <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} want={want} disabled={busy} />
+              <button type="button" className={bare && !assets.length ? 'btn btn-primary' : bare ? 'btn' : 'btn btn-ink'} disabled={busy || !styleId} onClick={make}>
+                {a.busy === 'make' ? 'Creating… (about a minute)' : bare ? (assets.length ? 'Regenerate visual' : 'Create visual') : assets.length ? 'Make again' : 'Make creative'}
               </button>
-              {bare && more}
             </div>
           ) : <p className="cr-meta">No examples saved yet. <a href="/content/styles">Add one on Design examples</a> to make creatives here.</p>}
-          {bare && !styles.length && more}
-          {bare ? a.feedback : <div className="cr-row">{extra}{a.feedback}</div>}
+          <div className="cr-row">{extra}{a.feedback}</div>
           {warnings.length > 0 && <ul className="cr-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
         </div>
       )}

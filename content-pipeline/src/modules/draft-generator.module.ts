@@ -17,6 +17,7 @@ import { buildScriptPrompt } from '../prompts/scripts.ts';
 import { parseDraftResponse, type DraftSet, type DraftPiece } from './draft-parse.ts';
 import { provenHooks, patternAdvice, hookPatternWeights, scoreHookOptions } from '../services/hook-service.ts';
 import { parseJsonObject } from './llm-json.ts';
+import { qcItem } from './qc-gate.module.ts';
 import type { ModuleContext as Ctx } from './module.ts';
 
 export const draftGeneratorModule: Module = {
@@ -35,15 +36,26 @@ export const draftGeneratorModule: Module = {
 
     let drafted = 0;
     let itemsCreated = 0;
+    let toApproval = 0, needProof = 0, signalFailures = 0;
     const failures: string[] = [];
 
     for (const t of topics) {
       try {
         const topic = await ensureMarketContext(ctx, t);
-        itemsCreated += (await draftTopic(ctx, topic, {
+        const ids = await draftTopic(ctx, topic, {
           platforms: platformsFor(topic, ctx.env.platformFit), exact: ownPick(topic), formats: formatsFor(topic), frameworks: frameworksFor(topic), scripts: scriptsFor(topic),
-        })).length;
+        });
+        itemsCreated += ids.length;
         drafted++;
+        for (const id of ids) {
+          try {
+            const r = await qcItem(ctx, (await repo.getItem(id))!);
+            if (r.outcome === 'blocked') needProof++; else toApproval++;
+            if (r.signalFailed) signalFailures++;
+          } catch (e) {
+            failures.push(`QC ${id}: ${(e as Error).message}`);
+          }
+        }
       } catch (e) {
         // Per-topic isolation: one bad topic never blocks the rest of the batch.
         failures.push(`${t.title}: ${(e as Error).message}`);
@@ -52,13 +64,14 @@ export const draftGeneratorModule: Module = {
     }
 
     const message =
-      `${drafted}/${topics.length} topic(s) drafted into ${itemsCreated} item(s)` +
+      `${drafted}/${topics.length} topic(s) drafted into ${itemsCreated} item(s); ${toApproval} waiting in Approvals, ${needProof} need proof` +
+      (signalFailures ? `; ${signalFailures} checked on format rules only` : '') +
       (failures.length ? `, ${failures.length} failed` : '');
     return {
       status: failures.length > 0 ? 'degraded' : 'ok',
       itemsProcessed: itemsCreated,
       message,
-      meta: { drafted, itemsCreated, failures },
+      meta: { drafted, itemsCreated, toApproval, needProof, signalFailures, failures },
     };
   },
 };

@@ -8,6 +8,7 @@ import { PageHead, KpiStrip, NeedsDb } from '@/app/content/_components/viz';
 import { CalendarGrid, type CalItem } from '@/app/content/calendar/_components/CalendarGrid';
 import { ItemDrawer } from '@/app/content/_components/ItemDrawer';
 import { withParams } from '@/app/content/_lib/format';
+import Link from 'next/link';
 
 const DAY = 86_400_000;
 
@@ -38,14 +39,20 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   return (
     <>
       <PageHead title="Calendar" sub="What goes out, and when."
-        next={data.unplanned.length ? { text: `${data.unplanned.length} approved post${data.unplanned.length === 1 ? ' has' : 's have'} no date yet. Drag ${data.unplanned.length === 1 ? 'it' : 'them'} from Unplanned onto a day.` } : null}
+        next={data.unplanned.length ? {
+          text: `${data.unplanned.length} approved post${data.unplanned.length === 1 ? ' needs' : 's need'} a date. Open a post to choose a time, or drag it onto a day.`,
+          action: <Link className="btn btn-primary" href={itemHref(data.unplanned[0]!.id)}>Plan a post</Link>,
+        } : !ahead.length ? {
+          text: 'Nothing is coming up in this view. Review your drafts to fill the calendar.',
+          action: <Link className="btn" href="/content/approvals">Review drafts</Link>,
+        } : null}
         how={[
           <>Approved posts without a time wait in <b>Unplanned</b>.</>,
           <>Drag one onto a day to set when it goes out. Click any post to read or change it.</>,
           <>Video scripts and Reddit posts aren’t posted automatically: those are on <b>Film &amp; post</b>.</>,
         ]} />
       <KpiStrip items={[
-        { label: 'Scheduled', value: ahead.length },
+        { label: 'Upcoming', value: ahead.length },
         { label: 'Next 7 days', value: ahead.filter((i) => new Date(i.at).getTime() < now + 7 * DAY).length },
         { label: 'Unplanned', value: data.unplanned.length },
         { label: 'Published', value: data.dated.filter((i) => ['published', 'performance_captured'].includes(i.status)).length },

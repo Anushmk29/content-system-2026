@@ -471,6 +471,9 @@ export function BrandKit({ kit, fonts, curated, photos }: { kit: Brand; fonts: F
   return (
     <div className="bk-page">
       <div className="bk-sheet">
+        <nav className="page-links" aria-label="Brand kit sections">
+          {PARTS.map(([key, title]) => <a key={key} href={`#${anchor(title)}`}>{title}</a>)}
+        </nav>
         <KitMeter kit={kit} />
         <IdentitySection kit={kit} />
         <VoiceSection kit={kit} />

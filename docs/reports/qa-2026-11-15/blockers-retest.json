@@ -1,0 +1,76 @@
+{
+  "startedAt": "2026-11-15T10:17:45.521Z",
+  "scope": [
+    "Production settings",
+    "Postiz connectivity",
+    "Proof-link handling",
+    "Draft-to-approval handoff"
+  ],
+  "excluded": "All OpenRouter model operations, including Jev, research, images and voice",
+  "blockers": [
+    {
+      "name": "Production settings",
+      "status": "still blocked",
+      "http": 503,
+      "message": "CONTENT_RUN_SECRET and CONTENT_ADMIN_SECRET must be at least 16 characters.",
+      "configuration": {
+        "clientPasswordLongEnough": false,
+        "adminPasswordLongEnough": false,
+        "sessionKeyLongEnough": false,
+        "problem": "CONTENT_RUN_SECRET and CONTENT_ADMIN_SECRET must be at least 16 characters."
+      }
+    },
+    {
+      "name": "Postiz connectivity",
+      "status": "resolved",
+      "health": {
+        "id": "postiz",
+        "state": "ok",
+        "message": "channels: linkedin-page, instagram, facebook, linkedin",
+        "checkedAt": "2026-11-15T10:17:46.022Z"
+      },
+      "http": 200,
+      "channelsReturned": true
+    },
+    {
+      "name": "Draft-to-approval handoff",
+      "status": "still blocked",
+      "draftModuleResult": "ok",
+      "afterDraft": [
+        "draft"
+      ],
+      "afterExplicitQc": "needs_approval",
+      "fixtureCompletions": 2,
+      "modelCalls": "Replaced with static local responses; no provider requests"
+    },
+    {
+      "name": "Proof-link handling",
+      "status": "still blocked",
+      "unprovenClaimsDisplayed": 5,
+      "proofInputsOrActions": 0
+    }
+  ],
+  "controls": [
+    {
+      "name": "Proof publication gate",
+      "status": "passed",
+      "missingProofBlocksPublication": true,
+      "proofAddedInIsolatedDatabaseAllowsPublication": true
+    },
+    {
+      "name": "Production with temporary valid settings and OpenRouter disabled",
+      "status": "passed",
+      "workspaceRendered": true,
+      "persistentSettingsChanged": false,
+      "proofBrowserWriteAttempts": 0,
+      "openRouterKeyInTestServer": "empty",
+      "jevMode": "off"
+    }
+  ],
+  "finishedAt": "2026-11-15T10:18:00.669Z",
+  "openRouterRequestsAttemptedByRunner": 0,
+  "cleanup": {
+    "persistentTestRecordsCreated": 0,
+    "temporaryBrowserServerStopped": true
+  }
+}

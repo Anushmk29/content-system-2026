@@ -9,7 +9,7 @@ import { Section, Tile, Funnel, PillarBars, Plat, StatusChip, Dot, NeedsDb, Page
 import { ApiButton, RunModuleButton } from '@/app/content/_components/actions';
 import { TodoTracker } from '@/app/content/_components/TodoTracker';
 import { ItemDrawer } from '@/app/content/_components/ItemDrawer';
-import { ago, when, shortDate, compact, times, RUN_COLOR, TONE, PLATFORM, withParams } from '@/app/content/_lib/format';
+import { ago, when, shortDate, compact, times, RUN_COLOR, PLATFORM, withParams } from '@/app/content/_lib/format';
 
 const KIND_LABEL: Record<TodayAction['kind'], string> = {
   fix: 'Fix', blocked: 'Blocked', approve: 'Approve', topic: 'Decide', draft: 'Run', signal: 'Run', task: 'Task',
@@ -25,16 +25,16 @@ function plainDetail(a: TodayAction): string | null {
 /** Priority bands, most important first. The colour is the band's, not the engine's tone. */
 const BANDS = [
   { id: 'now', tone: 'danger', label: 'Do first', hint: 'Only you can do these, and posts are waiting on them.' },
-  { id: 'next', tone: 'warn', label: 'Next', hint: 'Ideas to pick and things to film or post.' },
+  { id: 'next', tone: 'warn', label: 'Next', hint: 'Film, publish, choose ideas and work on important tasks.' },
   { id: 'later', tone: 'ok', label: 'When you have time', hint: 'Nothing is stuck on these.' },
 ] as const;
 const PER_BAND = 4;
 type Band = (typeof BANDS)[number]['id'] | 'tech';
-/** Broken tools and posts stuck behind them are ours to fix, not the user's. */
+/** Keep publishing blockers visible alongside decisions that need attention. */
 function bandOf(a: TodayAction): Band {
-  if (a.kind === 'fix' || (a.kind === 'blocked' && a.moduleId)) return 'tech';
+  if (a.kind === 'fix') return 'tech';
   if (a.kind === 'blocked' || a.kind === 'approve') return 'now';
-  if ((a.kind === 'topic' && a.topicId) || (a.kind === 'task' && a.href)) return 'next';
+  if ((a.kind === 'topic' && a.topicId) || a.kind === 'task') return 'next';
   return 'later';
 }
 
@@ -55,18 +55,21 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
 
   if (!today) return (<>{head()}<NeedsDb error={error} /></>);
   const k = today.kpis;
-  const byBand = (b: Band) => today!.actions.filter((a) => bandOf(a) === b);
+  const byBand = (b: Band) => today!.actions.filter((a) => bandOf(a) === b)
+    .sort((a, b) => Number(a.kind === 'topic') - Number(b.kind === 'topic'));
   // Technical problems are ours to fix: admin sees them, the client never does.
   const admin = (await headers()).get('x-content-role') === 'admin';
   const tech = admin ? byBand('tech') : [];
   const yours = today.actions.length - byBand('tech').length;
   const urgent = byBand('now').length;
   const isToday = (at: string | null) => !!at && new Date(at).toDateString() === new Date().toDateString();
-  const outToday = today.upNext.filter((u) => isToday(u.at));
-  const nextUp = today.upNext.find((u) => u.at && !isToday(u.at));
+  const outToday = today.upNext.filter((u) => u.status === 'queued' && isToday(u.at));
+  const nextUp = today.upNext.find((u) => u.status === 'queued' && u.at && !isToday(u.at));
+  const upcoming = today.upNext.filter((u) => u.status === 'queued' && u.at && !isToday(u.at));
+  const best = k.best7d && k.best7d.vsUsual > 1 ? k.best7d : null;
 
   return (
-    <>
+    <div className="today-page">
       {head(new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + (yours === 0 ? '. Nothing needs you right now.'
         : `. ${yours} thing${yours === 1 ? ' needs' : 's need'} you${urgent ? `, ${urgent} to do first` : ''}.`))}
 
@@ -76,7 +79,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
           <div className="attention" data-tone="info">
             {k.runwayDays < 3
               ? <>Nothing waits on you, but only {k.runwayDays} days of posts are ready. <Link href="/content/ideas" className="btn btn-primary btn-sm" style={{ marginLeft: 8 }}>Add an idea</Link></>
-              : <>Nothing waits on you and the queue is healthy. <Link href="/content/analytics" className="btn btn-sm" style={{ marginLeft: 8 }}>See what worked</Link></>}
+              : <>Your approvals and tasks are clear. <Link href="/content/analytics" className="btn btn-sm" style={{ marginLeft: 8 }}>See what worked</Link></>}
           </div>
         ) : (
           BANDS.map((b) => {
@@ -87,12 +90,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
                 <h3><i aria-hidden />{b.label} <span className="n">{list.length}</span><span className="hint">{b.hint}</span></h3>
                 <ul className="needs">
                   {list.slice(0, PER_BAND).map((a, i) => <NeedCard key={i} a={a} tone={b.tone} itemHref={itemHref} />)}
-                  {list.length > PER_BAND && (
-                    <li className="faint" style={{ fontSize: 12.5, padding: '4px 2px' }}>
-                      {list.length - PER_BAND} more. <Link href={b.id === 'now' ? '/content/approvals' : '/content/ideas'}>See all</Link>
-                    </li>
-                  )}
                 </ul>
+                {list.length > PER_BAND && <details className="more-actions">
+                  <summary>Show {list.length - PER_BAND} more</summary>
+                  <ul className="needs">{list.slice(PER_BAND).map((a, i) => <NeedCard key={i} a={a} tone={b.tone} itemHref={itemHref} />)}</ul>
+                </details>}
               </div>
             );
           })
@@ -101,7 +103,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
           <details className="prio prio-tech" data-tone="info">
             <summary>
               <i aria-hidden />Technical problems <span className="n">{tech.length}</span>
-              <span className="hint">Admin only. The client doesn’t see these.{tech.some((a) => a.kind === 'blocked') ? ` ${tech.filter((a) => a.kind === 'blocked').length} approved post(s) go out once they’re fixed.` : ''}</span>
+              <span className="hint">Connection and automation details.</span>
             </summary>
             <ul className="needs">
               {tech.map((a, i) => <NeedCard key={i} a={a} tone="info" itemHref={itemHref} quiet />)}
@@ -110,11 +112,17 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
         )}
       </Section>
 
+      <TodoTracker initial={todos} />
+
       <Section eyebrow="Going out today" meta={<Link href="/content/calendar">Full calendar</Link>}>
         {outToday.length === 0 ? (
-          <p className="empty">Nothing goes out today.{nextUp
-            ? <> Next: <Link href={itemHref(nextUp.id)} scroll={false}>{nextUp.title}</Link> on {shortDate(nextUp.at!)}.</>
-            : ' Approve drafts to fill the queue.'}</p>
+          <div className="schedule-empty">
+            <p className="empty">Nothing goes out today.{nextUp
+              ? <> Next: <Link href={itemHref(nextUp.id)} scroll={false}>{nextUp.title}</Link> on {shortDate(nextUp.at!)}.</>
+              : k.readyToSchedule > 0 ? ` ${k.readyToSchedule} approved post${k.readyToSchedule === 1 ? ' is' : 's are'} ready for scheduling.` : ' Approve drafts to fill the queue.'}</p>
+            {k.readyToSchedule > 0 && <RunModuleButton id="publisher" label="Schedule ready posts" className="btn btn-primary btn-sm" />}
+            {k.readyToSchedule === 0 && !nextUp && <Link href="/content/approvals" className="btn btn-sm">Review drafts</Link>}
+          </div>
         ) : (
           <ul className="row-list">
             {outToday.map((u) => (
@@ -133,23 +141,37 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
 
       <div className="quiet-kpis" aria-label="This week">
         <Link href="/content/analytics?range=7"><b>{k.publishedThisWeek}/{k.weeklyTarget}</b>published this week</Link>
-        <Link href="/content/calendar" style={k.runwayDays < 3 ? { color: 'var(--warn)' } : undefined}><b>{k.runwayDays}</b>days of posts ready</Link>
-        <Link href="/content/analytics?range=7"><b>{compact(k.reach7d)}</b>reach in 7 days</Link>
-        {k.best7d && <Link href={itemHref(k.best7d.id)} scroll={false}><b>{times(k.best7d.vsUsual)}</b>your usual: {k.best7d.title.slice(0, 40)}</Link>}
+        <Link href="/content/calendar"><b>{k.readyToSchedule}</b>approved posts ready to schedule</Link>
+        <Link href="/content/calendar"><b>{k.scheduled7d}</b>scheduled in the next 7 days</Link>
       </div>
-      <OwnResultsLine own={today.own} />
 
-      <div className="bento" style={{ marginTop: 24 }}>
-        <Tile span={4} title="Your tasks">
-          <div id="tasks"><TodoTracker initial={todos} /></div>
-        </Tile>
-      </div>
+      {upcoming.length > 0 && <Section eyebrow="Coming up" meta={<Link href="/content/calendar">Next 7 days</Link>}>
+        <ul className="row-list">{upcoming.slice(0, 3).map((u) => <li key={u.id}>
+          <Link href={itemHref(u.id)} scroll={false} className="row upcoming-post">
+            <time dateTime={u.at!}>{shortDate(u.at!)}</time><Plat p={u.platform} /><span className="grow">{u.title}</span>
+          </Link>
+        </li>)}</ul>
+      </Section>}
+
+      <Section eyebrow="What is working" title="Results from the last 7 days" meta={<Link href="/content/analytics?range=7">All results</Link>}>
+        <div className="today-results">
+          <div><b>{compact(k.reach7d)}</b><span>Reach</span></div>
+          <div><b>{k.clicks7d == null ? '—' : compact(k.clicks7d)}</b><span>Clicks</span></div>
+          <div><b>{k.qualifiedEngagement7d == null ? '—' : compact(k.qualifiedEngagement7d)}</b><span>Qualified engagement</span></div>
+        </div>
+        {(k.clicks7d == null || k.qualifiedEngagement7d == null) && <p className="results-note">Some metrics are awaiting data. <Link href="/content/analytics?range=7">Review post results</Link></p>}
+        <OwnResultsLine own={today.own} />
+        {best && <div className="winning-post">
+          <div><span className="muted">A post to build on · {times(best.vsUsual)} your usual reactions</span>
+            <Link href={itemHref(best.id)} scroll={false}>{best.title}</Link></div>
+          <ApiButton path="/content/api/todos" body={{ title: `Create a follow-up to ${best.title}`.slice(0, 300), detail: `Build on the post that earned ${times(best.vsUsual)} your usual reactions. Review it at /content/analytics?range=7&item=${best.id}`, priority: 2 }} label="Add follow-up task" className="btn btn-primary btn-sm" />
+        </div>}
+      </Section>
 
       <details className="more">
         <summary>Pipeline health: flow, content mix, steps and activity</summary>
         <div className="bento" style={{ marginTop: 16 }}>
-          <Tile span={2} title="Up next" hint="next 7 days" link={{ href: '/content/calendar', label: 'calendar' }}>
-            {today.upNext.length === 0 ? <p className="empty">Nothing scheduled.</p> : (
+          {today.upNext.length > 0 && <Tile span={2} title="Publishing queue" hint="next 7 days and approved posts" link={{ href: '/content/calendar', label: 'calendar' }}>
               <ul className="row-list">
                 {today.upNext.slice(0, 6).map((u) => (
                   <li key={u.id}>
@@ -162,21 +184,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
                   </li>
                 ))}
               </ul>
-            )}
-          </Tile>
+          </Tile>}
           <Tile span={2} title="Pipeline" hint="one per idea" link={{ href: '/content/board', label: 'board' }}>
             <Funnel stages={today.funnel} />
           </Tile>
-          <Tile span={2} title="Content mix" hint="vs target">
+          {today.mix.some((m) => m.count > 0) && <Tile span={2} title="Content mix" hint="vs target">
             <PillarBars mix={today.mix} />
-          </Tile>
-          <Tile span={2} title="Pipeline steps" link={{ href: '/content/system', label: 'system' }}>
+          </Tile>}
+          <Tile span={2} title="Pipeline steps" hint="last recorded run" link={admin ? { href: '/content/system', label: 'system' } : undefined}>
             <ul className="row-list">
               {health.modules.map((m) => (
                 <li key={m.id} className="row" title={m.error ?? m.message ?? m.description} style={{ padding: '7px 4px' }}>
                   <Dot color={RUN_COLOR[m.lastStatus] ?? RUN_COLOR.never!} pulse={m.lastStatus === 'error'} />
                   <span className="grow t" style={{ fontSize: 13 }}>{m.title}</span>
-                  <span className="faint mono" style={{ fontSize: 11 }}>{m.lastRunAt ? ago(m.lastRunAt) : 'never'}</span>
+                  <span className="module-last-run" title={when(m.lastRunAt)}>{m.lastRunAt ? `${m.lastStatus === 'ok' ? 'Last succeeded' : 'Last run'} ${ago(m.lastRunAt)}` : 'Never run'}</span>
                 </li>
               ))}
             </ul>
@@ -198,7 +219,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Search
       </details>
 
       {sp.item && <ItemDrawer id={sp.item} closeHref={withParams('/content', sp, { item: null })} linkFor={itemHref} />}
-    </>
+    </div>
   );
 }
 
@@ -227,7 +248,7 @@ function ActionButtons({ a, itemHref, quiet }: { a: TodayAction; itemHref: (id: 
         <ApiButton path={`/content/api/topics/${a.topicId}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn" />
       </>}
       {a.moduleId && <RunModuleButton id={a.moduleId} label={a.kind === 'fix' || a.kind === 'blocked' ? 'Retry' : 'Run it now'} className={a.itemId || a.topicId ? 'btn' : P} />}
-      {a.href && <Link href={a.href} className={a.itemId || a.topicId || a.moduleId ? 'btn' : P}>{a.kind === 'fix' ? 'Fix it' : 'Go there'}</Link>}
+      {a.href && <Link href={a.href} className={a.itemId || a.topicId || a.moduleId ? 'btn' : P}>{a.kind === 'fix' ? 'Fix it' : a.href === '/content/scripts' ? 'Open filming & publishing' : a.href === '/content/ideas' ? 'Choose ideas' : 'Open'}</Link>}
       {a.todoId && <Link href="#tasks" className="btn">See the task</Link>}
     </span>
   );
@@ -237,13 +258,13 @@ function ActionButtons({ a, itemHref, quiet }: { a: TodayAction; itemHref: (id: 
 function OwnResultsLine({ own }: { own: Today['own'] }) {
   const r = own.lastRun;
   if (!own.ready && !r) {
-    return <p className="own-line">Add your own accounts in <Link href="/content/brand">Brand kit</Link> to see each post against your usual.</p>;
+    return <p className="own-line"><span>Connect your accounts to compare posts against your usual results.</span><a href="/content/brand#your-accounts" className="btn btn-sm">Connect accounts</a></p>;
   }
   return (
     <div className="own-line">
       <span>
         {r?.status === 'running' ? `Refreshing your results (${r.stage})…`
-          : r ? `Your results: refreshed ${ago(r.finished_at ?? r.started_at)} from ${r.total} of your posts · $${r.cost.toFixed(2)}${r.status === 'error' ? ' · last refresh failed' : ''}`
+          : r ? `${r.status === 'error' ? 'Last results refresh failed' : 'Results last refreshed'} ${ago(r.finished_at ?? r.started_at)} · ${r.total} posts`
           : 'Your results haven’t been pulled yet.'}
         {own.baseline.length > 0 && ` · your usual: ${own.baseline.map((b) => `${compact(b.median_reactions)} on ${b.platform}`).join(', ')}`}
       </span>

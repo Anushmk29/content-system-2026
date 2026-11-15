@@ -9,15 +9,15 @@ import { ItemDrawer } from '@/app/content/_components/ItemDrawer';
 import { ago, when, prettyPillar, withParams, STATUS_LABEL, STATUS_COLOR, PILLAR_COLOR, PLATFORM, TONE } from '@/app/content/_lib/format';
 
 const NEXT_STEP: Record<string, string> = {
-  idea: 'draft it on Ideas', draft: 'quality check on the next run', qc_passed: 'moving to Approvals', needs_approval: 'approve or ask for changes',
+  idea: 'draft it on Ideas', draft: 'resolve claims and send for review', qc_passed: 'moving to Approvals', needs_approval: 'approve or ask for changes',
   approved: 'gets scheduled on the next run', queued: 'posts at its planned time', published: 'results come in by themselves',
   performance_captured: 'measured', archived: 'archived',
 };
 /** Stages that wait on a person; everything else the system moves on by itself. */
-const YOURS = new Set(['idea', 'needs_approval']);
+const YOURS = new Set(['idea', 'draft', 'needs_approval']);
 /** One line under each column title: what the column means. */
 const COL_SUB: Record<string, string> = {
-  idea: 'Picked ideas not written yet.', draft: 'Written by the AI, not checked yet.', qc_passed: 'Passed the quality check.',
+  idea: 'Picked ideas not written yet.', draft: 'Resolve evidence or copy issues, then send for review.', qc_passed: 'Passed the quality check.',
   needs_approval: 'Read these and approve them.', approved: 'Approved, waiting for a time slot.', queued: 'In Postiz with a time set.',
   published: 'Live on the platform.', performance_captured: 'Live, with numbers in.',
 };
@@ -84,7 +84,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       </form>
 
       {view === 'board' ? (
-        <div className="kanban">
+        <div className="kanban" tabIndex={0} role="region" aria-label="Post stages. Scroll sideways to see all stages.">
           {columns.map((c) => (
             <section key={c.status} className="col" aria-label={STATUS_LABEL[c.status]}>
               <div className="col-head">

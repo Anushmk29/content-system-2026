@@ -10,7 +10,7 @@ import { loadHealth } from '@/app/content/_lib/data';
 import { openMode } from '@/app/content/_lib/auth';
 import { Nav, type NavBadges } from '@/app/content/_components/Nav';
 import { RunControls } from '@/app/content/_components/RunControls';
-import { Loader3D } from '@/app/content/_components/actions';
+import { ActionScope, Loader3D } from '@/app/content/_components/actions';
 import { CommandPalette, PaletteButton } from '@/app/content/_components/CommandPalette';
 import { Dot } from '@/app/content/_components/viz';
 import { HEALTH_COLOR, ago, healthIssue } from '@/app/content/_lib/format';
@@ -56,9 +56,11 @@ export default async function ContentLayout({ children }: { children: ReactNode 
   const modules = health.modules.map((m) => ({ id: m.id, title: m.title, lastStatus: m.lastStatus }));
 
   return (
+    <ActionScope viewOnly={viewOnly}>
     <div className={`shell ${inter.variable} ${jet.variable}`}>
+      <a className="skip-link" href="#content-main">Skip to page content</a>
       <Nav badges={badges} admin={admin} brandName={brandName} />
-      <div className="main">
+      <main id="content-main" className="main" tabIndex={-1}>
         <header className="topbar">
           {admin && (
             <Link href="/content/system" className="health" title={`checked ${ago(health.checkedAt)}`}>
@@ -72,9 +74,10 @@ export default async function ContentLayout({ children }: { children: ReactNode 
           {!viewOnly && <RunControls modules={modules} />}
         </header>
         {children}
-      </div>
+      </main>
       <CommandPalette modules={modules} admin={admin} />
       <Loader3D />
     </div>
+    </ActionScope>
   );
 }

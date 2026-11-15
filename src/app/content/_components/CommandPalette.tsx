@@ -38,9 +38,11 @@ export function CommandPalette({ modules, admin }: { modules: { id: string; titl
   const go = (href: string) => () => { setOpen(false); router.push(href); };
   const cmds: Cmd[] = [
     ...GROUPS.filter((g) => admin || !g.admin).flatMap((g) => g.links).map(({ href, label, keywords }) => ({ id: href, label, keywords, group: 'Go to', run: go(href) })),
-    { id: 'new-signal', label: 'Capture a new signal', group: 'Create', run: go('/content/ideas#capture') },
-    { id: 'run-all', label: 'Run full pipeline', group: 'Run', run: () => a.call('all', 'POST', '/content/api/run', undefined, summarizeRun) },
-    ...modules.map((m) => ({ id: `run-${m.id}`, label: `Run ${m.title}`, group: 'Run', run: () => a.call(m.id, 'POST', `/content/api/modules/${m.id}/run`, undefined, summarizeRun) })),
+    ...(a.viewOnly ? [] : [
+      { id: 'new-signal', label: 'Capture a new signal', group: 'Create', run: go('/content/ideas#capture') },
+      { id: 'run-all', label: 'Run full pipeline', group: 'Run', run: () => a.call('all', 'POST', '/content/api/run', undefined, summarizeRun) },
+      ...modules.map((m) => ({ id: `run-${m.id}`, label: `Run ${m.title}`, group: 'Run', run: () => a.call(m.id, 'POST', `/content/api/modules/${m.id}/run`, undefined, summarizeRun) })),
+    ]),
     ...items.map((it) => ({ id: it.id, label: `${it.title} · ${it.platform}`, group: 'Post', run: go(`/content/board?item=${it.id}`) })),
   ];
 
@@ -53,7 +55,7 @@ export function CommandPalette({ modules, admin }: { modules: { id: string; titl
       <input value={q} placeholder="Search pages, posts, or run a step…" aria-label="Search"
         onChange={(e) => { setQ(e.target.value); setSel(0); }}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, shown.length - 1)); }
+          if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, Math.max(0, shown.length - 1))); }
           else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
           else if (e.key === 'Enter') shown[sel]?.run();
         }} />

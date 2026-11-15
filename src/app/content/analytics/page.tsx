@@ -24,7 +24,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   try { a = await getAnalytics(getContext(), range); } catch (e) { error = (e as Error).message; }
   const head = (
     <PageHead title="Results" sub="What performed, and the next move for each post.">
-      <ApiButton path="/content/api/decode" body={{ self: true }} label="Refresh my results" className="btn btn-sm" />
+      {a?.own.ready
+        ? <ApiButton path="/content/api/decode" body={{ self: true }} label="Refresh my results" className="btn btn-sm" />
+        : <a href="/content/brand#your-accounts" className="btn btn-primary">Connect accounts</a>}
       <nav className="seg" aria-label="Range">
         {ANALYTICS_RANGES.map((r) => <Link key={r} href={`/content/analytics?range=${r}`} aria-current={r === range ? 'page' : undefined}>{r}d</Link>)}
       </nav>
@@ -47,7 +49,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         { label: 'Reach', value: compact(t.reach), sub: `${compact(t.clicks)} clicks` },
         { label: 'Engagement', value: compact(t.engagement), sub: `likes, comments & shares · ${t.engagementPerPost ?? '—'} per post` },
         { label: 'Vs your usual', value: times(t.vsUsual), sub: t.vsUsual != null ? 'the median post, against your own median'
-          : a.own.baseline.length ? 'no results on these posts yet' : 'click Refresh my results above' },
+          : a.own.baseline.length ? 'no results on these posts yet' : 'connect your accounts to compare' },
       ]} />
       <div className="bento">
         {noMetrics.length > 0 && (
@@ -60,6 +62,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
           </Tile>
         )}
 
+        {a.posts.length > 0 ? <>
         <Tile title="Published" hint={range === 90 ? 'per week' : 'per day'} span={2}>
           <Area points={a.series.map((s) => s.published)} color="var(--ok)" height={70} labels={span} />
           <div className="faint mono" style={{ fontSize: 11, marginTop: 6 }}>
@@ -90,12 +93,18 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
 
         <Tile title="By platform" span={2}><BreakdownTable rows={a.byPlatform} name={(k) => <><Plat p={k} /> {PLATFORM[k]?.label ?? k}</>} /></Tile>
         <Tile title="By pillar" span={2}><BreakdownTable rows={a.byPillar} name={(k) => prettyPillar(k)} /></Tile>
+        </> : <Tile span={4} title="No published posts in this period">
+          <p className="empty">Results will appear here as posts are published and measured.</p>
+          <div className="acts">
+            <Link href="/content/calendar" className="btn btn-primary">Open calendar</Link>
+            {range < 90 && <Link href="/content/analytics?range=90" className="btn">Check the last 90 days</Link>}
+          </div>
+        </Tile>}
 
-        <Tile title="Your formats" hint="latest scrape of your accounts" span={2}><FormatList rows={a.formats.yours} empty="Click Refresh my results above to see which of your formats work." /></Tile>
+        <Tile title="Your formats" hint="latest scrape of your accounts" span={2}><FormatList rows={a.formats.yours} empty={a.own.ready ? 'Refresh your results to see which of your formats work.' : 'Connect your accounts to see which of your formats work.'} /></Tile>
         <Tile title="Competitors’ formats" hint="latest Decode" span={2}><FormatList rows={a.formats.theirs} empty="Scan competitors on Competitors to compare." /></Tile>
 
-        <Tile title="Every post" hint={`${a.posts.length}`} span={4}>
-          {a.posts.length === 0 ? <p className="empty">Nothing published in this window.</p> : (
+        {a.posts.length > 0 && <Tile title="Every post" hint={`${a.posts.length}`} span={4}>
             <div style={{ overflowX: 'auto' }}>
               <table className="table">
                 <thead><tr><th>Post</th><th>Published</th><th>Vs your usual</th><th>Reach</th><th>Engagement</th><th>Clicks</th><th>Next move</th></tr></thead>
@@ -118,8 +127,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
                 </tbody>
               </table>
             </div>
-          )}
-        </Tile>
+        </Tile>}
       </div>
       {sp.item && <ItemDrawer id={sp.item} closeHref={withParams('/content/analytics', sp, { item: null })} linkFor={itemHref} />}
     </>

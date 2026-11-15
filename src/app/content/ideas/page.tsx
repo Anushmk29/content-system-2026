@@ -68,7 +68,7 @@ export default async function IdeasPage() {
           <>Click <b>Make posts</b> on one to turn it into an idea, or <b>Turn them all into topics</b> for the whole list.</>,
           <>Click <b>Score</b> when asked: each idea gets a mark out of 25, best first.</>,
           <>On the ideas you like, tick the platforms and click <b>Draft this idea</b>. Drop the rest.</>,
-          <>Click <b>Draft them now</b>. The posts appear in <b>Approvals</b> for you to check.</>,
+          <>Click <b>Draft them now</b>. Posts pass a quality check and appear in <b>Approvals</b>. Posts needing evidence stay in <b>All posts</b>, where you can resolve their claims.</>,
         ]} />
       <KpiStrip items={[
         { label: 'Signals waiting', value: data.signals.length },

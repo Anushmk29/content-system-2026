@@ -13,10 +13,11 @@ const kindLabel = (e: ExampleOpt) => (e.kind === 'carousel' ? `Carousel · ${e.p
 export const firstFor = (examples: ExampleOpt[], want?: 'image' | 'carousel') =>
   (want && examples.find((e) => e.kind === want))?.id ?? examples[0]?.id ?? '';
 
-export function ExamplePicker({ examples, value, onChange, want }: {
+export function ExamplePicker({ examples, value, onChange, want, disabled = false }: {
   examples: ExampleOpt[]; value: string; onChange: (id: string) => void;
   /** What the post is: its examples are listed first. */
   want?: 'image' | 'carousel';
+  disabled?: boolean;
 }) {
   const dlg = useRef<HTMLDialogElement>(null);
   const cur = examples.find((e) => e.id === value);
@@ -38,13 +39,13 @@ export function ExamplePicker({ examples, value, onChange, want }: {
   );
   return (
     <>
-      <button type="button" className="xp-current" onClick={() => dlg.current?.showModal()} aria-label={`Example: ${cur?.name ?? 'none'}. Change`}>
+      <button type="button" className="xp-current" disabled={disabled} onClick={() => dlg.current?.showModal()} aria-label={`Example: ${cur?.name ?? 'none'}. Change`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {cur && <img src={thumb(cur.id)} alt="" />}
         <span className="xp-txt"><b>{cur?.name ?? 'Pick an example'}</b>{cur && <span className="xp-meta">{kindLabel(cur)}</span>}</span>
         <span className="xp-change">Change</span>
       </button>
-      <dialog ref={dlg} className="xp-dlg" onClick={(e) => { if (e.target === dlg.current) dlg.current?.close(); }}>
+      <dialog ref={dlg} className="xp-dlg" aria-label="Choose a design example" onClick={(e) => { if (e.target === dlg.current) dlg.current?.close(); }}>
         <div className="xp-head">
           <b>Pick a design{want ? ` for this ${want}` : ''}</b>
           <a href="/content/styles" className="linkish">Manage examples →</a>
@@ -78,8 +79,8 @@ function AddExample({ onAdded }: { onAdded: (id: string) => void }) {
       <p className="faint" style={{ margin: 0, fontSize: 12 }}>A post you like: one image, or every page of a carousel (select them in order). It’s kept for every post after this.</p>
       <div className="cr-row">
         <input className="input" name="name" placeholder="Name, e.g. Bold tips carousel" required aria-label="Example name" style={{ flex: '1 1 180px' }} />
-        <label className="btn btn-sm">{n ? `${n} image${n === 1 ? '' : 's'} chosen` : 'Choose images'}
-          <input name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => setN(e.target.files?.length ?? 0)} /></label>
+        <label className="btn btn-sm cr-upload">{n ? `${n} image${n === 1 ? '' : 's'} chosen` : 'Choose images'}
+          <input name="file" type="file" aria-label="Choose design example images" accept="image/png,image/jpeg,image/webp" multiple onChange={(e) => setN(e.target.files?.length ?? 0)} /></label>
         <button type="submit" className="btn btn-ink btn-sm" disabled={a.pending || !n}>{a.busy ? 'Saving…' : 'Save and use'}</button>
       </div>
       {a.feedback}

@@ -19,7 +19,7 @@ export function StyleUpload() {
       <input className="input" name="name" placeholder="Name, e.g. Gold stat card" required style={{ width: 240 }} aria-label="Example name" />
       <input className="input" name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required
         aria-label="One image, or every page of a carousel" title="One image, or select every page of a carousel (in order)" />
-      <button type="submit" className="btn btn-ink" disabled={!!a.busy}>{a.busy ? 'Saving…' : 'Save example'}</button>
+      <button type="submit" className="btn btn-ink" disabled={a.pending}>{a.busy ? 'Saving…' : 'Save example'}</button>
       {a.feedback}
     </form>
   );

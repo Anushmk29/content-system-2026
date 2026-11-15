@@ -7,6 +7,7 @@ All command examples run from the repository root unless a guide says otherwise.
 - [Project structure and feature navigation](development/PROJECT-STRUCTURE.md)
 - [Local setup](../README.md#quick-start-run-the-dashboard-locally)
 - [Production deployment and runbook](operations/DEPLOY.md)
+- [Hostinger VPS deployment](operations/HOSTINGER.md)
 - [Integration setup and go-live checks](operations/GO-LIVE.md)
 - [Owner tasks](operations/OWNER-TODO.md)
 

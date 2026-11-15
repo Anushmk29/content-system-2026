@@ -1,0 +1,2177 @@
+{
+  "date": "2026-11-15",
+  "timezone": "Asia/Kolkata",
+  "automatedTests": {
+    "host": 5,
+    "engine": 175,
+    "failed": 0
+  },
+  "typechecks": {
+    "host": "pass",
+    "engine": "pass"
+  },
+  "production": {
+    "build": "pass",
+    "workspaceHttp": 503,
+    "healthProbeHttp": 200,
+    "configurationProblem": "CONTENT_RUN_SECRET and CONTENT_ADMIN_SECRET must be at least 16 characters.",
+    "clientPasswordLongEnough": false,
+    "adminPasswordLongEnough": false,
+    "sessionKeyLongEnough": false
+  },
+  "health": {
+    "overall": "error",
+    "checkedAt": "2026-11-15T09:43:34.182Z",
+    "adapters": [
+      {
+        "id": "claude",
+        "state": "ok",
+        "message": "openrouter key present",
+        "checkedAt": "2026-11-15T09:43:33.386Z",
+        "meta": {
+          "provider": "openrouter",
+          "model": "anthropic/claude-sonnet-5.5"
+        }
+      },
+      {
+        "id": "postiz",
+        "state": "error",
+        "message": "fetch failed",
+        "checkedAt": "2026-11-15T09:43:33.395Z"
+      },
+      {
+        "id": "jev",
+        "state": "ok",
+        "message": "shadow mode via OpenRouter",
+        "checkedAt": "2026-11-15T09:43:33.922Z",
+        "meta": {
+          "model": "typesafe/jev-1.13",
+          "mode": "shadow",
+          "minConfidence": 0.8
+        }
+      },
+      {
+        "id": "apify",
+        "state": "ok",
+        "message": "connected as algorithemicedge",
+        "checkedAt": "2026-11-15T09:43:34.144Z",
+        "meta": {
+          "actors": [
+            "apidojo~tweet-scraper",
+            "apify~instagram-post-scraper",
+            "harvestapi~linkedin-company-posts",
+            "apify~facebook-posts-scraper"
+          ]
+        }
+      },
+      {
+        "id": "youtube",
+        "state": "unconfigured",
+        "message": "no CONTENT_YOUTUBE_API_KEY — Decode skips YouTube",
+        "checkedAt": "2026-11-15T09:43:33.392Z"
+      },
+      {
+        "id": "transcriber",
+        "state": "ok",
+        "message": "yt-dlp + faster-whisper (small) found",
+        "checkedAt": "2026-11-15T09:43:33.392Z",
+        "meta": {
+          "model": "small",
+          "cap": 15
+        }
+      },
+      {
+        "id": "tinyfish",
+        "state": "ok",
+        "message": "search ok (10 results); Search + Fetch are free",
+        "checkedAt": "2026-11-15T09:43:34.013Z"
+      }
+    ],
+    "database": {
+      "id": "database",
+      "state": "ok",
+      "message": "connected; search_path=content",
+      "checkedAt": "2026-11-15T09:43:33.648Z"
+    },
+    "modules": [
+      {
+        "id": "market-signals",
+        "title": "Market Signals",
+        "description": "Captures X posts, Reddit questions, TinyFish news + watched competitor pages, and competitor/trend feeds into research_inputs (official/public sources only).",
+        "lastStatus": "degraded",
+        "lastRunAt": "2026-10-11T14:35:19.517Z",
+        "durationMs": 20962,
+        "itemsProcessed": 19,
+        "message": "19 new signal(s) from 2/7 source(s); failed: https://rival.com/feed: fetch failed; reddit:agentic solutions for agencies: HTTP 429; reddit:AI consulting: HTTP 429; reddit:AI agents: HTTP 429; reddit:customized agentic solutions: HTTP 429",
+        "error": null
+      },
+      {
+        "id": "research",
+        "title": "Research Collector",
+        "description": "Drops off-audience signals (Jev), turns the rest into ranked-queue topics via a cheap LLM (Bible §6). The web check waits until a topic is drafted.",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-11T16:43:47.197Z",
+        "durationMs": 77256,
+        "itemsProcessed": 22,
+        "message": "22 topic(s) created from 22 signal(s); web-checked 22",
+        "error": null
+      },
+      {
+        "id": "scoring",
+        "title": "Topic Scorer",
+        "description": "Auto-scores new topics (Bible §7) and summarizes the ranked queue by band.",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-13T08:10:44.413Z",
+        "durationMs": 10806,
+        "itemsProcessed": 19,
+        "message": "scored 19 new topic(s); queue: 0 high, 20 queued, 0 if-timely",
+        "error": null
+      },
+      {
+        "id": "draft_generator",
+        "title": "Draft Generator",
+        "description": "Turns each selected topic into a LinkedIn anchor + blog + X thread + Instagram carousel + Facebook post via Claude (Bible §9).",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-13T08:14:03.450Z",
+        "durationMs": 35068,
+        "itemsProcessed": 4,
+        "message": "1/1 topic(s) drafted into 4 item(s)",
+        "error": null
+      },
+      {
+        "id": "qc_gate",
+        "title": "QC + Risk Gate",
+        "description": "Validates drafts, enforces honest-numbers, and assigns an escalate-only lane.",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-03T09:54:57.095Z",
+        "durationMs": 16656,
+        "itemsProcessed": 5,
+        "message": "5 to approval, 0 auto-approved (safe_auto), 0 blocked for missing proof",
+        "error": null
+      },
+      {
+        "id": "publisher",
+        "title": "Postiz Scheduler + UTM",
+        "description": "Schedules approved, proof-complete items via Postiz (one per platform per day) with UTM-tagged links.",
+        "lastStatus": "degraded",
+        "lastRunAt": "2026-10-10T19:44:13.954Z",
+        "durationMs": 641,
+        "itemsProcessed": 0,
+        "message": "0 scheduled, 5 failed",
+        "error": null
+      },
+      {
+        "id": "own_results",
+        "title": "Own Results",
+        "description": "Weekly scrape of your own accounts: sets \"your usual\" per platform and fills in results for published posts.",
+        "lastStatus": "never",
+        "lastRunAt": null,
+        "durationMs": null,
+        "itemsProcessed": null,
+        "message": null,
+        "error": null
+      },
+      {
+        "id": "analytics",
+        "title": "Analytics Collector",
+        "description": "Pulls live post numbers from every platform via Postiz, then rolls up metrics per item and classifies the reach×engagement signal (Bible §14, Table 30).",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-03T09:55:14.045Z",
+        "durationMs": 33,
+        "itemsProcessed": 0,
+        "message": "no published items with metrics yet",
+        "error": null
+      },
+      {
+        "id": "weekly_review",
+        "title": "Weekly Review Agent",
+        "description": "Recommends next week’s priorities from reach + engagement, creating todos (Bible §14.1).",
+        "lastStatus": "ok",
+        "lastRunAt": "2026-10-03T09:55:14.111Z",
+        "durationMs": 105,
+        "itemsProcessed": 0,
+        "message": "no published performance yet — nothing to review",
+        "error": null
+      }
+    ]
+  },
+  "browser": {
+    "checks": [
+      {
+        "name": "Unauthenticated home redirects to login",
+        "status": "pass"
+      },
+      {
+        "name": "Wrong password displays an error",
+        "status": "pass"
+      },
+      {
+        "name": "Client signs in through the actual form",
+        "status": "pass",
+        "detail": {
+          "landedOn": "/content"
+        }
+      },
+      {
+        "name": "Desktop navigation: Contentvijendra",
+        "status": "pass",
+        "detail": {
+          "heading": "Today",
+          "loadMs": 86,
+          "buttons": 13,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 02Approvals6",
+        "status": "pass",
+        "detail": {
+          "heading": "Approvals",
+          "loadMs": 1032,
+          "buttons": 4,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 03Calendar",
+        "status": "pass",
+        "detail": {
+          "heading": "Calendar",
+          "loadMs": 955,
+          "buttons": 4,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 04Results",
+        "status": "pass",
+        "detail": {
+          "heading": "Results",
+          "loadMs": 817,
+          "buttons": 5,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 05Ideas16",
+        "status": "pass",
+        "detail": {
+          "heading": "Ideas",
+          "loadMs": 1555,
+          "buttons": 65,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 06Design7",
+        "status": "pass",
+        "detail": {
+          "heading": "Design",
+          "loadMs": 2277,
+          "buttons": 23,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 07Film & post",
+        "status": "pass",
+        "detail": {
+          "heading": "Film & post",
+          "loadMs": 3564,
+          "buttons": 11,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 08All posts",
+        "status": "pass",
+        "detail": {
+          "heading": "All posts",
+          "loadMs": 1782,
+          "buttons": 5,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 09Brand kit",
+        "status": "pass",
+        "detail": {
+          "heading": "Brand kit",
+          "loadMs": 2324,
+          "buttons": 35,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 10Design examples",
+        "status": "pass",
+        "detail": {
+          "heading": "Design examples",
+          "loadMs": 1566,
+          "buttons": 45,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 11Competitors",
+        "status": "pass",
+        "detail": {
+          "heading": "Competitors",
+          "loadMs": 1765,
+          "buttons": 53,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 12Competitor videos",
+        "status": "pass",
+        "detail": {
+          "heading": "Competitor videos",
+          "loadMs": 2572,
+          "buttons": 34,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Desktop navigation: 13Opening lines",
+        "status": "pass",
+        "detail": {
+          "heading": "Opening lines",
+          "loadMs": 2794,
+          "buttons": 10,
+          "overflow": false
+        }
+      },
+      {
+        "name": "Command palette opens, searches, navigates with keyboard",
+        "status": "pass"
+      },
+      {
+        "name": "Run menu opens and closes without executing",
+        "status": "pass",
+        "detail": {
+          "modules": 9
+        }
+      },
+      {
+        "name": "Task create, status cycle, reload persistence, delete",
+        "status": "pass"
+      },
+      {
+        "name": "Mobile layout: Contentvijendra",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 02Approvals6",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 03Calendar",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 04Results",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 05Ideas16",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 06Design7",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 07Film & post",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 08All posts",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 570
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 854
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 1138
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 1422
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 1706
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 1990
+            },
+            {
+              "tag": "SECTION",
+              "class": "col",
+              "right": 2274
+            }
+          ],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 09Brand kit",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 10Design examples",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 11Competitors",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 12Competitor videos",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Mobile layout: 13Opening lines",
+        "status": "pass",
+        "detail": {
+          "width": 390,
+          "scrollWidth": 390,
+          "overflow": [],
+          "navVisible": true
+        }
+      },
+      {
+        "name": "Sign out ends session",
+        "status": "pass"
+      },
+      {
+        "name": "Admin login is read only and opens admin pages",
+        "status": "pass"
+      },
+      {
+        "name": "Admin page: system",
+        "status": "pass"
+      },
+      {
+        "name": "Admin page: costs",
+        "status": "pass"
+      },
+      {
+        "name": "Admin page: training",
+        "status": "pass"
+      }
+    ],
+    "runtimeErrors": [],
+    "desktopPages": [
+      {
+        "path": "/content",
+        "heading": "Today",
+        "loadMs": 86
+      },
+      {
+        "path": "/content/approvals",
+        "heading": "Approvals",
+        "loadMs": 1032
+      },
+      {
+        "path": "/content/calendar",
+        "heading": "Calendar",
+        "loadMs": 955
+      },
+      {
+        "path": "/content/analytics",
+        "heading": "Results",
+        "loadMs": 817
+      },
+      {
+        "path": "/content/ideas",
+        "heading": "Ideas",
+        "loadMs": 1555
+      },
+      {
+        "path": "/content/design",
+        "heading": "Design",
+        "loadMs": 2277
+      },
+      {
+        "path": "/content/scripts",
+        "heading": "Film & post",
+        "loadMs": 3564
+      },
+      {
+        "path": "/content/board",
+        "heading": "All posts",
+        "loadMs": 1782
+      },
+      {
+        "path": "/content/brand",
+        "heading": "Brand kit",
+        "loadMs": 2324
+      },
+      {
+        "path": "/content/styles",
+        "heading": "Design examples",
+        "loadMs": 1566
+      },
+      {
+        "path": "/content/decode",
+        "heading": "Competitors",
+        "loadMs": 1765
+      },
+      {
+        "path": "/content/videos",
+        "heading": "Competitor videos",
+        "loadMs": 2572
+      },
+      {
+        "path": "/content/hooks",
+        "heading": "Opening lines",
+        "loadMs": 2794
+      }
+    ],
+    "mobilePages": [
+      {
+        "path": "/content",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/approvals",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/calendar",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/analytics",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/ideas",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/design",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/scripts",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/board",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/brand",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/styles",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/decode",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/videos",
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "path": "/content/hooks",
+        "width": 390,
+        "scrollWidth": 390
+      }
+    ],
+    "note": "Final corrected auth/navigation checks. Original task-selector and mobile-signout test-context failures were rechecked on desktop; actual missing mobile sign-out is recorded separately."
+  },
+  "api": {
+    "checks": [
+      {
+        "name": "Unauthenticated PATCH /content/api/approvals/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/brand/fonts",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/brand/fonts",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/brand/logo",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/brand/logo",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/brand/logo",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/brand/photos",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/brand/photos",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/brand/photos",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/brand",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/brand/voice",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/check",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/check",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/check/00000000-0000-4000-8000-000000000000/media",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/check/00000000-0000-4000-8000-000000000000/media",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/check/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/check/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/check/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/check/00000000-0000-4000-8000-000000000000/run",
+        "status": "pass",
+        "detail": {
+          "status": 404
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/costs",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/dataset",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/decisions",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/decisions/seed",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/decode/competitors",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/decode/competitors",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/decode",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/decode/thumb/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/decode/use",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/decode/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/decode/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/health",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/items/00000000-0000-4000-8000-000000000000/asset",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/items/00000000-0000-4000-8000-000000000000/asset",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/items/00000000-0000-4000-8000-000000000000/asset",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/items/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/metrics",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/modules/00000000-0000-4000-8000-000000000000/run",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/pipeline",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/run",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/scripts/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/signals",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/signals/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/styles",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated GET /content/api/styles/00000000-0000-4000-8000-000000000000/image",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/styles/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/styles/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/styles/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/todos",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/todos/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated DELETE /content/api/todos/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated PATCH /content/api/topics/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/topics/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Unauthenticated POST /content/api/videos/00000000-0000-4000-8000-000000000000",
+        "status": "pass",
+        "detail": {
+          "status": 401
+        }
+      },
+      {
+        "name": "Forged role header cannot authenticate",
+        "status": "pass"
+      },
+      {
+        "name": "Client cannot access admin pages or APIs",
+        "status": "pass"
+      },
+      {
+        "name": "Cross-site cookie write is rejected",
+        "status": "pass"
+      },
+      {
+        "name": "Admin writes remain forbidden",
+        "status": "pass"
+      },
+      {
+        "name": "Health probe is public, minimal and has security headers",
+        "status": "pass",
+        "detail": {
+          "status": 200,
+          "data": {
+            "ok": true
+          }
+        }
+      },
+      {
+        "name": "Client health response hides adapter and database internals",
+        "status": "pass"
+      },
+      {
+        "name": "Admin GET /content/api/pipeline",
+        "status": "pass",
+        "detail": {
+          "status": 200
+        }
+      },
+      {
+        "name": "Admin GET /content/api/health",
+        "status": "pass",
+        "detail": {
+          "status": 200
+        }
+      },
+      {
+        "name": "Admin GET /content/api/costs",
+        "status": "pass",
+        "detail": {
+          "status": 200
+        }
+      },
+      {
+        "name": "Admin GET /content/api/dataset",
+        "status": "pass",
+        "detail": {
+          "status": 200
+        }
+      },
+      {
+        "name": "Unsupported GET /content/api/decisions returns 405",
+        "status": "pass",
+        "detail": {
+          "status": 405,
+          "reason": "Source exports POST only; corrected harness expectation"
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/todos null",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Send a JSON object."
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/todos {}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "todo title is required"
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/todos {\"title\":\" \"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "todo title is required"
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/todos/00000000-0000-4000-8000-000000000000 {\"status\":\"invented\"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "status must be one of: open, in_progress, done, archived"
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/todos/not-a-uuid {\"title\":\"test\"}",
+        "status": "pass",
+        "detail": {
+          "status": 404,
+          "message": "Not found."
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/signals {}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "rawText is required"
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/signals null",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "That request isn’t valid."
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/signals {\"rawText\":\"xxxxxxxxxxxxxxxxxx",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Signal is too long (8,000 characters max)."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/brand {\"name\":\"\"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Brand name can’t be empty."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/brand null",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "That request isn’t valid."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/topics/00000000-0000-4000-8000-000000000000 {\"decision\":\"invented\"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Unknown decision \"invented\"."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/topics/00000000-0000-4000-8000-000000000000 {\"platforms\":[]}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Pick at least one platform to post on."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/items/00000000-0000-4000-8000-000000000000 {\"plannedAt\":\"invalid date\"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Invalid date."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/items/00000000-0000-4000-8000-000000000000 {\"channels\":[]}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Keep at least one channel. To skip this post everywhere, reject it."
+        }
+      },
+      {
+        "name": "Invalid PATCH /content/api/approvals/00000000-0000-4000-8000-000000000000 {\"action\":\"invented\"}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Unknown action \"invented\"."
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/metrics {}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "itemId is required"
+        }
+      },
+      {
+        "name": "Invalid POST /content/api/brand/voice {\"samples\":[]}",
+        "status": "pass",
+        "detail": {
+          "status": 400,
+          "message": "Paste at least 3 posts (a few sentences each)."
+        }
+      },
+      {
+        "name": "Missing upload /content/api/brand/logo",
+        "status": "pass",
+        "detail": {
+          "ok": false,
+          "error": "Choose an image."
+        }
+      },
+      {
+        "name": "Missing upload /content/api/brand/photos",
+        "status": "pass",
+        "detail": {
+          "ok": false,
+          "error": "Choose a photo."
+        }
+      },
+      {
+        "name": "Missing upload /content/api/brand/fonts",
+        "status": "pass",
+        "detail": {
+          "ok": false,
+          "error": "Choose a .ttf or .otf file."
+        }
+      },
+      {
+        "name": "Missing upload /content/api/styles",
+        "status": "pass",
+        "detail": {
+          "ok": false,
+          "error": "choose an image"
+        }
+      },
+      {
+        "name": "Login accepts null JSON without server error",
+        "status": "fail",
+        "error": "Expected values to be strictly equal:\n\n500 !== 401\n"
+      },
+      {
+        "name": "Production configuration is ready to serve",
+        "status": "fail",
+        "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'CONTENT_RUN_SECRET and CONTENT_ADMIN_SECRET must be at least 16 characters.'\n- null\n"
+      }
+    ]
+  },
+  "live": {
+    "checks": [
+      {
+        "name": "Load brand into isolated database",
+        "status": "pass",
+        "detail": {
+          "saved": true
+        }
+      },
+      {
+        "name": "Real main writing model returns usable text",
+        "status": "fail",
+        "error": "OpenRouter 402: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 512 tokens, but can only afford 273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits"
+      },
+      {
+        "name": "Real Jev typed decision returns probability",
+        "status": "pass",
+        "detail": {
+          "model": "typesafe/jev-1.13-20260917",
+          "answers": {
+            "relevant": {
+              "type": "noul",
+              "noul": 0.97
+            }
+          }
+        }
+      },
+      {
+        "name": "Real web research and cheap model extract a topic from a signal",
+        "status": "pass",
+        "detail": {
+          "title": "Automate Appointment Reminders, Keep Humans for Unusual Requests: The Exception Rules and Handoff Context You Need",
+          "checked": true,
+          "cheapModel": "deepseek/deepseek-v4.1-flash",
+          "researchModel": "perplexity/sonar"
+        }
+      },
+      {
+        "name": "Real topic scoring and platform fit persist valid decisions",
+        "status": "pass",
+        "detail": {
+          "score": 18,
+          "band": "queue",
+          "fitSaved": true,
+          "decisions": [
+            {
+              "source": "jev",
+              "task": "topic_score",
+              "used": true
+            },
+            {
+              "source": "jev",
+              "task": "platform_fit",
+              "used": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "Real drafts and reel script are parsed and stored",
+        "status": "fail",
+        "error": "OpenRouter 402: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credit"
+      },
+      {
+        "name": "Real quality checks stop at human approval",
+        "status": "fail",
+        "error": "The expression evaluated to a falsy value:\n\n  assert.ok(ids.length)\n"
+      },
+      {
+        "name": "Claims, approval, scheduling, go-live and analytics lifecycle",
+        "status": "pass",
+        "detail": {
+          "scheduling": "SIMULATED, no external post",
+          "totals": {
+            "published": 1,
+            "reach": 120,
+            "engagement": 17,
+            "clicks": 4,
+            "engagementPerPost": 17,
+            "vsUsual": null
+          }
+        }
+      },
+      {
+        "name": "Real brand voice extraction",
+        "status": "fail",
+        "error": "OpenRouter 402: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 700 tokens, but can only afford 273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits"
+      },
+      {
+        "name": "Real vision model analyses an uploaded design example",
+        "status": "fail",
+        "error": "OpenRouter 402: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 1200 tokens, but can only afford 273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credit"
+      },
+      {
+        "name": "Real image generation returns a valid raster",
+        "status": "fail",
+        "error": "OpenRouter 402: {\"error\":{\"message\":\"Insufficient credits. Add more using https://openrouter.ai/settings/credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openrouter.ai/settings/credits, or lower max_tokens / prompt size to fit your remaining balance.\"}}}"
+      }
+    ],
+    "spentUsd": 0.006480828,
+    "isolation": "Fresh in-memory Postgres using real schema; real configured AI adapters and budget guard; simulated Postiz only. Cost ledger records real spend."
+  },
+  "transcription": {
+    "status": "pass",
+    "ms": 18402,
+    "source": "Locally generated disposable speech, served only on loopback",
+    "transcript": {
+      "text": "Appointment reminders help customers remember their bookings. A person should review unusual requests.",
+      "segments": [
+        {
+          "start": 0,
+          "end": 4,
+          "text": "Appointment reminders help customers remember their bookings."
+        },
+        {
+          "start": 4,
+          "end": 7,
+          "text": "A person should review unusual requests."
+        }
+      ],
+      "lang": "en",
+      "durationS": 7
+    }
+  },
+  "interactions": {
+    "checks": [
+      {
+        "name": "Ideas starter buttons and source selectors update the input",
+        "status": "pass"
+      },
+      {
+        "name": "Ideas platform editor opens and closes",
+        "status": "fail",
+        "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Change platforms', exact: true }).first()\u001b[22m\n"
+      },
+      {
+        "name": "Board search and filters return a matching QA card",
+        "status": "pass"
+      },
+      {
+        "name": "Post drawer opens and copy save/revert persist correctly",
+        "status": "fail",
+        "error": "locator.fill: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('aside.drawer').getByLabel('Body', { exact: true })\u001b[22m\n"
+      },
+      {
+        "name": "Changes/reject require a reason before sending",
+        "status": "pass"
+      },
+      {
+        "name": "Claim warning has a usable way to attach proof",
+        "status": "fail",
+        "error": "Claims are displayed but no proof-link input or action exists"
+      },
+      {
+        "name": "Drawer moves keyboard focus into the review surface",
+        "status": "fail",
+        "error": "{\"tag\":\"A\",\"text\":\"7inQA disposable approval safety fixtureQA original openingSensitive1 unprovenju\",\"inside\":false}"
+      },
+      {
+        "name": "Approve button records approval but unproven claims stay unpublishable",
+        "status": "pass"
+      },
+      {
+        "name": "Calendar planning saves a future time on the blocked QA fixture",
+        "status": "pass"
+      },
+      {
+        "name": "Escape closes the post drawer",
+        "status": "pass"
+      },
+      {
+        "name": "Calendar week/month and next/previous controls navigate",
+        "status": "fail",
+        "error": "The expression evaluated to a falsy value:\n\n  assert.ok(unique.length>=3)\n"
+      },
+      {
+        "name": "Opening-line platform, source and format filters work",
+        "status": "pass",
+        "detail": {
+          "options": 13
+        }
+      },
+      {
+        "name": "Competitor editing opens and existing group filters respond",
+        "status": "pass",
+        "detail": {
+          "editFields": 112
+        }
+      },
+      {
+        "name": "Design example picker opens and can be cancelled",
+        "status": "pass",
+        "detail": {
+          "buttons": [
+            "Person story carouselCarousel · 2 pagesChange",
+            "Make creative",
+            "Person story carouselCarousel · 2 pagesChange",
+            "Make creative",
+            "Person story carouselCarousel · 2 pagesChange",
+            "Make creative",
+            "graphic-heavySingle imageChange",
+            "Make creative",
+            "▶ Check 1 now",
+            "graphic-heavySingle imageChange",
+            "Make again",
+            ""
+          ]
+        }
+      },
+      {
+        "name": "Brand unsaved value controls respond without saving",
+        "status": "fail",
+        "error": "locator.getAttribute: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'No hype', exact: true })\u001b[22m\n"
+      },
+      {
+        "name": "Real voice button shows the provider-credit error and remains usable",
+        "status": "pass",
+        "detail": {
+          "fields": [
+            {
+              "placeholder": "e.g. Owners of 1–3 independent cafés. Great at coffee, not at numbers. Worried about cash flow, short on time.",
+              "label": null,
+              "value": ""
+            },
+            {
+              "placeholder": "e.g. You need a big team to use AI\nAutomation is only for tech companies",
+              "label": null,
+              "value": ""
+            }
+          ],
+          "note": "Provider failure exercised directly in live tests; browser form inventory captured for follow-up"
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/brand",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 12
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/ideas",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 18
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/approvals",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [
+            {
+              "label": "QA disposable approval safety fixture",
+              "modal": null
+            }
+          ],
+          "smallTargets": 1
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/styles",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 17
+        }
+      },
+      {
+        "name": "Mobile exposes sign-out control",
+        "status": "fail",
+        "error": "Expected values to be strictly equal:\n\nfalse !== true\n"
+      }
+    ],
+    "cleaned": true
+  },
+  "interactionFollowup": {
+    "checks": [
+      {
+        "name": "Ideas platform editor opens and closes",
+        "status": "pass",
+        "detail": {
+          "formats": [
+            "Text post",
+            "Carousel",
+            "Image",
+            "Video script",
+            "Article",
+            "Thread",
+            "Image",
+            "Carousel",
+            "Image",
+            "Reel script",
+            "Text post",
+            "Image",
+            "Reel script",
+            "Post",
+            "Short (you film)"
+          ]
+        }
+      },
+      {
+        "name": "Post drawer opens and copy save/revert persist correctly",
+        "status": "pass"
+      },
+      {
+        "name": "Calendar week/month and next/previous controls navigate",
+        "status": "pass",
+        "detail": [
+          {
+            "label": "←",
+            "href": "/content/calendar?view=month&d=2026-10-01"
+          },
+          {
+            "label": "Month",
+            "href": "/content/calendar?view=month"
+          },
+          {
+            "label": "→",
+            "href": "/content/calendar?view=month&d=2026-12-01"
+          },
+          {
+            "label": "Week",
+            "href": "/content/calendar?view=week"
+          }
+        ]
+      },
+      {
+        "name": "Brand unsaved value controls respond without saving",
+        "status": "fail",
+        "error": "locator.getAttribute: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'No hype', exact: true })\u001b[22m\n"
+      },
+      {
+        "name": "Real voice button shows the provider-credit error and remains usable",
+        "status": "pass",
+        "detail": {
+          "http": 502,
+          "buttonStillEnabled": true,
+          "provider": "OpenRouter 402 insufficient credits"
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/brand",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 12
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/ideas",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 18
+        }
+      },
+      {
+        "name": "Accessibility inventory /content/approvals",
+        "status": "fail",
+        "error": "[{\"tag\":\"TEXTAREA\",\"type\":\"textarea\",\"placeholder\":\"Anything else? (optional when you picked a reason above)\",\"id\":\"approval-note\"}]\n\n1 !== 0\n"
+      },
+      {
+        "name": "Accessibility inventory /content/styles",
+        "status": "pass",
+        "detail": {
+          "unlabeled": [],
+          "dialogs": [],
+          "smallTargets": 17
+        }
+      }
+    ],
+    "cleaned": true
+  },
+  "wiring": {
+    "checks": [
+      {
+        "name": "Capture signal button sends the form and shows service failure",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/signals",
+          "method": "POST",
+          "data": "{\"rawText\":\"QA simulated signal, no real record is created.\",\"channel\":null}"
+        }
+      },
+      {
+        "name": "Write this idea button sends selected decision",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/topics/3d8a3649-0e2c-44f1-8048-14bf2be7aafd",
+          "method": "PATCH",
+          "data": "{\"decision\":\"selected\"}"
+        }
+      },
+      {
+        "name": "Drop idea button sends dropped decision",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/topics/3d8a3649-0e2c-44f1-8048-14bf2be7aafd",
+          "method": "PATCH",
+          "data": "{\"decision\":\"dropped\"}"
+        }
+      },
+      {
+        "name": "Run entire pipeline button calls the correct endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 1Market Signalsdegraded",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/market-signals/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 2Research Collectorok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/research/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 3Topic Scorerok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/scoring/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 4Draft Generatorok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/draft_generator/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 5QC + Risk Gateok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/qc_gate/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 6Postiz Scheduler + UTMdegraded",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/publisher/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 7Own Resultsnever",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/own_results/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 8Analytics Collectorok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/analytics/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Run menu item 9Weekly Review Agentok",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/modules/weekly_review/run",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Make creative button calls the asset endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/items/364a21c0-04db-4b4d-aedb-4758d0d60994/asset",
+          "method": "POST",
+          "data": "{\"styleId\":\"66eacca6-3e0a-42c0-9e93-f3130288fcba\"}"
+        }
+      },
+      {
+        "name": "Make all design button calls generation endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/items/364a21c0-04db-4b4d-aedb-4758d0d60994/asset",
+          "method": "POST",
+          "data": "{\"styleId\":\"c6351236-32ec-41a7-a216-fa590d1ad7e4\"}"
+        }
+      },
+      {
+        "name": "Transcribe video button calls the selected video endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/videos/ba6061f5-7b01-48e4-a436-9252cdfd58dc",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Re-transcribe button calls the selected video endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/videos/8d3b7f72-bf34-4c61-8807-2c667e5ff5db",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Video explanation button calls the selected video endpoint",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/videos/8d3b7f72-bf34-4c61-8807-2c667e5ff5db",
+          "method": "POST",
+          "data": "{\"analyze\":true}"
+        }
+      },
+      {
+        "name": "Use video idea button calls post generation endpoint",
+        "status": "fail",
+        "error": "locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Write this idea →', exact: true }).first()\u001b[22m\n"
+      },
+      {
+        "name": "Refresh own results calls Decode",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/decode",
+          "method": "POST",
+          "data": "{\"self\":true}"
+        }
+      },
+      {
+        "name": "Approve request wiring and error feedback",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/approvals/8080869a-7a60-44a9-8ec7-6c76ff6fb69c",
+          "method": "PATCH",
+          "data": "{\"action\":\"approve\",\"note\":null,\"reasons\":[]}"
+        }
+      },
+      {
+        "name": "Request changes sends the selected reason",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/approvals/8080869a-7a60-44a9-8ec7-6c76ff6fb69c",
+          "method": "PATCH",
+          "data": "{\"action\":\"changes\",\"note\":null,\"reasons\":[\"Too long\"]}"
+        }
+      },
+      {
+        "name": "Reject sends the selected reason",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/approvals/8080869a-7a60-44a9-8ec7-6c76ff6fb69c",
+          "method": "PATCH",
+          "data": "{\"action\":\"reject\",\"note\":null,\"reasons\":[\"Too long\"]}"
+        }
+      },
+      {
+        "name": "Brand section 1 save wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/brand",
+          "method": "PATCH",
+          "data": "{\"name\":\"Vijendra\",\"tagline\":\"I am a AI enthusiast and consulting business in AI for making their process easy and efficient\",\"values\":[]}"
+        }
+      },
+      {
+        "name": "Brand section 2 save wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/brand",
+          "method": "PATCH",
+          "data": "{\"voice\":\"- Write in a direct, confident, plain-spoken business voice. Address the reader as \\\"you\\\" and speak as \\\"we\\\" or \\\"I\\\". State things as settled fact, with no hedging, filler or throat-clearing.\\n- Keep the rhythm choppy. Use one-sentence paragraphs and white space between every thought. Most sentences run 4 to 15 words, and fragments are fine (\\\"Stop guessing.\\\" \\\"That's the whole call.\\\"). Build structure with numbered points, bullet lists, or short labeled sections, and\",\"voiceSampl"
+        }
+      },
+      {
+        "name": "Brand section 3 save wiring",
+        "status": "pass",
+        "detail": {
+          "disabled": true,
+          "reason": "Form is incomplete"
+        }
+      },
+      {
+        "name": "Brand section 4 save wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/brand",
+          "method": "PATCH",
+          "data": "{\"offers\":[]}"
+        }
+      },
+      {
+        "name": "Brand section 5 save wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/brand",
+          "method": "PATCH",
+          "data": "{\"headingFont\":null,\"bodyFont\":null,\"logoCorner\":\"br\",\"palette\":[]}"
+        }
+      },
+      {
+        "name": "Brand section 6 save wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/brand",
+          "method": "PATCH",
+          "data": "{\"ownHandles\":{\"linkedin\":\"https://www.linkedin.com/in/vijendrapratapsingh/?isSelfProfile=true\"}}"
+        }
+      },
+      {
+        "name": "Style upload and save-example wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/styles",
+          "method": "POST",
+          "data": "------WebKitFormBoundarygMpw5AqflKXvw0ou\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\nQA intercepted example\r\n------WebKitFormBoundarygMpw5AqflKXvw0ou\r\nContent-Disposition: form-data; name=\"file\"; filename=\"qa.png\"\r\nContent-Type: image/png\r\n\r\n�PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR\u0000\u0000\u0000\u0001\u0000\u0000\u0000\u0001\b\u0004\u0000\u0000\u0000�\u001c\f\u0002\u0000\u0000\u0000\u000bIDATx�c��\u001f\u0000\u0003\u0003\u0002\u0000�I�\u0000\u0000\u0000\u0000IEND�B`�\r\n------WebKitFormBoundarygMpw5AqflKXvw0ou--\r\n"
+        }
+      },
+      {
+        "name": "Style rename wiring",
+        "status": "fail",
+        "error": "locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Rename', exact: true }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"button\" class=\"btn btn-sm\">Rename</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    19 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not enabled\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      },
+      {
+        "name": "Style delete wiring without deleting user data",
+        "status": "fail",
+        "error": "Expected values to be strictly equal:\n\n34 !== 35\n"
+      },
+      {
+        "name": "Make one from example wiring",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/styles/c6351236-32ec-41a7-a216-fa590d1ad7e4",
+          "method": "POST",
+          "data": "{\"topic\":\"QA simulated topic\",\"platform\":\"linkedin\",\"kind\":\"image\"}"
+        }
+      }
+    ],
+    "mode": "UI wiring and failure handling only. Every write intercepted with HTTP 503; no database or external mutation.",
+    "interceptedWrites": 35
+  },
+  "followup": {
+    "checks": [
+      {
+        "name": "Brand values toggle and tabs switch without saving",
+        "status": "pass"
+      },
+      {
+        "name": "Style rename button enables after editing and sends PATCH",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/styles/c6351236-32ec-41a7-a216-fa590d1ad7e4",
+          "method": "PATCH"
+        }
+      },
+      {
+        "name": "Style delete asks for confirmation and cancel leaves data untouched",
+        "status": "pass",
+        "detail": {
+          "confirmation": "Delete example \"graphic-heavy\"?",
+          "cancelled": true
+        }
+      },
+      {
+        "name": "Use video idea expands and calls its generation endpoint",
+        "status": "fail",
+        "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('details').filter({ has: getByRole('button', { name: 'Write this idea →', exact: true }) }).first().locator('summary').first()\u001b[22m\n"
+      },
+      {
+        "name": "Competitor scan button requests Decode without a real scrape",
+        "status": "pass",
+        "detail": {
+          "path": "/content/api/decode",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Keyboard palette can find every client section",
+        "status": "fail",
+        "error": "locator.fill: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog', { name: 'Command palette' }).getByRole('textbox', { name: 'Search', exact: true })\u001b[22m\n"
+      },
+      {
+        "name": "Mobile horizontal navigation reaches the last client section",
+        "status": "fail",
+        "error": "The expression evaluated to a falsy value:\n\n  assert.ok(await page.getByRole('heading',{name:'Opening lines',exact:true}).isVisible())\n"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content",
+        "status": "pass"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content/calendar",
+        "status": "pass"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content/ideas",
+        "status": "pass"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content/approvals",
+        "status": "fail",
+        "error": "{\"width\":320,\"scrollWidth\":377}"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content/brand",
+        "status": "pass"
+      },
+      {
+        "name": "Tablet and small-phone overflow /content/styles",
+        "status": "pass"
+      },
+      {
+        "name": "Text tokens retain readable contrast",
+        "status": "fail",
+        "error": "{\"--ink\":null,\"--muted\":4.82,\"--faint\":2.31,\"--warn\":3.28,\"--ok\":3.66}"
+      }
+    ],
+    "cleanup": {
+      "items": 0,
+      "tasks": 0
+    },
+    "metrics": [
+      {
+        "path": "/content",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content",
+        "width": 320,
+        "scrollWidth": 320
+      },
+      {
+        "path": "/content/calendar",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content/calendar",
+        "width": 320,
+        "scrollWidth": 320
+      },
+      {
+        "path": "/content/ideas",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content/ideas",
+        "width": 320,
+        "scrollWidth": 320
+      },
+      {
+        "path": "/content/approvals",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content/approvals",
+        "width": 320,
+        "scrollWidth": 377
+      },
+      {
+        "path": "/content/brand",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content/brand",
+        "width": 320,
+        "scrollWidth": 320
+      },
+      {
+        "path": "/content/styles",
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "path": "/content/styles",
+        "width": 320,
+        "scrollWidth": 320
+      }
+    ]
+  },
+  "finalChecks": {
+    "checks": [
+      {
+        "name": "Use video idea expands and calls its generation endpoint",
+        "status": "pass",
+        "detail": {
+          "mode": "Intercepted write",
+          "path": "/content/api/videos/57599c7b-97fa-4a6e-b985-e2dc2315e580",
+          "method": "POST"
+        }
+      },
+      {
+        "name": "Command palette finds every client section",
+        "status": "pass",
+        "detail": {
+          "sections": 13
+        }
+      },
+      {
+        "name": "Mobile navigation reaches the last client section",
+        "status": "pass"
+      },
+      {
+        "name": "Approvals fit a 320px phone viewport",
+        "status": "fail",
+        "error": "{\"width\":320,\"scrollWidth\":377,\"overflow\":[]}"
+      },
+      {
+        "name": "Small text has adequate contrast on the actual page background",
+        "status": "fail",
+        "error": "{\"--ink\":17,\"--muted\":4.82,\"--faint\":2.31,\"--warn\":3.28,\"--ok\":3.66}"
+      },
+      {
+        "name": "Failure feedback remains visible after the loader closes",
+        "status": "pass"
+      }
+    ],
+    "phone": {
+      "width": 320,
+      "scrollWidth": 377,
+      "overflow": []
+    },
+    "contrast": {
+      "colors": {
+        "--paper": "#f4f3ee",
+        "--ink": "#111",
+        "--muted": "#6b6b66",
+        "--faint": "#a3a29b",
+        "--warn": "#b7791f",
+        "--ok": "#2f8f4e"
+      },
+      "ratios": {
+        "--ink": 17,
+        "--muted": 4.82,
+        "--faint": 2.31,
+        "--warn": 3.28,
+        "--ok": 3.66
+      }
+    }
+  },
+  "correctionNotes": [
+    "Use finalChecks for video-idea wiring, palette coverage and mobile navigation; preceding locator/hydration failures were harness errors.",
+    "Use interactionFollowup for copy save, platform editing and calendar navigation.",
+    "Use followup for brand-value controls, style rename and delete-confirmation cancellation. The earlier delete-request test was not executed through confirmation.",
+    "The live generated-draft QC assertion is blocked downstream of the failed funded drafting call, not a separate demonstrated QC defect.",
+    "UI writes in wiring, followup and finalChecks were intercepted; these outcomes do not establish successful external operations."
+  ],
+  "cleanup": {
+    "items": 0,
+    "tasks": 0
+  }
+}

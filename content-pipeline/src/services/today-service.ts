@@ -56,11 +56,15 @@ export interface Today {
     publishedThisWeek: number;
     weeklyTarget: number;
     runwayDays: number;
+    readyToSchedule: number;
+    scheduled7d: number;
     blocked: number;
     oldestWaitingHours: number | null;
     /** Reach and engagement on posts that went live in the last 7 days. */
     reach7d: number;
     engagement7d: number;
+    clicks7d: number | null;
+    qualifiedEngagement7d: number | null;
     /** The 7-day post that most beat your usual (needs Own Results). */
     best7d: { id: string; title: string; platform: string; vsUsual: number } | null;
     cycleMedianDays: number | null;
@@ -101,7 +105,7 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
     repo.reviewableTopics(),
     repo.selectedTopics(),
     repo.unprocessedResearchInputs(),
-    repo.listTodos('open'),
+    repo.listTodos(),
     repo.publishedSince(weekStart(now).toISOString()),
     repo.performanceSince(7),
     repo.cycleMedianDays(),
@@ -172,7 +176,7 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   if (noAngle) actions.push({ kind: 'topic', tone: 'info', title: `${noAngle} selected topic(s) without an angle`, detail: 'Pick the belief each post flips (Ideas → Find angles), or drafting uses the strongest one it finds.', href: '/content/ideas' });
   if (selected.length) actions.push({ kind: 'draft', tone: 'info', title: `${selected.length} selected topic(s) waiting to be drafted`, detail: 'Run Draft Generator, then QC Gate.', moduleId: 'draft_generator' });
   if (signals.length) actions.push({ kind: 'signal', tone: 'info', title: `${signals.length} signal(s) waiting`, detail: 'Run Research Collector, then Topic Scorer.', moduleId: 'research' });
-  for (const t of todos.filter((t) => t.priority <= 2)) {
+  for (const t of todos.filter((t) => t.priority <= 2 && (t.status === 'open' || t.status === 'in_progress'))) {
     actions.push({ kind: 'task', tone: 'info', title: t.title, detail: `P${t.priority} task${t.detail ? ` · ${t.detail}` : ''}`, todoId: t.id });
   }
 
@@ -197,10 +201,14 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
       publishedThisWeek: published,
       weeklyTarget: WEEKLY_POST_TARGET,
       runwayDays: runwayDays(runwayCount, WEEKLY_POST_TARGET),
+      readyToSchedule: items.filter((i) => !isManual(i) && i.status === 'approved' && !i.postiz_id && readyIds.has(i.id)).length,
+      scheduled7d: upNext.filter((i) => i.status === 'queued' && i.at && new Date(i.at).getTime() >= now.getTime()).length,
       blocked,
       oldestWaitingHours: oldest ? Math.round((now.getTime() - new Date(oldest.updated_at ?? oldest.created_at).getTime()) / 3_600_000) : null,
       reach7d: recent.reduce((s, p) => s + (Number(p.reach ?? p.impressions) || 0), 0),
       engagement7d: recent.reduce((s, p) => s + (Number(p.engagement) || 0), 0),
+      clicks7d: recent.some((p) => p.clicks != null) ? recent.reduce((s, p) => s + Number(p.clicks ?? 0), 0) : null,
+      qualifiedEngagement7d: recent.some((p) => p.qualified_engagement != null) ? recent.reduce((s, p) => s + Number(p.qualified_engagement ?? 0), 0) : null,
       best7d: best ? { id: best.id, title: best.title, platform: best.platform, vsUsual: Number(best.vs_usual) } : null,
       cycleMedianDays: cycle == null ? null : Math.round(cycle * 10) / 10,
     },

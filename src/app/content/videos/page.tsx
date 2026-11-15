@@ -7,6 +7,7 @@ import { getContext, listVideos, type VideoRow } from '@pratapai/content-pipelin
 import { loadHealth, params, type SearchParams } from '@/app/content/_lib/data';
 import { PageHead, KpiStrip, NeedsDb, Plat, Chip, Section, Notice } from '@/app/content/_components/viz';
 import { ApiButton } from '@/app/content/_components/actions';
+import { VideoThumbnail } from '@/app/content/_components/VideoThumbnail';
 import { ago, compact, times, withParams, TONE } from '@/app/content/_lib/format';
 
 // Each video sits in the one step it needs next; sections run in workflow order.
@@ -105,10 +106,7 @@ function Video({ v, ready }: { v: VideoRow; ready: boolean }) {
   const usual = `${times(v.vs_own_median)} their usual`;
   return (
     <li className="vid">
-      <a href={v.url} target="_blank" rel="noreferrer" className="vid-thumb" aria-label={`Open ${who(v)} video`}>
-        {v.thumb && <img src={v.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" />}
-        {v.duration_s != null && <span>{v.duration_s}s</span>}
-      </a>
+      <VideoThumbnail key={v.thumb ?? 'missing'} url={v.url} src={v.thumb} label={`Open ${who(v)} video`} duration={v.duration_s} />
       <div className="vid-body">
         <div className="vid-who">
           <Plat p={v.platform} /> <b>{who(v)}</b>
