@@ -12,6 +12,7 @@ import { Nav, type NavBadges } from '@/app/content/_components/Nav';
 import { RunControls } from '@/app/content/_components/RunControls';
 import { ActionScope, Loader3D } from '@/app/content/_components/actions';
 import { CommandPalette, PaletteButton } from '@/app/content/_components/CommandPalette';
+import { Guide } from '@/app/content/_components/Guide';
 import { Dot } from '@/app/content/_components/viz';
 import { HEALTH_COLOR, ago, healthIssue } from '@/app/content/_lib/format';
 import '@/app/content/_styles/theme.css';
@@ -70,6 +71,7 @@ export default async function ContentLayout({ children }: { children: ReactNode 
           )}
           {viewOnly && <span className="faint" title="The admin login watches only: changes are refused.">View only</span>}
           <span className="spacer" />
+          <Guide />
           <PaletteButton />
           {!viewOnly && <RunControls modules={modules} />}
         </header>
