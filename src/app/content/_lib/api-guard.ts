@@ -8,12 +8,12 @@ const roleOf = (req: Request) => req.headers.get('x-content-role');
 
 /** Null when the request may proceed, else the 401/403 to return. The admin only watches:
  *  any change to the client's account is refused. Every client change is logged for the admin. */
-function denied(req: Request): NextResponse | null {
+function denied(req: Request, adminCanWrite = false): NextResponse | null {
   const r = roleOf(req);
   if (r !== 'client' && r !== 'admin') return NextResponse.json({ ok: false, error: 'locked', locked: true }, { status: 401 });
   if (req.method === 'GET' || req.method === 'HEAD') return null;
   // Local dev with no passwords set runs as admin and must still be able to change things.
-  if (r === 'admin' && !openMode()) return NextResponse.json({ ok: false, error: 'View only: the admin login can’t change the client’s account.' }, { status: 403 });
+  if (r === 'admin' && !adminCanWrite && !openMode()) return NextResponse.json({ ok: false, error: 'View only: the admin login can’t change the client’s account.' }, { status: 403 });
   void logAction(buildContext(), { role: r, method: req.method, path: new URL(req.url).pathname });
   return null;
 }
@@ -44,10 +44,10 @@ function statusOf(e: unknown): number {
  *  message so schema details never reach the browser; a malformed id is a 404. */
 export function handle<A extends unknown[]>(
   fn: (req: Request, ...rest: A) => Promise<Response>,
-  opts: { admin?: boolean; key?: 'error' | 'message' } = {},
+  opts: { admin?: boolean; adminCanWrite?: boolean; key?: 'error' | 'message' } = {},
 ) {
   return async (req: Request, ...rest: A): Promise<Response> => {
-    const no = (opts.admin ? deniedAdmin : denied)(req);
+    const no = opts.admin ? deniedAdmin(req) : denied(req, opts.adminCanWrite);
     if (no) return no;
     try {
       return await fn(req, ...rest);

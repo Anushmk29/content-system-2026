@@ -64,7 +64,7 @@ export function verifySession(token: string | null | undefined, now = Date.now()
 }
 
 /** Pages and routes only the admin sees: engine health, run log, Jev training data, spend. */
-const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '/content/api/dataset', '/content/api/decisions', '/content/api/costs', '/content/api/settings'];
+const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '/content/api/dataset', '/content/api/decisions', '/content/api/costs'];
 export const isAdminPath = (p: string) => ADMIN_PATHS.some((a) => p === a || p.startsWith(`${a}/`));
 
 export const isCreativeCheckPath = (p: string) => /^\/content\/(?:api\/)?check(?:\/|$)/.test(p);

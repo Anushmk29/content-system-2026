@@ -24,6 +24,7 @@ export const GROUPS: { label: string; admin?: boolean; links: { href: string; la
   { label: 'Brand', links: [
     { href: '/content/brand', label: 'Brand kit', keywords: 'voice audience logo colours fonts offers settings' },
     { href: '/content/styles', label: 'Design examples', keywords: 'styles templates look examples' },
+    { href: '/content/settings', label: 'Keys & settings', keywords: 'api keys openrouter byok models budget connections' },
   ] },
   { label: 'Research', links: [
     { href: '/content/decode', label: 'Competitors', keywords: 'decode spy rivals what works' },

@@ -22,9 +22,8 @@ test('passwords map to roles; sessions verify, expire, and resist tampering', ()
   assert.ok(isAdminPath('/content/system') && isAdminPath('/content/api/decisions/seed'));
   assert.ok(isAdminPath('/content/costs') && isAdminPath('/content/api/costs'));
   assert.ok(!isAdminPath('/content/systems') && !isAdminPath('/content'));
-  assert.ok(isAdminPath('/content/api/settings'));
-  assert.ok(isAdminPath('/content/api/settings/anything'));
-  assert.ok(!isAdminPath('/content/api/settings-other'));
+  // Bring your own key: the client manages keys too.
+  assert.ok(!isAdminPath('/content/api/settings') && !isAdminPath('/content/settings'));
 });
 
 test('paused Creative Check covers its page and API descendants without blocking other routes', async () => {

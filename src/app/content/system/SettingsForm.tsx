@@ -4,9 +4,9 @@ import { useState, type FormEvent } from 'react';
 import type { SettingView } from '@pratapai/content-pipeline';
 import { ActionScope, useAction } from '@/app/content/_components/actions';
 
-export function SettingsForm({ fields, ready }: { fields: SettingView[]; ready: boolean }) {
+export function SettingsForm({ fields, ready, open = false }: { fields: SettingView[]; ready: boolean; open?: boolean }) {
   const groups = [...new Set(fields.map((f) => f.group))];
-  return <details style={{ margin: '24px 0' }}>
+  return <details open={open} style={{ margin: '24px 0' }}>
     <summary style={{ cursor: 'pointer' }}><b>Keys &amp; settings</b> <span className="muted">— connections, models, workflow and research</span></summary>
     <p className="muted">Save provider keys and everyday settings here. Changes apply to new operations without restarting the server.</p>
     <p className="bk-note">Saved keys stay hidden. Blank key fields keep the existing key. Server values come from your VPS environment file.</p>
