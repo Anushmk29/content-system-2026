@@ -815,13 +815,14 @@ textarea.input { resize: vertical; min-height: 64px; line-height: 1.5; }
    Deliberate exception to the guide's no-shadow / no-blur rule: the loader is the one layered,
    "floating" moment. Steps are the request's real lifecycle; chips pop in one after another. */
 .ld-scrim {
-  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px;
-  background: rgba(244, 243, 238, .55); backdrop-filter: blur(6px) saturate(1.1);
+  position: fixed; right: 16px; bottom: 16px; z-index: 200; width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
   animation: ld-fade .25s var(--ease) both;
 }
 .ld {
   --spring: cubic-bezier(.34, 1.56, .64, 1);
-  position: relative; width: min(600px, 100%); display: grid; justify-items: center; gap: 12px;
+  position: relative; width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; justify-items: center; gap: 12px;
+  pointer-events: auto;
   padding: 24px 28px 26px; text-align: center; color: var(--ink);
   background: var(--paper-2); border: 1px solid var(--rule); border-radius: 18px;
   box-shadow: 0 1px 0 #fff inset, 0 2px 4px rgba(17,17,17,.04), 0 12px 24px -8px rgba(17,17,17,.10), 0 40px 80px -24px rgba(35,70,196,.22);

@@ -19,8 +19,8 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Se
   const sp = await params(searchParams);
   let data: OperatorConsole | null = null;
   let error: string | null = null;
-  try { data = await getOperatorConsole(getContext()); } catch (e) { error = (e as Error).message; }
-  const noVisual = new Set(data ? (await listDesignQueue(getContext()).catch(() => [])).filter((d) => d.stage === 'needs').map((d) => d.id) : []);
+  try { data = await getOperatorConsole((await getContext())); } catch (e) { error = (e as Error).message; }
+  const noVisual = new Set(data ? (await listDesignQueue((await getContext())).catch(() => [])).filter((d) => d.stage === 'needs').map((d) => d.id) : []);
   if (!data) return (<><PageHead title="Approvals" /><NeedsDb error={error} /></>);
 
   const queue = [...data.approvalQueue].sort((a, b) =>

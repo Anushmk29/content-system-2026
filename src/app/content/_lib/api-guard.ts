@@ -1,7 +1,7 @@
 // Second line behind src/middleware.ts: routes that spend tokens or change content check the
 // role middleware resolved from the login cookie (or x-content-secret for cron).
 import { NextResponse } from 'next/server';
-import { getContext, logAction } from '@pratapai/content-pipeline';
+import { buildContext, logAction } from '@pratapai/content-pipeline';
 import { openMode } from './auth';
 
 const roleOf = (req: Request) => req.headers.get('x-content-role');
@@ -14,7 +14,7 @@ function denied(req: Request): NextResponse | null {
   if (req.method === 'GET' || req.method === 'HEAD') return null;
   // Local dev with no passwords set runs as admin and must still be able to change things.
   if (r === 'admin' && !openMode()) return NextResponse.json({ ok: false, error: 'View only: the admin login can’t change the client’s account.' }, { status: 403 });
-  void logAction(getContext(), { role: r, method: req.method, path: new URL(req.url).pathname });
+  void logAction(buildContext(), { role: r, method: req.method, path: new URL(req.url).pathname });
   return null;
 }
 

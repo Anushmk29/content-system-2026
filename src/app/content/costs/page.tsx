@@ -28,7 +28,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Search
   const custom = { from: sp.from, to: sp.to };
   let c: Costs | null = null;
   let error: string | null = null;
-  try { c = await getCosts(getContext(), range, custom); } catch (e) { error = (e as Error).message; }
+  try { c = await getCosts((await getContext()), range, custom); } catch (e) { error = (e as Error).message; }
 
   const csv = withParams('/content/api/costs', { range, ...(range === 'custom' ? custom : {}) }, {});
   const head = (

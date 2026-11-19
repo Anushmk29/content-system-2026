@@ -9,6 +9,19 @@ const db = await createTestDb();
 const repo = createRepo(db);
 const TOPIC = JSON.stringify({ title: 'T', pillar: 'founder_build_notes', funnelStage: 'trust', customerLanguage: '' });
 
+test('overlapping research requests create and pay for one topic per signal', async () => {
+  const signal = await repo.insertResearchInput({ rawText: 'one signal used twice' });
+  const input = (await repo.researchInput(signal.id))!;
+  const prompts: string[] = [];
+  const context = ctx(() => '', prompts);
+  const results = await Promise.allSettled([
+    researchSignal(context, input, { webCheck: false }), researchSignal(context, input, { webCheck: false }),
+  ]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(prompts.length, 1);
+  assert.equal((await db.query(`select 1 from content.topics where source_detail = $1`, [input.raw_text])).rowCount, 1);
+});
+
 // Fake OpenRouter: the Perplexity call returns (or throws) the market check; the extraction call returns a topic.
 // `relevance` set = Jev is on and answers P(relevant) with it.
 function ctx(market: () => string, prompts: string[], models: Array<string | undefined> = [], relevance?: number) {

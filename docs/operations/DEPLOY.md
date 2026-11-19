@@ -59,7 +59,48 @@ docker compose --env-file .env -f infra/app/docker-compose.yml up -d scheduler
 Run the migration **before** the new containers start. New code may read columns the old schema
 lacks.
 
+## Updating keys and routine settings in the app
+
+After deploying this version and running `npm run migrate`, sign in with the **admin password**,
+open **System**, and expand **Keys & settings**. Provider keys, model IDs, budget, workflow options,
+and research inputs can be saved there. Client and cron credentials cannot manage these settings.
+The admin's other content-editing permissions remain view-only.
+
+Saved app values override the matching `CONTENT_*` server environment values. Empty key fields
+keep the current key; **Use server value**, followed by Save, removes the app override. Empty
+non-secret fields use the built-in default. Changes reach every app worker on its next operation
+and the scheduler on its next run. Work already running keeps its original configuration.
+`getContext()` is now asynchronous; custom scripts must use `await getContext()` to load saved
+settings. `buildContext()` stays synchronous and uses environment/explicit configuration only.
+
+Settings are encrypted using AES-256-GCM with `CONTENT_SETTINGS_KEY`, falling back to
+`CONTENT_SESSION_KEY` (at least 32 characters). Keep the same key in the app and scheduler and
+back it up with the database. If you plan to rotate session keys independently, set a dedicated
+`CONTENT_SETTINGS_KEY` **before the first settings save**. Changing the encryption key while
+saved overrides exist makes them unreadable; retain the original key for recovery. Keys are
+never returned by the settings API or prefilled in the browser. A configured key still needs
+a small real generation test to confirm provider access and credits.
+
+Database URLs, authentication secrets, TLS/proxy options, executable paths and deployment
+configuration stay in the VPS environment. No environment file is rewritten by the app.
+
+For `/srv/studio2`, deploy the new image, run its migration as the server administrator, and
+copy the updated `infra/studio2/scheduler.mjs` to `/srv/studio2/ops/scheduler.mjs` before recreating
+the app and scheduler. Its database application role needs SELECT/INSERT/UPDATE/DELETE on
+`content.runtime_settings`; if that role uses explicit table grants, grant those privileges as
+the database administrator after migrating. The encryption key must be in `private/app.env`.
+
 ## 3. Scheduling
+
+Page navigation reuses the last integration-health result while expired checks refresh in the
+background; the first check after startup still waits for a result. System and the health API
+wait for an in-progress refresh so failures remain inspectable. Transcription-tool checks run
+as asynchronous subprocesses. Decode progress requests run one at a time and are cancelled
+when leaving the page; cancelling progress requests does not stop the server-side Decode run.
+Pipeline buttons also start work in the background and return HTTP 202 promptly, so leaving
+the page does not cancel the pipeline. Their loading panel leaves navigation usable. API/cron
+callers retain the existing synchronous response unless they send `Prefer: respond-async`.
+Background work still requires a long-lived app container; a restart can interrupt it.
 
 The `scheduler` container runs every module once an hour (`PIPELINE_INTERVAL_SECONDS` changes
 that). Each module holds a Postgres advisory lock while it runs, so a run started from the

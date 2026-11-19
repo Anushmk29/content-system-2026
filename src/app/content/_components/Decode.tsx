@@ -2,7 +2,7 @@
 // Decode — the competitor spy page body (docs/development/DESIGN-GUIDE.md §6–§6f). Reads answer → why →
 // evidence: the scan bar (steps, settings, who we watch), Make this next (the lime tile), What's
 // working (ranked formats, gaps badged in), then the map and the post pane. While a run works
-// the map comes first; each 1s poll's new posts drive the progress bar and the fly-in.
+// the map comes first; sequential progress polls drive the progress bar and the fly-in.
 // Selection (format ?f=, pinned post ?v=, grouping ?by=) lives in the URL without a server trip.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { CompetitorRow, DecodeView, DecodedPostRow, DecodeFormatRow, DecodeRunRow } from '@pratapai/content-pipeline';
@@ -10,6 +10,7 @@ import { Notice, Section } from './viz';
 import { LogScatter, Face, type ScatterPoint } from './LogScatter';
 import { Competitors } from './Competitors';
 import { useAction } from './actions';
+import { poll } from '@/app/content/_lib/poll';
 import { median } from '@pratapai/content-pipeline/core';
 import { CATEGORY, NO_CATEGORY, PLATFORM, compact, times } from '@/app/content/_lib/format';
 
@@ -66,16 +67,27 @@ export function Decode({ view, initial, apifyReady, youtubeReady, styles }: {
   maxSeq.current = posts.reduce((m, p) => Math.max(m, p.seq), 0);
   useEffect(() => {
     if (!live || !run) return;
-    const t = setInterval(async () => {
-      const r = await fetch(`/content/api/decode/${run.id}?after=${maxSeq.current}`).then((res) => res.json()).catch(() => null);
-      if (!r?.ok) return;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const stop = poll(async (signal) => {
+      const r = await fetch(`/content/api/decode/${run.id}?after=${maxSeq.current}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) }).then((res) => res.json()).catch(() => null);
+      if (signal.aborted || !r?.ok) return;
       setRun(r.run);
       setFormats(r.formats);
+      // A finished run tears down this effect; keep its last batch before cancelling animations.
+      if (r.run.status !== 'running') {
+        setPosts((cur) => [...cur, ...(r.posts as DecodedPostRow[]).filter((p) => !cur.some((c) => c.id === p.id))]);
+        return;
+      }
       // A batch lands in one poll; drip it in one card at a time so it reads as a stream.
-      (r.posts as DecodedPostRow[]).forEach((p, i) => setTimeout(() =>
-        setPosts((cur) => (cur.some((c) => c.id === p.id) ? cur : [...cur, p])), i * DRIP));
+      (r.posts as DecodedPostRow[]).forEach((p, i) => {
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          setPosts((cur) => (cur.some((c) => c.id === p.id) ? cur : [...cur, p]));
+        }, i * DRIP);
+        timers.add(timer);
+      });
     }, 1000);
-    return () => clearInterval(t);
+    return () => { stop(); timers.forEach(clearTimeout); };
   }, [live, run?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- selection ↔ URL (no navigation) ----

@@ -15,9 +15,9 @@ export default async function HooksPage() {
   let error: string | null = null;
   try {
     [hooks, styles, weights] = await Promise.all([
-      listHooks(getContext(), { limit: 500 }),
-      listStyles(getContext()).then((r) => r.map((s) => ({ id: s.id, name: s.name }))),
-      hookPatternWeights(getContext()).catch(() => []),
+      listHooks((await getContext()), { limit: 500 }),
+      listStyles((await getContext())).then((r) => r.map((s) => ({ id: s.id, name: s.name }))),
+      hookPatternWeights((await getContext())).catch(() => []),
     ]);
   } catch (e) { error = (e as Error).message; }
   const head = (

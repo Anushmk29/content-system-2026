@@ -20,8 +20,8 @@ export default async function DecodePage({ searchParams }: { searchParams: Searc
   let error: string | null = null;
   try {
     [view, styles] = await Promise.all([
-      getDecodeView(getContext(), sp.run),
-      listStyles(getContext()).then((r) => r.map((s) => ({ id: s.id, name: s.name }))),
+      getDecodeView((await getContext()), sp.run),
+      listStyles((await getContext())).then((r) => r.map((s) => ({ id: s.id, name: s.name }))),
     ]);
   } catch (e) { error = (e as Error).message; }
   const health = await loadHealth();

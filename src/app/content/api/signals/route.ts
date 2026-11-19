@@ -7,7 +7,7 @@ import { handle } from '@/app/content/_lib/api-guard';
 // { rawText, channel?, sourceUrl? }
 export const POST = handle(async (req: Request) => {
   const body = (await req.json()) as Record<string, unknown>;
-  const row = await addSignal(getContext(), {
+  const row = await addSignal((await getContext()), {
     rawText: typeof body.rawText === 'string' ? body.rawText : '',
     channel: typeof body.channel === 'string' ? body.channel : null,
     sourceUrl: typeof body.sourceUrl === 'string' ? body.sourceUrl : null,

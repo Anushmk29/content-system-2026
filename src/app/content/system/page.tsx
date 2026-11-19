@@ -1,8 +1,9 @@
 // System — connections hub + every pipeline step's health, run history and the full
 // activity log. Anything broken says what's wrong and exactly how to fix it.
 import Link from 'next/link';
-import { getContext, getRunHistory, getActivity, getActions, type HealthReport } from '@pratapai/content-pipeline';
-import { loadHealth } from '@/app/content/_lib/data';
+import { SettingsForm } from './SettingsForm';
+import { settingsView } from '@pratapai/content-pipeline';
+import { getContext, getSystemHealth, getRunHistory, getActivity, getActions, type HealthReport } from '@pratapai/content-pipeline';
 import { PageHead, KpiStrip, Tile, Dot, Chip } from '@/app/content/_components/viz';
 import { RunModuleButton } from '@/app/content/_components/actions';
 import { ago, when, HEALTH_COLOR, RUN_COLOR, healthIssue } from '@/app/content/_lib/format';
@@ -19,8 +20,9 @@ const CONNECTIONS: Record<string, { name: string; role: string; env: string[]; f
 };
 
 export default async function SystemPage() {
-  const ctx = getContext();
-  const health = await loadHealth();
+  const ctx = await getContext();
+  const settings = await settingsView(ctx.db);
+  const health = await getSystemHealth(ctx);
   const [runs, activity, actions] = await Promise.all([
     getRunHistory(ctx, 60).catch(() => []), getActivity(ctx, 60).catch(() => []), getActions(ctx, 100).catch(() => null),
   ]);
@@ -30,6 +32,7 @@ export default async function SystemPage() {
   return (
     <>
       <PageHead title="System" sub={`Checked ${ago(health.checkedAt)}. Broken things sort first, each with its fix.`} />
+      <SettingsForm fields={settings.fields} ready={settings.ready} />
       <KpiStrip items={[
         { label: 'Overall', value: health.overall },
         { label: 'Steps ok', value: health.modules.filter((m) => m.lastStatus === 'ok').length, denom: `${health.modules.length}` },

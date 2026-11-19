@@ -8,7 +8,7 @@ import { handle } from '@/app/content/_lib/api-guard';
 export const POST = handle(async (req: Request) => {
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined);
-  const run = await startDecode(getContext(), {
+  const run = await startDecode((await getContext()), {
     competitorIds: strings(b.competitorIds),
     platforms: strings(b.platforms),
     lookbackDays: typeof b.lookbackDays === 'number' ? b.lookbackDays : undefined,

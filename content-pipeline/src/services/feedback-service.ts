@@ -33,8 +33,8 @@ export async function reviseItem(ctx: ModuleContext, item: ContentItemRow, feedb
   const pick = (k: string) => (typeof o[k] === 'string' && (o[k] as string).trim() ? (o[k] as string).trim() : undefined);
   const body = pick('body');
   if (!body) throw new Error('the rewrite came back empty');
-  const row = await createRepo(ctx.db).updateItemCopy(item.id, { hook: pick('hook'), body, cta: pick('cta') });
-  if (!row) throw new Error('the post is no longer editable');
+  const row = await createRepo(ctx.db).updateItemCopy(item.id, { hook: pick('hook'), body, cta: pick('cta') }, item);
+  if (!row) throw new Error('The post changed or is no longer editable. Reload it before rewriting.');
   return row;
 }
 

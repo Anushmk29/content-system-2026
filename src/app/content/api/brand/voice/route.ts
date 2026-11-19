@@ -9,7 +9,7 @@ export const maxDuration = 300; // an Apify import can take a few minutes
 //   { platform, handle }                 → { samples } the account's best recent posts (Apify)
 export const POST = handle(async (req: Request) => {
   const b = (await req.json()) as { samples?: unknown; platform?: unknown; handle?: unknown };
-  const ctx = getContext();
+  const ctx = await getContext();
   if (Array.isArray(b.samples)) {
     const r = await extractVoice(ctx, b.samples.filter((s): s is string => typeof s === 'string'));
     return NextResponse.json({ ok: true, ...r, message: 'Voice guide written — edit it, then save' });

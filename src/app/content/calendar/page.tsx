@@ -23,10 +23,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
 
   let data: CalendarData | null = null;
   let error: string | null = null;
-  try { data = await getCalendar(getContext(), from, to); } catch (e) { error = (e as Error).message; }
+  try { data = await getCalendar((await getContext()), from, to); } catch (e) { error = (e as Error).message; }
   if (!data) return (<><PageHead title="Calendar" /><NeedsDb error={error} /></>);
 
-  const sync = getContext().env.postizSync;
+  const sync = (await getContext()).env.postizSync;
   const toCal = (i: ContentItemRow, at: string | null): CalItem => ({
     id: i.id, title: i.title, platform: i.platform, format: i.format, status: i.status, at,
     movable: (i.status === 'approved' && !i.postiz_id)

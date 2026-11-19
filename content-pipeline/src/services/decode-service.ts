@@ -152,9 +152,9 @@ export type DecodeView = Awaited<ReturnType<typeof getDecodeView>>;
 
 // ---- starting / stopping -----------------------------------------------------
 /** `self`: scrape the client's own accounts (Brand Kit) instead of competitors — "Refresh my results". */
-interface StartDecodeInput { competitorIds?: string[]; platforms?: string[]; lookbackDays?: number; postCap?: number; resumeRunId?: string; self?: boolean }
+interface StartDecodeInput { competitorIds?: string[]; platforms?: string[]; lookbackDays?: number; postCap?: number; resumeRunId?: string; self?: boolean; wait?: boolean }
 
-/** Creates (or resumes) a run and works it in the background. Returns as soon as the run row exists. */
+/** Creates (or resumes) a run. Dashboard calls return at once; `wait` keeps scheduled callers alive until completion. */
 export async function startDecode(ctx: ModuleContext, input: StartDecodeInput = {}): Promise<DecodeRunRow> {
   if (!ctx.adapters.claude.configured) throw new Error('No LLM configured — Decode needs one to break posts down');
 
@@ -191,7 +191,12 @@ export async function startDecode(ctx: ModuleContext, input: StartDecodeInput = 
   });
   // ponytail: in-process background work — fine for one long-lived `next` server; a serverless
   // deploy needs a queue/cron to call runDecode instead.
-  void withCostScope({ feature: input.self ? 'own_results' : 'decode', refType: 'decode_run', refId: run!.id }, () => runDecode(ctx, run!.id)).catch((e) => ctx.logger?.error('decode run crashed', { runId: run!.id, error: (e as Error).message }));
+  const work = withCostScope({ feature: input.self ? 'own_results' : 'decode', refType: 'decode_run', refId: run!.id }, () => runDecode(ctx, run!.id));
+  if (input.wait) {
+    await work;
+    return (await getRun(ctx, run.id))!;
+  }
+  void work.catch((e) => ctx.logger?.error('decode run crashed', { runId: run!.id, error: (e as Error).message }));
   return run;
 }
 
@@ -320,7 +325,9 @@ async function syncOwnMetrics(ctx: ModuleContext, runId: string): Promise<number
 /** Transcribes the best video posts (cached by URL). Returns false when stopped. */
 async function transcribeVideos(ctx: ModuleContext, runId: string, stopped: () => Promise<boolean>): Promise<boolean> {
   const t = ctx.adapters.transcriber;
-  if (!t?.cap || !t.configured) return true;
+  if (!t?.cap) return true;
+  await t.healthCheck();
+  if (!t.configured) return true;
   const vids = (await ctx.db.query<{ id: string; url: string; cached: boolean }>(
     `select p.id, p.url, tr.text is not null as cached from content.decoded_posts p ${TRANSCRIPT_JOIN}
      where p.run_id = $1 and p.post_type = 'video' order by p.vs_own_median desc nulls last limit $2`, [runId, t.cap])).rows;

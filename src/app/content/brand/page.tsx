@@ -7,7 +7,7 @@ import { BrandKit } from '@/app/content/brand/_components/BrandKit';
 export default async function BrandPage() {
   let kit: Brand | null = null, fonts: FontRow[] = [], photos = 0, error: string | null = null;
   try {
-    const ctx = getContext();
+    const ctx = await getContext();
     const b = await loadBrand(ctx);
     [kit, fonts, photos] = [b.saved ? b : EMPTY_BRAND, await listFonts(ctx), (await getPhotos(ctx)).length];
   } catch (e) { error = (e as Error).message; }

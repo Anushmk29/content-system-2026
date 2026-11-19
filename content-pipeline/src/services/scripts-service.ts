@@ -35,8 +35,17 @@ export async function listScripts(ctx: ModuleContext): Promise<ScriptRow[]> {
  *  so own-results matching (content.norm_url) finds it. Null when it isn't a YouTube video link. */
 export function youtubeUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const m = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/))([\w-]{11})/.exec(raw.trim());
-  return m ? `https://youtu.be/${m[1]}` : null;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    let id: string | null = null;
+    if (url.hostname === 'youtu.be') id = /^\/([\w-]{11})\/?$/.exec(url.pathname)?.[1] ?? null;
+    else if (/(^|\.)youtube\.com$/.test(url.hostname)) {
+      id = url.pathname === '/watch' ? url.searchParams.get('v')
+        : /^\/(?:shorts|live|embed)\/([\w-]{11})\/?$/.exec(url.pathname)?.[1] ?? null;
+    }
+    return id && /^[\w-]{11}$/.test(id) ? `https://youtu.be/${id}` : null;
+  } catch { return null; }
 }
 
 export async function markFilmed(ctx: ModuleContext, id: string, filmed: boolean): Promise<{ ok: boolean; message: string }> {
@@ -47,7 +56,7 @@ export async function markFilmed(ctx: ModuleContext, id: string, filmed: boolean
 }
 
 const HOSTS: Record<string, RegExp> = {
-  instagram: /(^|.)instagram.com$/, linkedin: /(^|.)linkedin.com$/, facebook: /(^|.)(facebook.com|fb.watch)$/, reddit: /(^|.)(reddit.com|redd.it)$/,
+  instagram: /(^|\.)instagram\.com$/, linkedin: /(^|\.)linkedin\.com$/, facebook: /(^|\.)(facebook\.com|fb\.watch)$/, reddit: /(^|\.)(reddit\.com|redd\.it)$/,
 };
 
 /** The link of the live post on its own platform (YouTube links normalised), else null. */
@@ -56,7 +65,7 @@ export function postedUrl(platform: string, raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   try {
     const u = new URL(raw.trim());
-    return u.protocol === 'https:' && HOSTS[platform]?.test(u.hostname) ? u.toString() : null;
+    return u.protocol === 'https:' && !u.username && !u.password && HOSTS[platform]?.test(u.hostname) ? u.toString() : null;
   } catch { return null; }
 }
 

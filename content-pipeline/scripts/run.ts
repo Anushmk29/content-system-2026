@@ -2,10 +2,10 @@
 //   Run all modules:     npm run pipeline
 //   Run one module:      npm run pipeline -- draft_generator
 // Env is loaded from ../.env and/or ../.env.content via the npm script (node --env-file-if-exists).
-import { buildContext, runModule, runModules, MODULES, getModule } from '../src/index.ts';
+import { getContext, runModule, runModules, MODULES, getModule } from '../src/index.ts';
 
 const id = process.argv[2];
-const ctx = buildContext();
+const ctx = await getContext();
 
 const records = id
   ? [await runModule(getModule(id) ?? fail(id), ctx)]

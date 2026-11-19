@@ -26,8 +26,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   const sp = await params(searchParams);
   let board: IdeaBoard | null = null;
   let error: string | null = null;
-  try { board = await getIdeaBoard(getContext()); } catch (e) { error = (e as Error).message; }
-  const pillars = pillarSlugs(await loadBrand(getContext()));
+  try { board = await getIdeaBoard((await getContext())); } catch (e) { error = (e as Error).message; }
+  const pillars = pillarSlugs(await loadBrand((await getContext())));
   if (!board) return (<><PageHead title="All posts" /><NeedsDb error={error} /></>);
 
   const q = (sp.q ?? '').toLowerCase();

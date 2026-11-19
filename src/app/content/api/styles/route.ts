@@ -14,7 +14,7 @@ export const POST = handle(async (req: Request) => {
   if (files.length === 0) throw new Error('choose an image');
   if (files.length > 10) throw new Error('at most 10 pages');
   if (files.some((f) => f.size > MAX_BYTES)) throw new Error('an image is over 15 MB');
-  const style = await createStyle(getContext(), {
+  const style = await createStyle((await getContext()), {
     name: String(form.get('name') ?? ''),
     images: await Promise.all(files.map(async (f) => Buffer.from(await f.arrayBuffer()))),
   });

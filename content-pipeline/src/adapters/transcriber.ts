@@ -1,7 +1,7 @@
 // Local transcription for Decode: yt-dlp pulls a public video's audio, faster-whisper (Python)
 // turns it into text. Free, no API key, but it needs a real host with both installed — not a
 // serverless function (docs/operations/GO-LIVE.md). Video hooks become the actual spoken first lines.
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -39,16 +39,17 @@ export interface TranscriberAdapter extends Adapter {
 
 export function createTranscriber(cfg: TranscriberConfig = {}): TranscriberAdapter {
   const ytdlp = cfg.ytdlp ?? 'yt-dlp', python = cfg.python ?? 'python', model = cfg.model ?? 'small';
-  // Which tool is missing; checked once per process (importing faster_whisper takes ~1s).
+  // Importing faster_whisper can be slow: probe once asynchronously, never on the Node event loop.
   let missing: string[] | undefined;
-  const check = () => missing ??= [
-    spawnSync(ytdlp, ['--version'], { timeout: 15_000 }).status === 0 ? '' : `yt-dlp (${ytdlp})`,
-    spawnSync(python, ['-c', 'import faster_whisper'], { timeout: 30_000 }).status === 0 ? '' : `faster-whisper (pip install faster-whisper into ${python})`,
-  ].filter(Boolean);
+  let checking: Promise<string[]> | undefined;
+  const check = () => checking ??= Promise.all([
+    run(ytdlp, ['--version'], { timeout: 15_000 }).then(() => '', () => `yt-dlp (${ytdlp})`),
+    run(python, ['-c', 'import faster_whisper'], { timeout: 30_000 }).then(() => '', () => `faster-whisper (pip install faster-whisper into ${python})`),
+  ]).then((results) => missing = results.filter(Boolean));
 
   return {
     id: 'transcriber',
-    get configured() { return check().length === 0; },
+    get configured() { return missing?.length === 0; },
     cap: cfg.cap ?? 15,
 
     async transcribe(url) {
@@ -67,7 +68,7 @@ export function createTranscriber(cfg: TranscriberConfig = {}): TranscriberAdapt
     },
 
     async healthCheck(): Promise<HealthReport> {
-      const m = check();
+      const m = await check();
       return m.length
         ? report('transcriber', 'unconfigured', `missing: ${m.join(', ')} — video posts keep their captions`)
         : report('transcriber', 'ok', `yt-dlp + faster-whisper (${model}) found`, { model, cap: cfg.cap ?? 15 });

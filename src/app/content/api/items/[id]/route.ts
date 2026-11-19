@@ -10,12 +10,12 @@ export const maxDuration = 120;
 export const PATCH = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = (await req.json()) as Record<string, unknown>;
-  const result = 'claim' in body ? await updateClaim(getContext(), id, body.claim, req.headers.get('x-content-role'))
-    : 'resubmit' in body ? await resubmitItem(getContext(), id)
-    : 'plannedAt' in body ? await planItem(getContext(), id, body.plannedAt)
-    : 'channels' in body ? await setItemChannels(getContext(), id, body.channels)
-    : 'hookId' in body ? await rewriteWithHook(getContext(), id, body.hookId)
-    : 'swapHook' in body ? await applyHookOption(getContext(), id, body.swapHook, body.pattern)
-    : await editItemCopy(getContext(), id, body);
+  const result = 'claim' in body ? await updateClaim((await getContext()), id, body.claim, req.headers.get('x-content-role'))
+    : 'resubmit' in body ? await resubmitItem((await getContext()), id)
+    : 'plannedAt' in body ? await planItem((await getContext()), id, body.plannedAt)
+    : 'channels' in body ? await setItemChannels((await getContext()), id, body.channels)
+    : 'hookId' in body ? await rewriteWithHook((await getContext()), id, body.hookId)
+    : 'swapHook' in body ? await applyHookOption((await getContext()), id, body.swapHook, body.pattern)
+    : await editItemCopy((await getContext()), id, body);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }, { key: 'message' });

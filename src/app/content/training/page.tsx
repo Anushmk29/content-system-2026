@@ -6,7 +6,7 @@ import { PageHead, KpiStrip, Section, NeedsDb, Chip } from '@/app/content/_compo
 import { LabelQueue, SeedButton } from '@/app/content/training/_components/LabelQueue';
 
 export default async function TrainingPage() {
-  const ctx = getContext();
+  const ctx = await getContext();
   let training: TrainingOverview | null = null;
   let error: string | null = null;
   try { training = await getTrainingOverview(ctx); } catch (e) { error = (e as Error).message; }
@@ -32,7 +32,7 @@ export default async function TrainingPage() {
             <SeedButton />
             {!jevOn && <Chip color="var(--faint)">Jev off — the “Jev was right” option is hidden until it runs</Chip>}
           </div>
-          <LabelQueue queue={training.queue} pillars={pillarSlugs(await loadBrand(getContext()))} />
+          <LabelQueue queue={training.queue} pillars={pillarSlugs(await loadBrand((await getContext())))} />
       </Section>
     </>
   );

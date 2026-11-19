@@ -40,9 +40,9 @@ const DIMS: [keyof TopicRow, string][] = [
 export default async function IdeasPage() {
   let data: OperatorConsole | null = null;
   let error: string | null = null;
-  try { data = await getOperatorConsole(getContext()); } catch (e) { error = (e as Error).message; }
-  const kit = await loadBrand(getContext());
-  const on = await connectedPlatforms(getContext());
+  try { data = await getOperatorConsole((await getContext())); } catch (e) { error = (e as Error).message; }
+  const kit = await loadBrand((await getContext()));
+  const on = await connectedPlatforms((await getContext()));
   const pillars = pillarSlugs(kit);
   if (!data) return (<><PageHead title="Ideas" /><NeedsDb error={error} /></>);
 

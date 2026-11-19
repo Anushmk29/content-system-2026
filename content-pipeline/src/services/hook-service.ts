@@ -95,11 +95,12 @@ export async function rewriteWithHook(ctx: ModuleContext, itemId: string, hookId
   const body = typeof out.body === 'string' ? out.body.trim() : '';
   if (!options.length || !body) return { ok: false, message: 'The AI reply was unusable, try again.' };
   const best = options[0]!;
-  const r = await editItemCopy(ctx, itemId, { hook: best.hook, body });
-  if (r.ok) {
-    await ctx.db.query(`update content.content_items set hook_ref = $2, hook_pattern = coalesce($3, hook_pattern) where id = $1`,
+  const r = await ctx.db.tx(async (db) => {
+    const saved = await editItemCopy({ ...ctx, db }, itemId, { hook: best.hook, body }, item);
+    if (saved.ok) await db.query(`update content.content_items set hook_ref = $2, hook_pattern = coalesce($3, hook_pattern) where id = $1`,
       [itemId, h.id, best.pattern]);
-  }
+    return saved;
+  });
   return r.ok ? { ok: true, message: `Rewritten with that hook (score ${best.score})`, options } : r;
 }
 

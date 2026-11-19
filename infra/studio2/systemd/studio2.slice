@@ -1,0 +1,10 @@
+[Unit]
+Description=Combined resource budget for Studio2 and its publishing services
+[Slice]
+CPUQuota=100%
+CPUWeight=50
+MemoryHigh=3072M
+MemoryMax=3584M
+MemorySwapMax=0
+TasksMax=2048
+IOWeight=50

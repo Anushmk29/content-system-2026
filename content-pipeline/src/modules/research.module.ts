@@ -111,37 +111,38 @@ async function relevant(ctx: ModuleContext, input: ResearchInputRow): Promise<bo
  *  `webCheck: false` (the batch path) leaves the check to ensureMarketContext at draft time, so it is
  *  paid only for topics that get drafted. "Make posts" on Ideas checks at once (it drafts next). */
 export async function researchSignal(ctx: ModuleContext, input: ResearchInputRow, opts: { webCheck?: boolean } = {}): Promise<{ topicId: string; checked: boolean; checkError?: string }> {
-  let marketContext: string | null = null;
-  let checkError: string | undefined;
-  if (opts.webCheck !== false) {
-    try {
-      marketContext = await marketCheck(ctx, input.raw_text);
-    } catch (e) {
-      checkError = (e as Error).message;
+  return ctx.db.tx(async (db) => {
+    const current = (await db.query<ResearchInputRow>(
+      `select * from content.research_inputs where id = $1 and status = 'new' for update`, [input.id])).rows[0];
+    if (!current) throw new Error('Signal already used or dropped. Reload the Ideas page.');
+    let marketContext: string | null = null;
+    let checkError: string | undefined;
+    if (opts.webCheck !== false) {
+      try {
+        marketContext = await marketCheck(ctx, current.raw_text);
+      } catch (e) {
+        checkError = (e as Error).message;
+      }
     }
-  }
-  const raw = await ctx.adapters.claude.complete(
-    buildResearchPrompt({ rawText: input.raw_text, channel: input.channel, marketContext }),
-    { system: researchSystem(), model: cheapModelOf(ctx) },
-  );
-  const topic = parseExtractedTopic(raw);
-  // Topic + "signal processed" commit together, so a crash can't leave a topic whose signal is drafted again.
-  const topicId = await ctx.db.tx(async (q) => {
-    const repo = createRepo(q);
-    const id = await repo.insertTopic({
+    const raw = await ctx.adapters.claude.complete(
+      buildResearchPrompt({ rawText: current.raw_text, channel: current.channel, marketContext }),
+      { system: researchSystem(), model: cheapModelOf(ctx) },
+    );
+    const topic = parseExtractedTopic(raw);
+    const repo = createRepo(db);
+    const topicId = await repo.insertTopic({
       title: topic.title,
       pillar: topic.pillar,
       funnelStage: topic.funnelStage,
-      source: input.channel,
-      sourceDetail: input.raw_text.slice(0, 500),
+      source: current.channel,
+      sourceDetail: current.raw_text.slice(0, 500),
       customerLanguage: topic.customerLanguage,
       marketContext,
       status: 'new',
     });
-    await repo.markResearchProcessed(input.id, id);
-    return id;
+    await repo.markResearchProcessed(current.id, topicId);
+    return { topicId, checked: !!marketContext, checkError };
   });
-  return { topicId, checked: !!marketContext, checkError };
 }
 
 export const researchModule: Module = {

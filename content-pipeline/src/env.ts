@@ -67,21 +67,15 @@ export interface ContentEnv {
   dailyBudgetUsd?: number;
 }
 
-function read(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.trim().length > 0 ? v.trim() : undefined;
-}
-
-/** A number setting; a typo fails loudly instead of becoming NaN. */
-function num(name: string): number | undefined {
-  const v = read(name);
-  if (v === undefined) return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n)) throw new Error(`${name} must be a number, got "${v}"`);
-  return n;
-}
-
-export function loadEnv(): ContentEnv {
+export function loadEnv(source: Record<string, string | undefined> = process.env): ContentEnv {
+  const read = (name: string): string | undefined => source[name]?.trim() || undefined;
+  const num = (name: string): number | undefined => {
+    const v = read(name);
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw new Error(`${name} must be a number`);
+    return n;
+  };
   return {
     databaseUrl: read('CONTENT_DATABASE_URL'),
     openrouterApiKey: read('CONTENT_OPENROUTER_API_KEY'),

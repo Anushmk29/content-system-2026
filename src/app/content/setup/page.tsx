@@ -7,7 +7,7 @@ import { Setup } from '@/app/content/setup/_components/Setup';
 export default async function SetupPage() {
   let kit: Brand | null = null, fonts: FontRow[] = [], competitors: CompetitorRow[] = [], error: string | null = null;
   try {
-    const ctx = getContext();
+    const ctx = await getContext();
     const b = await loadBrand(ctx);
     [kit, fonts, competitors] = [b.saved ? b : EMPTY_BRAND, await listFonts(ctx), await listCompetitors(ctx)];
   } catch (e) { error = (e as Error).message; }

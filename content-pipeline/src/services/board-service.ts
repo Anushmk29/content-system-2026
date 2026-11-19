@@ -90,7 +90,7 @@ const MAX_COPY = 20_000;
 
 /** Edit hook/body/CTA from the drawer. Refused once the item is approved (the reviewer signed that text). */
 export async function editItemCopy(
-  ctx: ModuleContext, id: string, patch: { hook?: unknown; body?: unknown; cta?: unknown },
+  ctx: ModuleContext, id: string, patch: { hook?: unknown; body?: unknown; cta?: unknown }, expected?: Pick<ContentItemRow, 'hook' | 'body' | 'cta'>,
 ): Promise<{ ok: boolean; message: string }> {
   const clean: Record<string, string> = {};
   for (const k of ['hook', 'body', 'cta'] as const) {
@@ -100,8 +100,8 @@ export async function editItemCopy(
     clean[k] = v;
   }
   if (!Object.keys(clean).length) return { ok: false, message: 'Nothing to save.' };
-  const row = await createRepo(ctx.db).updateItemCopy(id, clean);
-  return row ? { ok: true, message: 'Saved' } : { ok: false, message: 'Copy is locked once approved (or item not found).' };
+  const row = await createRepo(ctx.db).updateItemCopy(id, clean, expected);
+  return row ? { ok: true, message: 'Saved' } : { ok: false, message: expected ? 'The post changed or was approved. Reload it before rewriting.' : 'Copy is locked once approved (or item not found).' };
 }
 
 /** Set the posting time for an approved item that hasn't gone to Postiz; the publisher honours it. */

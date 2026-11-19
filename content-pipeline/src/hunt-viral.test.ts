@@ -130,7 +130,7 @@ test('decode run on YouTube: transcribe → Jev judge → hunt score → skeleto
     adapters: {
       apify: { configured: false },
       youtube: { configured: true, async scrape() { return { costUsd: 0, posts: [vid(1, 500), vid(2, 50), vid(3, 5)] }; } },
-      transcriber: { configured: true, cap: 2, async transcribe(url: string) { transcribed++; return { text: `spoken words of ${url}`, segments: [], lang: 'en', durationS: 40 }; } },
+      transcriber: { configured: true, cap: 2, async healthCheck() { return { state: 'ok' }; }, async transcribe(url: string) { transcribed++; return { text: `spoken words of ${url}`, segments: [], lang: 'en', durationS: 40 }; } },
       jev: {
         configured: true, mode: 'shadow', model: 'typesafe/jev-1.13', minConfidence: 0.8, spentUsd: 0.0003,
         async decide(state: string) {

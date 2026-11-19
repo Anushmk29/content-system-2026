@@ -3,7 +3,7 @@
 import { cache } from 'react';
 import { getContext, getSystemHealth } from '@pratapai/content-pipeline';
 
-export const loadHealth = cache(() => getSystemHealth(getContext()));
+export const loadHealth = cache(async () => getSystemHealth(await getContext(), { cached: true }));
 
 /** Next 15 page props: searchParams arrive as a promise of string | string[]. */
 export type SearchParams = Promise<Record<string, string | string[] | undefined>>;

@@ -12,7 +12,7 @@ export const PATCH = handle(async (req: Request, { params }: { params: Promise<{
   if (typeof body.action !== 'string' || !isApprovalAction(body.action)) {
     return NextResponse.json({ ok: false, message: `Unknown action "${body.action}".` }, { status: 400 });
   }
-  const result = await applyApprovalDecision(getContext(), {
+  const result = await applyApprovalDecision((await getContext()), {
     itemId: id,
     action: body.action,
     decidedBy: 'dashboard',

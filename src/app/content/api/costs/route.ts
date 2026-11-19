@@ -6,7 +6,7 @@ import { handle } from '@/app/content/_lib/api-guard';
 export const GET = handle(async (req) => {
   const url = new URL(req.url);
   const range = costRange(url.searchParams.get('range'));
-  const body = await costsCsv(getContext(), range, { from: url.searchParams.get('from') ?? undefined, to: url.searchParams.get('to') ?? undefined });
+  const body = await costsCsv((await getContext()), range, { from: url.searchParams.get('from') ?? undefined, to: url.searchParams.get('to') ?? undefined });
   return new Response(body, {
     headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="costs-${range}.csv"` },
   });

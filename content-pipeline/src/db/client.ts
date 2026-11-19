@@ -26,24 +26,43 @@ const run = async <T>(c: Pool | PoolClient, text: string, params?: unknown[]): P
   return { rows: res.rows as T[], rowCount: res.rowCount ?? res.rows.length };
 };
 
-// Managed Postgres (Supabase, Neon, RDS, …) require TLS, and their certs are signed
-// by chains Node doesn't bundle — so a plain connection throws either
-// "no encryption" or "self-signed certificate in certificate chain". We enable TLS for
-// any non-local host (without forcing the operator to append ?sslmode=require), and skip
-// it for localhost. Override with CONTENT_DATABASE_SSL = require | no-verify | disable.
-// CONTENT_DATABASE_CA = path to the provider's CA cert (Supabase: Database settings → SSL
-// certificate) turns full verification on for remote hosts.
+// Supabase's private CA: https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
+const SUPABASE_CA = `-----BEGIN CERTIFICATE-----
+MIIDxDCCAqygAwIBAgIUbLxMod62P2ktCiAkxnKJwtE9VPYwDQYJKoZIhvcNAQEL
+BQAwazELMAkGA1UEBhMCVVMxEDAOBgNVBAgMB0RlbHdhcmUxEzARBgNVBAcMCk5l
+dyBDYXN0bGUxFTATBgNVBAoMDFN1cGFiYXNlIEluYzEeMBwGA1UEAwwVU3VwYWJh
+c2UgUm9vdCAyMDIxIENBMB4XDTIxMDQyODEwNTY1M1oXDTMxMDQyNjEwNTY1M1ow
+azELMAkGA1UEBhMCVVMxEDAOBgNVBAgMB0RlbHdhcmUxEzARBgNVBAcMCk5ldyBD
+YXN0bGUxFTATBgNVBAoMDFN1cGFiYXNlIEluYzEeMBwGA1UEAwwVU3VwYWJhc2Ug
+Um9vdCAyMDIxIENBMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqQXW
+QyHOB+qR2GJobCq/CBmQ40G0oDmCC3mzVnn8sv4XNeWtE5XcEL0uVih7Jo4Dkx1Q
+DmGHBH1zDfgs2qXiLb6xpw/CKQPypZW1JssOTMIfQppNQ87K75Ya0p25Y3ePS2t2
+GtvHxNjUV6kjOZjEn2yWEcBdpOVCUYBVFBNMB4YBHkNRDa/+S4uywAoaTWnCJLUi
+cvTlHmMw6xSQQn1UfRQHk50DMCEJ7Cy1RxrZJrkXXRP3LqQL2ijJ6F4yMfh+Gyb4
+O4XajoVj/+R4GwywKYrrS8PrSNtwxr5StlQO8zIQUSMiq26wM8mgELFlS/32Uclt
+NaQ1xBRizkzpZct9DwIDAQABo2AwXjALBgNVHQ8EBAMCAQYwHQYDVR0OBBYEFKjX
+uXY32CztkhImng4yJNUtaUYsMB8GA1UdIwQYMBaAFKjXuXY32CztkhImng4yJNUt
+aUYsMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAB8spzNn+4VU
+tVxbdMaX+39Z50sc7uATmus16jmmHjhIHz+l/9GlJ5KqAMOx26mPZgfzG7oneL2b
+VW+WgYUkTT3XEPFWnTp2RJwQao8/tYPXWEJDc0WVQHrpmnWOFKU/d3MqBgBm5y+6
+jB81TU/RG2rVerPDWP+1MMcNNy0491CTL5XQZ7JfDJJ9CCmXSdtTl4uUQnSuv/Qx
+Cea13BX2ZgJc7Au30vihLhub52De4P/4gonKsNHYdbWjg7OWKwNv/zitGDVDB9Y2
+CMTyZKG3XEu5Ghl1LEnI3QmEKsqaCLv12BnVjbkSeZsMnevJPs1Ye6TjjJwdik5P
+o/bKiIz+Fq8=
+-----END CERTIFICATE-----`;
+
+// Verify remote database certificates. CONTENT_DATABASE_CA supplies the provider's CA
+// when Node does not trust it. Explicit overrides: require | no-verify | disable.
 export function sslFor(url: string): false | { rejectUnauthorized: boolean; ca?: string } {
-  const mode = (process.env.CONTENT_DATABASE_SSL ?? '').trim().toLowerCase();
+  const mode = (process.env.CONTENT_DATABASE_SSL?.trim() || new URL(url).searchParams.get('sslmode') || '').toLowerCase();
   if (mode === 'disable') return false;
   const caPath = process.env.CONTENT_DATABASE_CA?.trim();
   if (caPath) return { rejectUnauthorized: true, ca: readFileSync(caPath, 'utf8') };
-  if (mode === 'require') return { rejectUnauthorized: true };
   if (mode === 'no-verify') return { rejectUnauthorized: false };
   const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url) || /\bhost=localhost\b/.test(url);
-  // Default: TLS on for remote hosts, relaxed verification (Supabase's pooler cert chain
-  // isn't in Node's trust store); off for local dev.
-  return isLocal ? false : { rejectUnauthorized: false };
+  if (isLocal && mode !== 'require') return false;
+  const supabase = /@(?:[a-z0-9-]+\.pooler\.supabase\.com|db\.[a-z0-9-]+\.supabase\.co)[:/]/i.test(url);
+  return supabase ? { rejectUnauthorized: true, ca: SUPABASE_CA } : { rejectUnauthorized: true };
 }
 
 // One pool per database URL for the whole process. `next dev` re-evaluates this module on reloads;
@@ -57,8 +76,11 @@ export function createDb(databaseUrl: string | undefined): Db {
     if (!poolPromise) {
       POOLS.set(databaseUrl, poolPromise = (async () => {
         const { default: pg } = await import('pg');
+        const connection = new URL(databaseUrl);
+        // pg's sslmode parsing otherwise overwrites the verified CA configured below.
+        connection.searchParams.delete('sslmode');
         const pool = new pg.Pool({
-          connectionString: databaseUrl,
+          connectionString: connection.toString(),
           // Every checked-out connection is scoped to the content schema; no query runs past 2 min.
           options: '-c search_path=content,public -c statement_timeout=120000',
           ssl: sslFor(databaseUrl),

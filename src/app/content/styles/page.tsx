@@ -14,7 +14,7 @@ export default async function StylesPage() {
   let styles: StyleRow[] | null = null;
   let error: string | null = null;
   try {
-    const ctx = getContext();
+    const ctx = await getContext();
     await ensureStarterExamples(ctx).catch((e) => console.warn('starter examples', (e as Error).message));
     styles = await listStyles(ctx);
   } catch (e) { error = (e as Error).message; }

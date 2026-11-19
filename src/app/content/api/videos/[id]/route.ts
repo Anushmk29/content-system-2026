@@ -11,7 +11,7 @@ export const maxDuration = 600;
 export const POST = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { analyze?: boolean; fresh?: boolean; useIdea?: unknown };
-  const ctx = getContext();
+  const ctx = await getContext();
   const result = body.analyze ? await analyzeVideo(ctx, id, { fresh: body.fresh === true })
     : body.useIdea !== undefined ? await useVideoIdea(ctx, id, body.useIdea)
     : await transcribeVideo(ctx, id);

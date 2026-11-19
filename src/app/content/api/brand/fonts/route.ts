@@ -10,7 +10,7 @@ export const POST = handle(async (req: Request) => {
   if (!files.length) throw new Error('Choose a .ttf or .otf file.');
   if (files.length > 8) throw new Error('At most 8 files at once.');
   if (files.some((f) => f.size > MAX_BYTES)) throw new Error('A font file is over 5 MB.');
-  const ctx = getContext();
+  const ctx = await getContext();
   const saved = [];
   for (const f of files) saved.push(await uploadFont(ctx, Buffer.from(await f.arrayBuffer())));
   const families = [...new Set(saved.map((s) => s.family))];
@@ -21,6 +21,6 @@ export const POST = handle(async (req: Request) => {
 export const DELETE = handle(async (req: Request) => {
   const family = new URL(req.url).searchParams.get('family');
   if (!family) return NextResponse.json({ ok: false, error: 'family is required' }, { status: 400 });
-  await deleteFont(getContext(), family);
+  await deleteFont((await getContext()), family);
   return NextResponse.json({ ok: true, message: 'Removed' });
 });

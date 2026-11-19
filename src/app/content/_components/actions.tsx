@@ -34,9 +34,10 @@ export function useAction({ reload = false }: { reload?: boolean } = {}) {
     const load = startLoad(title ?? titleFor(method, path));
     try {
       const raw = body === undefined || body instanceof FormData; // FormData sets its own multipart header
+      const background = method === 'POST' && /^\/content\/api\/(?:run|modules\/[^/]+\/run)$/.test(path);
       const res = await fetch(path, {
         method,
-        headers: raw ? undefined : { 'content-type': 'application/json' },
+        headers: { ...(!raw ? { 'content-type': 'application/json' } : {}), ...(background ? { prefer: 'respond-async' } : {}) },
         body: raw ? (body as FormData | undefined) : JSON.stringify(body),
       });
       const data: Json = await res.json().catch(() => ({}));
@@ -64,7 +65,7 @@ export function useAction({ reload = false }: { reload?: boolean } = {}) {
   return { call, busy, pending: viewOnly || busy !== null || refreshing, viewOnly, msg, feedback, clear: () => setMsg(null) };
 }
 
-// ---- 3D loader: every call() that runs past SHOW_AFTER_MS opens one shared modal --------
+// ---- Nonblocking status panel for calls that run past SHOW_AFTER_MS --------
 // Steps are the request's real lifecycle (no fake timers): Sent → Processing (with elapsed
 // seconds) → Done/Failed. A pipeline run also lists each module that ran as one word.
 type Load = { id: number; title: string; done: string[]; now: string; failed?: string; since: number; hidden?: boolean; leaving?: boolean };
@@ -72,7 +73,7 @@ let current: Load | null = null;
 let seq = 0;
 const subs = new Set<() => void>();
 const setLoad = (l: Load | null) => { current = l; subs.forEach((f) => f()); };
-/** Play the exit animation, then unmount (only if this load still owns the modal). */
+/** Play the exit animation, then unmount (only if this load still owns the panel). */
 const closeLoad = (id: number, patch: Partial<Load> = {}) => {
   if (current?.id !== id) return;
   setLoad({ ...current, ...patch, leaving: true });
@@ -81,8 +82,8 @@ const closeLoad = (id: number, patch: Partial<Load> = {}) => {
 const SHOW_AFTER_MS = 600; // quick saves and toggles never flash the modal
 
 const TITLES: [RegExp, string][] = [
-  [/\/api\/run$/, 'Running the pipeline'],
-  [/\/modules\/([^/]+)\/run$/, 'Running $1'],
+  [/\/api\/run$/, 'Starting the pipeline'],
+  [/\/modules\/([^/]+)\/run$/, 'Starting $1'],
   [/\/asset$/, 'Making the creative'],
   [/\/brand\/voice$/, 'Reading the brand voice'],
   [/\/decode$/, 'Starting Decode'],
@@ -103,7 +104,7 @@ function startLoad(title: string) {
   return {
     end(ok: boolean, text: string, modules: string[]) {
       clearTimeout(show);
-      if (current?.id !== id) return; // never shown, or a newer action took the modal
+      if (current?.id !== id) return; // never shown, or a newer action took the panel
       setLoad(ok
         ? { ...current, done: [...current.done, 'Processed', ...modules, 'Done'], now: '' }
         : { ...current, now: '', failed: text });
@@ -175,10 +176,11 @@ export function ApiButton({ path, method = 'POST', body, label, busyLabel = '…
 
 /** Run one pipeline module (e.g. from a Today action). */
 export function RunModuleButton({ id, label, className = 'btn btn-sm' }: { id: string; label: string; className?: string }) {
-  return <ApiButton path={`/content/api/modules/${id}/run`} label={`▶ ${label}`} busyLabel="▸ running…" okText={summarizeRun} className={className} />;
+  return <ApiButton path={`/content/api/modules/${id}/run`} label={`▶ ${label}`} busyLabel="▸ starting…" okText={summarizeRun} className={className} />;
 }
 
 export function summarizeRun(data: Json): string {
+  if (data?.status === 'started') return data.message;
   if (Array.isArray(data)) {
     const bad = data.filter((r: Json) => r.status === 'error' || r.status === 'degraded').length;
     return `${data.length} step${data.length === 1 ? '' : 's'} done${bad ? ` · ${bad} had a problem (see Today)` : ''}`;

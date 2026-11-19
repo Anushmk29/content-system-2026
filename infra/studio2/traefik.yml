@@ -1,0 +1,34 @@
+# Add this file to the existing watched directory only after the local app checks pass.
+http:
+  routers:
+    studio2:
+      rule: "Host(`studio2.srv1675029.hstgr.cloud`)"
+      entryPoints: [websecure]
+      service: studio2
+      middlewares: [studio2-rate, studio2-connections, studio2-body, studio2-headers]
+      tls: { certResolver: letsencrypt, options: studio2-tls }
+  services:
+    studio2:
+      loadBalancer:
+        servers: [{ url: "http://127.0.0.1:18132" }]
+  middlewares:
+    studio2-rate:
+      rateLimit: { average: 10, burst: 60 }
+    studio2-connections:
+      inFlightReq: { amount: 20 }
+    studio2-body:
+      buffering: { maxRequestBodyBytes: 62914560, memRequestBodyBytes: 1048576 }
+    studio2-headers:
+      headers:
+        contentTypeNosniff: true
+        frameDeny: true
+        stsSeconds: 31536000
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders:
+          Server: ""
+          X-Powered-By: ""
+tls:
+  options:
+    studio2-tls:
+      minVersion: VersionTLS12
+      sniStrict: true

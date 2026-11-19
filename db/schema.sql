@@ -10,6 +10,14 @@
 create extension if not exists "pgcrypto";        -- gen_random_uuid()
 create schema if not exists content;
 
+-- Routine provider/settings overrides. Values are authenticated ciphertext, never plaintext keys.
+create table if not exists content.runtime_settings (
+  name text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table content.runtime_settings enable row level security;
+
 set search_path to content, public;
 
 -- ---------------------------------------------------------------------------

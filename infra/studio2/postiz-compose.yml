@@ -1,0 +1,157 @@
+# Existing workspace migration. Images are pinned to the exact versions from the old installation.
+x-limits: &limits
+  restart: unless-stopped
+  cgroup_parent: studio2.slice
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+services:
+  postiz:
+    <<: *limits
+    image: ghcr.io/gitroomhq/postiz-app@sha256:01b24a4fc1055f6833122c99614805bea702fdc0ee30c9b5d09330b521fa1efa
+    env_file:
+      - { path: ./private/postiz.env, format: raw }
+    # The preserved schema is migrated explicitly by an administrator, never by a public runtime.
+    command: [sh, -c, "nginx && pm2 ping && pnpm run --parallel pm2 && pm2 logs"]
+    cpus: 0.75
+    mem_limit: 1792m
+    memswap_limit: 1792m
+    pids_limit: 512
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, NET_BIND_SERVICE]
+    volumes:
+      - postiz-config:/config
+      - postiz-uploads:/uploads
+      - ./ops/postiz-nginx.conf:/etc/nginx/nginx.conf:ro
+    ports: ["127.0.0.1:18133:5000"]
+    networks:
+      backend:
+      egress:
+      publishing: { aliases: [postiz-publisher] }
+    depends_on:
+      postiz-redis: { condition: service_healthy }
+      temporal: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "Promise.all([fetch('http://127.0.0.1:4200',{redirect:'manual'}),fetch('http://127.0.0.1:5000/api/public/v1/integrations',{redirect:'manual'})]).then(r=>process.exit(r[0].status<400&&r[1].status===401?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+  postiz-redis:
+    <<: *limits
+    image: redis@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    user: redis
+    read_only: true
+    cap_drop: [ALL]
+    cpus: 0.15
+    mem_limit: 64m
+    pids_limit: 64
+    command: [redis-server, /run/secrets/redis.conf]
+    secrets: [redis.conf, redis-password]
+    volumes: [postiz-redis:/data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$(cat /run/secrets/redis-password)" redis-cli ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  temporal-postgresql:
+    <<: *limits
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    user: postgres
+    read_only: true
+    cap_drop: [ALL]
+    cpus: 0.25
+    mem_limit: 192m
+    pids_limit: 128
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD_FILE: /run/secrets/temporal-password
+    secrets: [temporal-password]
+    volumes: [temporal-postgres:/var/lib/postgresql/data]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U temporal]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  temporal-elasticsearch:
+    <<: *limits
+    image: elasticsearch@sha256:9a6443f55243f6acbfeb4a112d15eb3b9aac74bf25e0e39fa19b3ddd3a6879d0
+    user: "1003:0"
+    cpus: 0.5
+    mem_limit: 768m
+    memswap_limit: 768m
+    pids_limit: 256
+    cap_drop: [ALL]
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms256m -Xmx256m
+      xpack.security.enabled: "false"
+      node.store.allow_mmap: "false"
+      cluster.routing.allocation.disk.watermark.low: 512mb
+      cluster.routing.allocation.disk.watermark.high: 256mb
+      cluster.routing.allocation.disk.watermark.flood_stage: 128mb
+    volumes: [temporal-elasticsearch:/usr/share/elasticsearch/data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+  temporal:
+    <<: *limits
+    image: temporalio/auto-setup@sha256:607d68caa111338d754771efb876c92dfcdae06d056e4530bb31cd0f37406e6a
+    user: "1003:1003"
+    read_only: true
+    env_file:
+      - { path: ./private/temporal.env, format: raw }
+    cap_drop: [ALL]
+    cpus: 0.5
+    mem_limit: 384m
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    volumes: [temporal-config:/etc/temporal/config]
+    environment:
+      USER: studio2
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_SEEDS: temporal-postgresql
+      TEMPORAL_NAMESPACE: default
+      ENABLE_ES: "true"
+      ES_SEEDS: temporal-elasticsearch
+      ES_VERSION: v7
+    networks: [backend]
+    depends_on:
+      temporal-postgresql: { condition: service_healthy }
+      temporal-elasticsearch: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, temporal, operator, cluster, health, --address, "temporal:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+secrets:
+  temporal-password: { file: ./private/temporal-password }
+  redis-password: { file: ./private/redis-password }
+  redis.conf: { file: ./private/redis.conf }
+volumes:
+  postiz-config:
+  postiz-uploads:
+  postiz-redis:
+  temporal-postgres:
+  temporal-elasticsearch:
+  temporal-config:
+networks:
+  backend: { internal: true }
+  publishing: { external: true, name: studio2-publishing }
+  egress:
+    ipam:
+      config: [{ subnet: "172.29.240.16/28" }]

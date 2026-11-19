@@ -9,7 +9,7 @@ export const maxDuration = 300;
 export const POST = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const b = (await req.json()) as { topic?: unknown; platform?: unknown; kind?: unknown };
   if (!isVisualKind(b.kind)) throw new Error('Pick Image or Carousel.');
-  const r = await makeFromExample(getContext(), {
+  const r = await makeFromExample((await getContext()), {
     styleId: (await params).id, kind: b.kind,
     topic: typeof b.topic === 'string' ? b.topic : '',
     platform: typeof b.platform === 'string' ? b.platform : '',
@@ -24,12 +24,12 @@ export const POST = handle(async (req: Request, { params }: { params: Promise<{ 
 // PATCH /content/api/styles/:id { name } → rename.
 export const PATCH = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const b = (await req.json()) as { name?: unknown };
-  await renameStyle(getContext(), (await params).id, typeof b.name === 'string' ? b.name : '');
+  await renameStyle((await getContext()), (await params).id, typeof b.name === 'string' ? b.name : '');
   return NextResponse.json({ ok: true, message: 'Renamed' });
 });
 
 // DELETE /content/api/styles/:id → remove the style.
 export const DELETE = handle(async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  await deleteStyle(getContext(), (await params).id);
+  await deleteStyle((await getContext()), (await params).id);
   return NextResponse.json({ ok: true, message: 'Deleted' });
 });

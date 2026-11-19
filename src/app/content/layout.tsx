@@ -28,7 +28,7 @@ export default async function ContentLayout({ children }: { children: ReactNode 
   const admin = role === 'admin';
   const viewOnly = admin && !openMode(); // see _lib/api-guard.ts
 
-  const ctx = getContext();
+  const ctx = await getContext();
   // A client starts with the guided setup until it's finished; the setup itself has no sidebar.
   // Only a kit actually read as unfinished redirects; a DB hiccup must not bounce a client into setup.
   if ((h.get('x-content-path') ?? '').startsWith('/content/setup')) return bare;

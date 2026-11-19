@@ -201,6 +201,22 @@ test('hook library: ranked best first, used by drafting, rewrite locked after ap
   assert.match(rw.message, /^Rewritten with that hook/);
   const after = (await repo.getItem(ids[0]!))!;
   assert.deepEqual([after.hook, after.body, after.hook_ref], ['New hook', 'rewritten', hooks.at(-1)!.id]);
+  const complete = ctx.adapters.claude.complete;
+  let started!: () => void, finish!: (text: string) => void;
+  const generating = new Promise<void>((resolve) => { started = resolve; });
+  const reply = new Promise<string>((resolve) => { finish = resolve; });
+  ctx.adapters.claude.complete = async () => { started(); return reply; };
+  try {
+    const pending = rewriteWithHook(ctx, ids[0]!, best.id);
+    await generating;
+    await repo.updateItemCopy(ids[0]!, { body: 'Newer manual copy' });
+    finish(JSON.stringify({ hook: 'Late hook', body: 'Late AI copy' }));
+    const conflict = await pending;
+    assert.equal(conflict.ok, false);
+    assert.match(conflict.message, /post changed/);
+    const kept = (await repo.getItem(ids[0]!))!;
+    assert.deepEqual([kept.body, kept.hook_ref], ['Newer manual copy', after.hook_ref]);
+  } finally { ctx.adapters.claude.complete = complete; }
   await db.query(`update content.content_items set status = 'approved' where id = $1`, [ids[0]]);
   assert.equal((await rewriteWithHook(ctx, ids[0]!, best.id)).ok, false);
 });

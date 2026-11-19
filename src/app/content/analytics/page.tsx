@@ -21,7 +21,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   const range = (ANALYTICS_RANGES as readonly number[]).includes(Number(sp.range)) ? (Number(sp.range) as AnalyticsRange) : 30;
   let a: Analytics | null = null;
   let error: string | null = null;
-  try { a = await getAnalytics(getContext(), range); } catch (e) { error = (e as Error).message; }
+  try { a = await getAnalytics((await getContext()), range); } catch (e) { error = (e as Error).message; }
   const head = (
     <PageHead title="Results" sub="What performed, and the next move for each post.">
       {a?.own.ready

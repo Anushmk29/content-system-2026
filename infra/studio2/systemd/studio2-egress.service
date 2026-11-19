@@ -1,0 +1,10 @@
+[Unit]
+Description=Firewall only Studio2 outbound container traffic
+After=docker.service ufw.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /srv/studio2/ops/egress.sh
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target

@@ -10,8 +10,8 @@ import { EscTo, ApiButton } from './actions';
 import { PLATFORM, STATUS_COLOR, ago, when, prettyPillar, compact, times } from '@/app/content/_lib/format';
 
 export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; closeHref: string; linkFor: (id: string) => string }) {
-  const d = await getItemDetail(getContext(), id).catch(() => null);
-  const brand = await loadBrand(getContext());
+  const d = await getItemDetail((await getContext()), id).catch(() => null);
+  const brand = await loadBrand((await getContext()));
   if (!d) {
     return (
       <>
@@ -28,14 +28,14 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
   const claimsEditable = ['draft', 'needs_approval', 'approved'].includes(item.status) && !item.postiz_id;
   const hasCreative = item.platform !== 'blog';
   const [assets, styles] = hasCreative
-    ? await Promise.all([listItemAssets(getContext(), item.id).catch(() => []), editable ? listStyles(getContext()).catch(() => []) : []])
+    ? await Promise.all([listItemAssets((await getContext()), item.id).catch(() => []), editable ? listStyles((await getContext())).catch(() => []) : []])
     : [[], []];
-  const channels = live ? null : await platformChannels(getContext(), item.platform);
+  const channels = live ? null : await platformChannels((await getContext()), item.platform);
   // Hooks for this platform (any platform for a blog); the used one is looked up even if it's not in the top list.
   const forPlat = item.platform === 'blog' ? undefined : [item.platform];
   const [hooks, used] = await Promise.all([
-    editable ? listHooks(getContext(), { platforms: forPlat, limit: 40 }).catch(() => []) : [],
-    item.hook_ref ? listHooks(getContext(), { ids: [item.hook_ref], limit: 1 }).then((r) => r[0]).catch(() => undefined) : undefined,
+    editable ? listHooks((await getContext()), { platforms: forPlat, limit: 40 }).catch(() => []) : [],
+    item.hook_ref ? listHooks((await getContext()), { ids: [item.hook_ref], limit: 1 }).then((r) => r[0]).catch(() => undefined) : undefined,
   ]);
 
   return (

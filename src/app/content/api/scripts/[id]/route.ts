@@ -8,7 +8,7 @@ export const PATCH = handle(async (req: Request, { params }: { params: Promise<{
   const { id } = await params;
   const body = (await req.json()) as { filmed?: unknown; uploadedUrl?: unknown };
   const result = 'uploadedUrl' in body
-    ? await markUploaded(getContext(), id, body.uploadedUrl)
-    : await markFilmed(getContext(), id, body.filmed === true);
+    ? await markUploaded((await getContext()), id, body.uploadedUrl)
+    : await markFilmed((await getContext()), id, body.filmed === true);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }, { key: 'message' });

@@ -18,9 +18,9 @@ export default async function CheckPage({ searchParams }: { searchParams: Search
   let detail: CreativeDetail | null = null;
   let error: string | null = null;
   try {
-    list = await listCreatives(getContext());
+    list = await listCreatives((await getContext()));
     const id = sp.new ? undefined : sp.c ?? list[0]?.id;
-    if (id) detail = await getCreative(getContext(), id).catch(() => null);
+    if (id) detail = await getCreative((await getContext()), id).catch(() => null);
   } catch (e) { error = (e as Error).message; }
 
   const head = (

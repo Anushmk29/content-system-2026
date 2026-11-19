@@ -28,19 +28,24 @@ export interface SystemHealth {
 // External probes (Postiz, OpenRouter… up to 8s) are cached per adapter set; the layout
 // runs this on every page view. DB + module run state below stay live.
 const PROBE_TTL_MS = 60_000;
-const probeCache = new WeakMap<object, { at: number; p: Promise<HealthReport[]> }>();
+const probeCache = new WeakMap<object, { at: number; p: Promise<HealthReport[]>; reports?: HealthReport[] }>();
 
-function probeAdapters(a: ModuleContext['adapters']): Promise<HealthReport[]> {
+function probeAdapters(a: ModuleContext['adapters'], cached: boolean): Promise<HealthReport[]> {
   const hit = probeCache.get(a);
-  if (hit && Date.now() - hit.at < PROBE_TTL_MS) return hit.p;
-  const p = Promise.all([a.claude, a.postiz, a.jev, a.apify, a.youtube, a.transcriber, a.tinyfish].filter(Boolean).map((x) => x.healthCheck()));
-  probeCache.set(a, { at: Date.now(), p });
+  if (hit && Date.now() - hit.at < PROBE_TTL_MS) return cached && hit.reports ? Promise.resolve(hit.reports) : hit.p;
+  const entry = { at: Date.now(), reports: hit?.reports, p: Promise.resolve([] as HealthReport[]) };
+  entry.p = Promise.all([a.claude, a.postiz, a.jev, a.apify, a.youtube, a.transcriber, a.tinyfish].filter(Boolean).map((x) => x.healthCheck()))
+    .then((reports) => { entry.reports = reports; return reports; });
+  probeCache.set(a, entry);
+  const p = entry.p;
+  // Navigation keeps the last known result; System/API requests can wait for the refresh.
+  if (cached && entry.reports) { void p.catch(() => {}); return Promise.resolve(entry.reports); }
   return p;
 }
 
-export async function getSystemHealth(ctx: ModuleContext): Promise<SystemHealth> {
+export async function getSystemHealth(ctx: ModuleContext, { cached = false } = {}): Promise<SystemHealth> {
   // Probe adapters + DB concurrently; probes never throw (they catch internally).
-  const [database, adapters] = await Promise.all([ctx.db.healthCheck(), probeAdapters(ctx.adapters)]);
+  const [database, adapters] = await Promise.all([ctx.db.healthCheck(), probeAdapters(ctx.adapters, cached)]);
 
   // Pull last-known run state per module (empty if DB is down).
   let runRows: ModuleHealthRow[] = [];

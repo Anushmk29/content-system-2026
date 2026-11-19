@@ -74,3 +74,15 @@ test('an overlapping run of the same module is skipped, not run twice', async ()
   assert.equal((await first).status, 'ok');
   assert.equal(calls, 1);
 });
+
+test('a failed run lock records an error without executing the module', async () => {
+  const { ctx } = fakeCtx();
+  let calls = 0;
+  const guarded: Module = { ...goodModule, id: 'lock_failure', run: async () => { calls++; return ok(1, 'unsafe'); } };
+  ctx.db = { ...ctx.db, tryLock: async () => { throw new Error('connection timeout'); } };
+  const result = await runModule(guarded, ctx);
+  assert.equal(result.status, 'error');
+  assert.match(result.message, /run lock.*connection timeout/);
+  assert.equal(calls, 0);
+  assert.equal((await createRepo(db).recentRuns(1))[0]!.status, 'error');
+});

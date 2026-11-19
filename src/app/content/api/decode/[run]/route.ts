@@ -9,7 +9,7 @@ export const GET = handle(async (req: Request, { params }: { params: Promise<{ r
   const { run } = await params;
   if (!UUID.test(run)) return notFound();
   const after = Number(new URL(req.url).searchParams.get('after') ?? 0) || 0;
-  const data = await getDecodeRun(getContext(), run, after);
+  const data = await getDecodeRun((await getContext()), run, after);
   return data ? NextResponse.json({ ok: true, ...data }) : notFound();
 });
 
@@ -17,6 +17,6 @@ export const GET = handle(async (req: Request, { params }: { params: Promise<{ r
 export const PATCH = handle(async (_req: Request, { params }: { params: Promise<{ run: string }> }) => {
   const { run } = await params;
   if (!UUID.test(run)) return notFound();
-  await stopDecode(getContext(), run);
+  await stopDecode((await getContext()), run);
   return NextResponse.json({ ok: true, message: 'Stopping…' });
 });

@@ -40,6 +40,7 @@ const VIDEOS_SQL = (analysis: string) =>
 /** Transcribe one video now (a retry, or one past the per-run cap). Synchronous: ~15s-5min. */
 export async function transcribeVideo(ctx: ModuleContext, postId: string): Promise<{ ok: boolean; message: string }> {
   const t = ctx.adapters.transcriber;
+  if (t) await t.healthCheck();
   if (!t?.configured) return { ok: false, message: 'Transcription tools are not installed on the server (see System).' };
   const p = (await ctx.db.query<{ url: string }>(`select url from content.decoded_posts where id = $1 and post_type = 'video'`, [postId])).rows[0];
   if (!p) return { ok: false, message: 'Video not found.' };

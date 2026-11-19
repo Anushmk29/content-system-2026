@@ -40,7 +40,7 @@ function bandOf(a: TodayAction): Band {
 
 export default async function TodayPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await params(searchParams);
-  const ctx = getContext();
+  const ctx = await getContext();
   const health = await loadHealth();
   let today: Today | null = null;
   let todos: Awaited<ReturnType<typeof listTodos>> = [];

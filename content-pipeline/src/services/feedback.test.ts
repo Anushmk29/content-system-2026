@@ -4,13 +4,32 @@ import { createTestDb } from '../db/test-db.ts';
 import { createContentItems } from '../db/content-items.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import { applyApprovalDecision } from './approval-service.ts';
-import { feedbackText, refreshLessons } from './feedback-service.ts';
+import { feedbackText, refreshLessons, reviseItem } from './feedback-service.ts';
+import { createRepo } from '../db/repo.ts';
+import { editItemCopy } from './board-service.ts';
 import { saveBrand } from './brand-service.ts';
 import { brand, setBrand, DEFAULT_BRAND } from '../brand.ts';
 import { brandSystem } from '../prompts/brand-context.ts';
 
 const db = await createTestDb();
 const items = createContentItems(db);
+
+test('a late AI revision preserves newer manual copy', async () => {
+  const { ctx } = ctxWith([]);
+  const id = await waitingItem();
+  await items.transition(id, { event: 'changes' });
+  const original = (await createRepo(db).getItem(id))!;
+  let started!: () => void, finish!: (text: string) => void;
+  const generating = new Promise<void>((resolve) => { started = resolve; });
+  const reply = new Promise<string>((resolve) => { finish = resolve; });
+  ctx.adapters.claude.complete = async () => { started(); return reply; };
+  const pending = reviseItem(ctx, original, 'Shorten it');
+  await generating;
+  assert.ok((await editItemCopy(ctx, id, { body: 'My newer saved edit' })).ok);
+  finish(JSON.stringify({ body: 'Late model response' }));
+  await assert.rejects(pending, /post changed/i);
+  assert.equal((await createRepo(db).getItem(id))!.body, 'My newer saved edit');
+});
 
 /** A context whose LLM answers from a queue and records each prompt. */
 function ctxWith(replies: string[], env: Record<string, unknown> = {}) {

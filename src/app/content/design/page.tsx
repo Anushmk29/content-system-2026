@@ -21,8 +21,8 @@ export default async function DesignPage({ searchParams }: { searchParams: Searc
   const sp = await params(searchParams);
   let rows: DesignRow[] | null = null;
   let error: string | null = null;
-  try { rows = await listDesignQueue(getContext()); } catch (e) { error = (e as Error).message; }
-  const styles = rows ? await listStyles(getContext()).then((r) => r.map(({ id, name, kind, pages, has_person }) => ({ id, name, kind, pages, has_person }))).catch(() => []) : [];
+  try { rows = await listDesignQueue((await getContext())); } catch (e) { error = (e as Error).message; }
+  const styles = rows ? await listStyles((await getContext())).then((r) => r.map(({ id, name, kind, pages, has_person }) => ({ id, name, kind, pages, has_person }))).catch(() => []) : [];
   const head = (
     <PageHead title="Design" sub="Create the visual, review the post, then follow it to the calendar.">
       <Link href="/content/styles" className="btn">Design examples</Link>

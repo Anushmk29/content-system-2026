@@ -21,7 +21,7 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Sear
   const sp = await params(searchParams);
   let rows: ScriptRow[] | null = null;
   let error: string | null = null;
-  try { rows = await listScripts(getContext()); } catch (e) { error = (e as Error).message; }
+  try { rows = await listScripts((await getContext())); } catch (e) { error = (e as Error).message; }
   const head = (next: { text: string; action?: React.ReactNode } | null) => (
     <PageHead title="Film & post" next={next}
       sub="Videos and Reddit posts you film and post yourself." />

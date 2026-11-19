@@ -3,14 +3,12 @@
 Tick each box when it's done. None of these need code changes.
 
 ## 1. Database TLS (do this first)
-At the moment the app encrypts the database connection but does not check the server's certificate.
+The app verifies remote database certificates by default and includes Supabase's root CA.
 
-- [ ] Download the CA certificate from Supabase: Dashboard → Project Settings → Database → SSL Configuration → Download certificate.
-- [ ] Put it on the server next to the app, for example `/opt/content/prod-ca.crt`.
-- [ ] In the server `.env`, add `CONTENT_DATABASE_CA=/opt/content/prod-ca.crt`.
-- [ ] Make sure the server `.env` does **not** have `CONTENT_DATABASE_SSL=disable`. When the CA is set it takes priority over `no-verify` or `require`.
+- [ ] For a remote database, leave `CONTENT_DATABASE_SSL` unset or set it to `require`. Remove any `disable` or `no-verify` override.
+- [ ] If your database uses a different CA, put its certificate on the server and set `CONTENT_DATABASE_CA` to that file's path.
 - [ ] Restart the app and the scheduler. Then open `/content/api/healthz`; it should return 200.
-  - If it returns a certificate error, the certificate file is the wrong one. Download it again; don't remove the setting.
+  - If the database reports a certificate error, check the provider's current CA and the configured hostname.
 
 ## 2. Image cost check
 Make sure the image costs we record match what OpenRouter actually charges.

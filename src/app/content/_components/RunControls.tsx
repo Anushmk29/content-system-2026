@@ -24,7 +24,7 @@ export function RunControls({ modules }: { modules: { id: string; title: string;
       <div style={{ display: 'inline-flex' }}>
         <button type="button" className="btn btn-brand" style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
           disabled={a.pending} onClick={() => run('/content/api/run', 'all')}>
-          {a.busy === 'all' ? '▸ running…' : '▶ run pipeline'}
+          {a.busy === 'all' ? '▸ starting…' : '▶ run pipeline'}
         </button>
         <button type="button" className="btn btn-brand" aria-haspopup="menu" popoverTarget="run-menu" aria-label="Run one step"
           style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeft: '1px solid var(--ink-2)', padding: '6px 9px' }}

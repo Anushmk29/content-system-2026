@@ -8,6 +8,6 @@ import { handle } from '@/app/content/_lib/api-guard';
 export const PATCH = handle(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const { action } = (await req.json()) as { action?: string };
-  const result = await decideSignal(getContext(), id, action as 'use' | 'drop');
+  const result = await decideSignal((await getContext()), id, action as 'use' | 'drop');
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 });

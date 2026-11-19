@@ -29,7 +29,7 @@ export const POST = handle(async (req: Request) => {
     postId: typeof b.postId === 'string' ? b.postId : undefined,
   };
   if (b.mode === 'steal') {
-    const r = await stealFormat(getContext(), {
+    const r = await stealFormat((await getContext()), {
       ...target,
       platforms: Array.isArray(b.platforms) ? b.platforms.filter((p): p is string => typeof p === 'string') : [],
       styleId: typeof b.styleId === 'string' && b.styleId ? b.styleId : undefined,
@@ -48,6 +48,6 @@ export const POST = handle(async (req: Request) => {
     return NextResponse.json({ ok: true, ...r, status: r.creativeErrors.length ? 'degraded' : 'ok', message: `${parts.join(' · ')} · $${r.costUsd.toFixed(2)}` });
   }
   const mode = b.mode === 'counter' ? 'counter' : 'use';
-  const out = await useDecode(getContext(), { ...target, mode });
+  const out = await useDecode((await getContext()), { ...target, mode });
   return NextResponse.json({ ok: true, ...out, message: mode === 'use' ? 'Added to Ideas' : 'Counter-angle added to Ideas' });
 });

@@ -6,7 +6,7 @@ import { handle } from '@/app/content/_lib/api-guard';
 //   ?workspace=<id>   per-customer slice (default 'default')
 // Admin only (the engine's training data), see src/middleware.ts.
 export const GET = handle(async (req: Request) => {
-  const ctx = getContext();
+  const ctx = await getContext();
   const url = new URL(req.url);
   const body = await exportDataset(ctx, {
     workspace: url.searchParams.get('workspace') ?? undefined,

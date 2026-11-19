@@ -465,13 +465,14 @@ export function createRepo(db: Db) {
         .then((r) => r.rows[0] ?? null),
 
     /** Copy edits are only allowed before sign-off; returns null if the item is past approval. */
-    updateItemCopy: (id: string, p: { hook?: string | null; body?: string | null; cta?: string | null }) =>
+    updateItemCopy: (id: string, p: { hook?: string | null; body?: string | null; cta?: string | null }, expected?: Pick<ContentItemRow, 'hook' | 'body' | 'cta'>) =>
       db.query<ContentItemRow>(
         `update content.content_items set
            hook = coalesce($2, hook), body = coalesce($3, body), cta = coalesce($4, cta)
           where id = $1 and status::text = any($5::text[])
+            and ($6::boolean = false or (hook is not distinct from $7 and body is not distinct from $8 and cta is not distinct from $9))
           returning *`,
-        [id, p.hook ?? null, p.body ?? null, p.cta ?? null, EDITABLE_STATUSES],
+        [id, p.hook ?? null, p.body ?? null, p.cta ?? null, EDITABLE_STATUSES, !!expected, expected?.hook ?? null, expected?.body ?? null, expected?.cta ?? null],
       ).then((r) => r.rows[0] ?? null),
 
     /** Operator picks a posting time; only while approved and not yet handed to Postiz. */

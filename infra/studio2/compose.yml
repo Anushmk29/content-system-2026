@@ -1,0 +1,96 @@
+# Run from /srv/studio2 with: docker compose -p studio2 -f compose.yml ...
+# No existing database, network, proxy port, Docker socket, or host directory is mounted in the app.
+x-app: &app
+  image: ${STUDIO2_IMAGE:?set STUDIO2_IMAGE}
+  cgroup_parent: studio2.slice
+  env_file:
+    - { path: ./private/app.env, format: raw }
+  user: "1003:1003"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  cpus: 1.0
+  mem_limit: 1536m
+  memswap_limit: 1536m
+  init: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777
+  volumes:
+    - next-cache:/app/.next/cache
+    - model-cache:/home/studio2/.cache
+  networks: [data, egress, publishing]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  app:
+    <<: *app
+    restart: unless-stopped
+    ports: ["127.0.0.1:18132:3000"]
+    depends_on:
+      db: { condition: service_healthy }
+  scheduler:
+    <<: *app
+    profiles: [automation]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 768m
+    memswap_limit: 768m
+    command: [sh, -c, "while true; do node /app/studio2-scheduler.mjs; sleep 3600; done"]
+    volumes:
+      - next-cache:/app/.next/cache
+      - model-cache:/home/studio2/.cache
+      - ./ops/scheduler.mjs:/app/studio2-scheduler.mjs:ro
+    healthcheck: { disable: true }
+    depends_on:
+      db: { condition: service_healthy }
+  db:
+    image: postgres:17-alpine
+    cgroup_parent: studio2.slice
+    user: postgres
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 0.5
+    mem_limit: 384m
+    memswap_limit: 384m
+    environment:
+      POSTGRES_DB: studio2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/db-admin-password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [db-admin-password, db-app-password]
+    command: [postgres, -c, max_connections=32, -c, shared_buffers=64MB]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./ops/init-db.sh:/docker-entrypoint-initdb.d/10-studio2.sh:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d studio2"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+secrets:
+  db-admin-password: { file: ./private/db-admin-password }
+  db-app-password: { file: ./private/db-app-password }
+volumes:
+  postgres-data:
+  next-cache:
+  model-cache:
+networks:
+  data: { internal: true }
+  publishing: { external: true, name: studio2-publishing }
+  egress:
+    ipam:
+      config: [{ subnet: "172.29.240.0/28" }]

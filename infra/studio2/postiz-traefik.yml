@@ -1,0 +1,33 @@
+http:
+  routers:
+    studio2-postiz:
+      rule: "Host(`postiz2.srv1675029.hstgr.cloud`)"
+      entryPoints: [websecure]
+      service: studio2-postiz
+      middlewares: [studio2-postiz-rate, studio2-postiz-body, studio2-postiz-headers]
+      tls: { certResolver: letsencrypt, options: studio2-tls }
+    studio2-postiz-auth:
+      rule: "Host(`postiz2.srv1675029.hstgr.cloud`) && (PathPrefix(`/api/auth`) || PathPrefix(`/api/login`) || PathPrefix(`/api/register`))"
+      priority: 100
+      entryPoints: [websecure]
+      service: studio2-postiz
+      middlewares: [studio2-postiz-login, studio2-postiz-body, studio2-postiz-headers]
+      tls: { certResolver: letsencrypt, options: studio2-tls }
+  services:
+    studio2-postiz:
+      loadBalancer:
+        servers: [{ url: "http://127.0.0.1:18133" }]
+  middlewares:
+    studio2-postiz-rate:
+      rateLimit: { average: 10, burst: 60 }
+    studio2-postiz-login:
+      rateLimit: { average: 5, period: 1m, burst: 5 }
+    studio2-postiz-body:
+      buffering: { maxRequestBodyBytes: 62914560, memRequestBodyBytes: 1048576 }
+    studio2-postiz-headers:
+      headers:
+        contentTypeNosniff: true
+        frameDeny: true
+        stsSeconds: 31536000
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders: { Server: "", X-Powered-By: "" }

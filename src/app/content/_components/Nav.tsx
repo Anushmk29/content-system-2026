@@ -33,7 +33,7 @@ export const GROUPS: { label: string; admin?: boolean; links: { href: string; la
   { label: 'Admin', admin: true, links: [
     { href: '/content/training', label: 'Training', badge: 'training' },
     { href: '/content/costs', label: 'Costs', keywords: 'money spend billing' },
-    { href: '/content/system', label: 'System', badge: 'systemBroken', danger: true, keywords: 'health connections broken fix' },
+    { href: '/content/system', label: 'System', badge: 'systemBroken', danger: true, keywords: 'health connections broken fix settings api keys models budget' },
   ] },
 ];
 

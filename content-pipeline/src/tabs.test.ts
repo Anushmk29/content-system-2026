@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestDb } from './db/test-db.ts';
 import type { ModuleContext } from './modules/module.ts';
-import { listScripts, markFilmed, markUploaded, youtubeUrl } from './services/scripts-service.ts';
+import { listScripts, markFilmed, markUploaded, postedUrl, youtubeUrl } from './services/scripts-service.ts';
 import { listVideos, transcribeVideo } from './services/videos-service.ts';
 
 test('youtubeUrl: every link shape → youtu.be/<id>', () => {
@@ -11,6 +11,15 @@ test('youtubeUrl: every link shape → youtu.be/<id>', () => {
     assert.equal(youtubeUrl(u), 'https://youtu.be/dQw4w9WgXcQ');
   }
   assert.equal(youtubeUrl('https://vimeo.com/123'), null);
+  for (const url of ['https://evil.test/youtube.com/watch?v=dQw4w9WgXcQ', 'ftp://youtube.com/watch?v=dQw4w9WgXcQ',
+    'https://notyoutube.com/watch?v=dQw4w9WgXcQ', 'https://youtube.com/watch?v=dQw4w9WgXcQextra', 'https://youtu.be/dQw4w9WgXcQ/extra']) {
+    assert.equal(youtubeUrl(url), null, url);
+  }
+  for (const [platform, url] of [['instagram', 'https://evilinstagram.com/post'], ['linkedin', 'https://notlinkedin.com/post'],
+    ['facebook', 'https://facebookXcom/post'], ['reddit', 'https://reddit.com.evil.test/post']]) {
+    assert.equal(postedUrl(platform!, url), null, url);
+  }
+  assert.equal(postedUrl('instagram', 'https://www.instagram.com/p/abc/'), 'https://www.instagram.com/p/abc/');
 });
 
 test('scripts: review → to film → filmed → uploaded (published, with its link)', async () => {
@@ -38,6 +47,7 @@ test('videos: log shows transcribed / failed / not yet; retry fixes a failure', 
   const db = await createTestDb();
   let fail = true;
   const ctx = { db, adapters: { transcriber: { configured: true, cap: 5,
+    async healthCheck() { return { state: 'ok' }; },
     async transcribe() { if (fail) throw new Error('Command failed\nERROR: [youtube] private video'); return { text: 'hello there', segments: [], lang: 'en', durationS: 30 }; } } } } as unknown as ModuleContext;
   const run = (await db.query<{ id: string }>(`insert into content.decode_runs (platforms) values ('{youtube}') returning id`)).rows[0]!.id;
   const ids: string[] = [];

@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up Studio2 and its migrated Postiz data
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /srv/studio2/ops/backup.sh
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+UMask=0077

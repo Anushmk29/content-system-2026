@@ -30,7 +30,7 @@ export default async function VideosPage({ searchParams }: { searchParams: Searc
   const sp = await params(searchParams);
   let rows: VideoRow[] | null = null;
   let error: string | null = null;
-  try { rows = await listVideos(getContext()); } catch (e) { error = (e as Error).message; }
+  try { rows = await listVideos((await getContext())); } catch (e) { error = (e as Error).message; }
   const tool = (await loadHealth()).adapters.find((a) => a.id === 'transcriber');
   const head = (next: { text: string; action?: React.ReactNode } | null = null) => (
     <PageHead title="Competitor videos" next={next}

@@ -5,6 +5,7 @@ import { createTestDb } from '../db/test-db.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import { publisherModule } from '../modules/publisher.module.ts';
 import { settingsFor } from '../adapters/postiz.ts';
+import { createContentItems } from '../db/content-items.ts';
 import { createStyle } from './style-service.ts';
 import { creativeText, saveItemCreative, uploadItemAssets, removeItemAssets, listItemAssets, getItemAsset } from './asset-service.ts';
 
@@ -85,4 +86,25 @@ test('uploads: only PNG/JPEG/WebP/GIF bytes reach the image decoder; SVG is refu
   assert.ok(isRasterImage(Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1')));
   assert.ok(!isRasterImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')));
   assert.ok(!isRasterImage(Buffer.from('<?xml version="1.0"?><svg/>')));
+});
+
+test('a creative finishing after approval cannot replace the approved media', async () => {
+  const db = await createTestDb();
+  const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: 'red' } }).png().toBuffer();
+  let started!: () => void, finish!: (image: Buffer) => void;
+  const generating = new Promise<void>((resolve) => { started = resolve; });
+  const image = new Promise<Buffer>((resolve) => { finish = resolve; });
+  const ctx = { db, logger: { warn() {} }, adapters: { claude: {
+    spentUsd: 0, complete: async () => '{}', generateImage: async () => { started(); return image; },
+  } } } as unknown as ModuleContext;
+  const id = (await db.query<{ id: string }>(`insert into content.content_items (title, pillar, funnel_stage, platform, format, status, body)
+    values ('Late image', 'founder_build_notes', 'trust', 'linkedin', 'founder_post', 'needs_approval', 'The copy') returning id`)).rows[0]!.id;
+  await uploadItemAssets(ctx, id, [png]);
+  const pending = saveItemCreative(ctx, id, { refs: [png] });
+  await generating;
+  await createContentItems(db).transition(id, { event: 'approve' });
+  finish(png);
+  await assert.rejects(pending, /locked once.*approved/);
+  assert.equal((await listItemAssets(ctx, id))[0]!.source, 'upload');
+  assert.deepEqual((await getItemAsset(ctx, id, 0))!.bytes, png);
 });

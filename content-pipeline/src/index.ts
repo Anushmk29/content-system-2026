@@ -2,7 +2,8 @@
 // The Next.js layer (src/app/content) imports ONLY from here.
 
 // runtime
-export { buildContext, getContext } from './context.ts'; // buildContext: scripts/run.ts
+export { buildContext, getContext } from './context.ts'; // getContext loads saved configuration; buildContext uses explicit/env config.
+export { settingsView, saveSettings, type SettingView } from './services/settings-service.ts';
 
 // orchestration
 export { runModule, runModules } from './modules/orchestrator.ts';

@@ -64,13 +64,13 @@ export function verifySession(token: string | null | undefined, now = Date.now()
 }
 
 /** Pages and routes only the admin sees: engine health, run log, Jev training data, spend. */
-const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '/content/api/dataset', '/content/api/decisions', '/content/api/costs'];
+const ADMIN_PATHS = ['/content/system', '/content/training', '/content/costs', '/content/api/dataset', '/content/api/decisions', '/content/api/costs', '/content/api/settings'];
 export const isAdminPath = (p: string) => ADMIN_PATHS.some((a) => p === a || p.startsWith(`${a}/`));
 
 export const isCreativeCheckPath = (p: string) => /^\/content\/(?:api\/)?check(?:\/|$)/.test(p);
 
 /** Writes that spend money (LLM, Jev, Apify, image model) — rate limited in middleware. */
-const SPEND_PATH = /^\/content\/api\/(run|modules\/[^/]+\/run|styles(\/[^/]+)?|brand\/voice|decode(\/use)?|items\/[^/]+\/asset|decisions\/seed|videos\/[^/]+|approvals\/[^/]+|topics\/[^/]+|check\/[^/]+\/run)$/;
+const SPEND_PATH = /^\/content\/api\/(run|modules\/[^/]+\/run|styles(\/[^/]+)?|brand\/voice|decode(\/use)?|items\/[^/]+(\/asset)?|signals\/[^/]+|decisions\/seed|videos\/[^/]+|approvals\/[^/]+|topics\/[^/]+|check\/[^/]+\/run)$/;
 export const isSpendPath = (p: string) => SPEND_PATH.test(p);
 
 /** A cookie-authenticated write must come from our own pages (CSRF). No Origin = not a browser. */

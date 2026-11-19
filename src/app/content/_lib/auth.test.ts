@@ -22,6 +22,9 @@ test('passwords map to roles; sessions verify, expire, and resist tampering', ()
   assert.ok(isAdminPath('/content/system') && isAdminPath('/content/api/decisions/seed'));
   assert.ok(isAdminPath('/content/costs') && isAdminPath('/content/api/costs'));
   assert.ok(!isAdminPath('/content/systems') && !isAdminPath('/content'));
+  assert.ok(isAdminPath('/content/api/settings'));
+  assert.ok(isAdminPath('/content/api/settings/anything'));
+  assert.ok(!isAdminPath('/content/api/settings-other'));
 });
 
 test('paused Creative Check covers its page and API descendants without blocking other routes', async () => {
@@ -45,7 +48,10 @@ test('cron secret opens only the run routes; spend paths; same-origin writes; ra
 
   assert.ok(isSpendPath('/content/api/run') && isSpendPath('/content/api/styles/abc') && isSpendPath('/content/api/decode'));
   assert.ok(isSpendPath('/content/api/approvals/1') && isSpendPath('/content/api/topics/1'));
-  assert.ok(!isSpendPath('/content/api/brand') && !isSpendPath('/content/api/items/1'));
+  assert.ok(!isSpendPath('/content/api/brand'));
+  for (const path of ['/content/api/items/1', '/content/api/items/1/asset', '/content/api/signals/1']) {
+    assert.ok(isSpendPath(path), path);
+  }
 
   assert.ok(sameOrigin('https://app.example.com', 'app.example.com'));
   assert.ok(sameOrigin(null, 'app.example.com'));                         // curl / server-to-server

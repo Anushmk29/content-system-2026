@@ -9,7 +9,7 @@ type P = { params: Promise<{ id: string }> };
 // GET ?i=0 → one image / the video of the creative.
 export const GET = handle(async (req: Request, { params }: P) => {
   const i = Number(new URL(req.url).searchParams.get('i') ?? 0);
-  const m = Number.isInteger(i) && i >= 0 ? await getCreativeMedia(getContext(), (await params).id, i) : null;
+  const m = Number.isInteger(i) && i >= 0 ? await getCreativeMedia((await getContext()), (await params).id, i) : null;
   if (!m) return new Response('not found', { status: 404 });
   return new Response(new Uint8Array(m.bytes), { headers: { 'content-type': m.mime, 'cache-control': 'private, no-cache' } });
 });
@@ -19,6 +19,6 @@ export const POST = handle(async (req: Request, { params }: P) => {
   const files = (await req.formData()).getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length > MAX_FILES) throw new Error(`Attach at most ${MAX_FILES} files.`);
   if (files.some((f) => f.size > MAX_BYTES)) throw new Error('Each file must be under 50 MB.');
-  const r = await setCreativeMedia(getContext(), (await params).id, await Promise.all(files.map(async (f) => Buffer.from(await f.arrayBuffer()))));
+  const r = await setCreativeMedia((await getContext()), (await params).id, await Promise.all(files.map(async (f) => Buffer.from(await f.arrayBuffer()))));
   return NextResponse.json({ ok: true, message: r.count ? `Attached ${r.count} file${r.count === 1 ? '' : 's'}` : 'Media removed' });
 });

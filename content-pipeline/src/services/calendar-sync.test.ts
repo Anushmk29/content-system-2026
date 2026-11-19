@@ -4,7 +4,7 @@ import { createTestDb } from '../db/test-db.ts';
 import { createContentItems } from '../db/content-items.ts';
 import type { ModuleContext } from '../modules/module.ts';
 import { planItem } from './board-service.ts';
-import { bookItem } from './calendar-sync-service.ts';
+import { bookItem, syncPlanned, setItemChannels } from './calendar-sync-service.ts';
 import { createPostiz } from '../adapters/postiz.ts';
 
 const db = await createTestDb();
@@ -107,4 +107,59 @@ test('bookItem: two bookings at once reach Postiz once; a pulled item is never b
   await db.query(`update content.content_items set status = 'draft' where id = $1`, [pulled]);
   assert.equal(await bookItem(ctx, pulled, at), null);
   assert.equal(calls.length, 1);
+});
+
+test('overlapping moves remove each previous booking and leave one remote post', async () => {
+  const { p } = fakePostiz('moves');
+  const active = new Set<string>();
+  const schedule = p.schedule, remove = p.remove;
+  p.schedule = async (input) => { const booked = await schedule(input); active.add(booked.postizId); return booked; };
+  p.remove = async (id) => { await remove(id); active.delete(id); };
+  const ctx = ctxWith(true, p);
+  const id = await approved();
+  await bookItem(ctx, id, new Date(Date.now() + DAY));
+  const result = await Promise.all([
+    syncPlanned(ctx, id, new Date(Date.now() + 2 * DAY)), syncPlanned(ctx, id, new Date(Date.now() + 3 * DAY)),
+  ]);
+  assert.ok(result.every((r) => r?.ok));
+  assert.deepEqual([...active], [(await row(id)).postiz_id]);
+});
+
+test('channel selection saves only after Postiz accepts it, even with calendar auto-sync off', async () => {
+  const { p } = fakePostiz('channels');
+  const sent: Array<string[] | null | undefined> = [];
+  const postiz = { ...p, schedule: async (input: { scheduledAt: string; channelIds?: string[] | null }) => {
+    sent.push(input.channelIds); return p.schedule(input);
+  }, remove: (id: string) => p.remove(id) };
+  const ctx = ctxWith(false, postiz);
+  const id = await approved();
+  await setItemChannels(ctx, id, ['old']);
+  await bookItem(ctx, id, new Date(Date.now() + DAY));
+  p.fail = 'remove';
+  assert.equal((await setItemChannels(ctx, id, ['new'])).ok, false);
+  assert.deepEqual((await db.query<{ channels: string[] }>('select channels from content.content_items where id = $1', [id])).rows[0]!.channels, ['old']);
+  p.fail = '';
+  assert.equal((await setItemChannels(ctx, id, ['new'])).ok, true);
+  assert.deepEqual(sent, [['old'], ['new']]);
+  assert.deepEqual((await db.query<{ channels: string[] }>('select channels from content.content_items where id = $1', [id])).rows[0]!.channels, ['new']);
+});
+
+test('failed replacement save removes the new remote post before allowing publisher retry', async () => {
+  const { p, calls } = fakePostiz('rollback');
+  const ctx = ctxWith(true, p);
+  const id = await approved();
+  await bookItem(ctx, id, new Date(Date.now() + DAY));
+  let failSave = true;
+  const failing: ModuleContext = { ...ctx, db: { ...db, tx: (fn) => db.tx((q) => fn({ ...q, query: async (sql, args) => {
+    if (failSave && sql.startsWith('update content.content_items set postiz_id =')) {
+      failSave = false;
+      throw new Error('save failed');
+    }
+    return q.query(sql, args);
+  } })) } };
+  const result = await syncPlanned(failing, id, new Date(Date.now() + 2 * DAY));
+  assert.equal(result?.ok, false);
+  assert.deepEqual(calls.filter((c) => c.startsWith('remove')), ['remove rollback1', 'remove rollback2']);
+  assert.equal((await row(id)).status, 'approved');
+  assert.equal((await row(id)).postiz_id, null);
 });

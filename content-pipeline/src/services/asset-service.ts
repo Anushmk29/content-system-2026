@@ -3,7 +3,7 @@
 // reviewer signs off on text and creative together). The publisher reads itemMedia().
 import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
-import { createRepo, type ContentItemRow } from '../db/repo.ts';
+import type { ContentItemRow } from '../db/repo.ts';
 import { generateCreative, type GenerateResult } from './style-service.ts';
 import { isPlacement, isRasterImage } from '../creative.ts';
 import { EDITABLE_STATUSES } from '../../core/src/index.ts';
@@ -31,7 +31,7 @@ export function creativeText(item: Pick<ContentItemRow, 'platform' | 'title' | '
 }
 
 async function editableItem(ctx: ModuleContext, itemId: string): Promise<ContentItemRow> {
-  const item = await createRepo(ctx.db).getItem(itemId);
+  const item = (await ctx.db.query<ContentItemRow>('select * from content.content_items where id = $1 for update', [itemId])).rows[0];
   if (!item) throw new Error('That post no longer exists.');
   if (!EDITABLE_STATUSES.includes(item.status)) throw new Error('The creative is locked once the post is approved.');
   return item;
@@ -40,6 +40,7 @@ async function editableItem(ctx: ModuleContext, itemId: string): Promise<Content
 /** Replace the post's media (old rows go only if the new ones land). */
 async function replace(ctx: ModuleContext, itemId: string, files: { buf: Buffer; mime: AssetMime }[], source: 'generated' | 'upload', styleId: string | null) {
   await ctx.db.tx(async (q) => {
+    await editableItem({ ...ctx, db: q }, itemId);
     await q.query(`delete from content.content_assets where item_id = $1`, [itemId]);
     for (const [i, f] of files.entries()) {
       await q.query(`insert into content.content_assets (item_id, idx, mime, bytes, source, style_id) values ($1, $2, $3, $4, $5, $6)`,
@@ -89,9 +90,11 @@ export async function uploadItemAssets(ctx: ModuleContext, itemId: string, files
 }
 
 export async function removeItemAssets(ctx: ModuleContext, itemId: string): Promise<void> {
-  await editableItem(ctx, itemId);
-  await ctx.db.query(`delete from content.content_assets where item_id = $1`, [itemId]);
-  await ctx.db.query(`update content.content_items set asset_url = null where id = $1`, [itemId]);
+  await ctx.db.tx(async (db) => {
+    await editableItem({ ...ctx, db }, itemId);
+    await db.query(`delete from content.content_assets where item_id = $1`, [itemId]);
+    await db.query(`update content.content_items set asset_url = null where id = $1`, [itemId]);
+  });
 }
 
 export async function listItemAssets(ctx: ModuleContext, itemId: string): Promise<AssetInfo[]> {

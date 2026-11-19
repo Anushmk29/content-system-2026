@@ -44,9 +44,12 @@ export async function runModule(module: Module, ctx: ModuleContext): Promise<Run
     const rec = await ctx.db.tryLock(`content:module:${module.id}`, () => runUnlocked(module, ctx));
     if (rec) return rec;
   } catch (e) {
-    // Lock unavailable (DB down): run anyway, so the failure is recorded like any other.
     ctx.logger.warn(`run lock for ${module.id}: ${(e as Error).message}`);
-    return runUnlocked(module, ctx);
+    const now = new Date().toISOString();
+    const rec: RunRecord = { moduleId: module.id, status: 'error', itemsProcessed: 0,
+      message: `Could not acquire the run lock: ${(e as Error).message}`, startedAt: now, finishedAt: now, durationMs: 0 };
+    await recordRun(ctx, rec, null);
+    return rec;
   }
   const now = new Date().toISOString();
   ctx.logger.child(module.id).info('skipped: already running');
