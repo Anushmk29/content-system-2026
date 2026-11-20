@@ -46,3 +46,33 @@ The initial recovery set and private `access.json` have been copied over SSH to 
 An application backup was restored into a disposable database successfully. A full Postiz disaster-recovery restore has not been rehearsed. To recover, stop only the affected new project, preserve its volumes, restore matching image versions/settings and database dumps, and verify locally before exposing the routes. Managed Postiz tables must be restored by an administrator into the intended schema; never overwrite other schemas. Use the database-specific dump rather than copying live PostgreSQL files.
 
 Rollback public access by removing only `studio2.yml` and/or `studio2-postiz.yml` from `/docker/traefik/dynamic`, then stop only the respective Compose project. A Postiz rollback must leave exactly one worker stack running. Preserve private files, volumes and backups. Never run a Docker-wide prune, global firewall reset, or restart of unrelated services for this deployment.
+
+## Upgrade steps (as used for `d935faa`, 20 Nov 2026)
+
+```sh
+# Locally: package the pushed commit and upload it
+git archive --format=tar.gz -o source-<sha>.tar.gz <sha>
+scp source-<sha>.tar.gz root@<vps>:/srv/studio2/
+
+# On the VPS, in /srv/studio2
+mkdir app.new && tar -xzf source-<sha>.tar.gz -C app.new
+rm -rf app.prev && mv app app.prev && mv app.new app
+cd app && docker buildx build --builder studio2-builder -f infra/studio2/Dockerfile \
+  -t studio2:<date>-<sha>-isolated --load . && cd ..
+# Back up the app database before migrating
+docker compose -p studio2 --env-file .env -f compose.yml exec -T db \
+  sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "${POSTGRES_DB:-$POSTGRES_USER}"' > private/backups/pre-<sha>-app.dump
+STUDIO2_IMAGE=studio2:<date>-<sha>-isolated docker compose -p studio2 --env-file .env -f compose.yml \
+  run --rm --no-deps app npm run migrate
+cp .env .env.bak-pre-<sha>   # then set STUDIO2_IMAGE in .env to the new tag
+docker compose -p studio2 --env-file .env -f compose.yml --profile automation up -d --no-deps app scheduler
+docker buildx stop studio2-builder
+curl https://studio2.srv1675029.hstgr.cloud/content/api/healthz   # {"ok":true}
+```
+
+The app uses this stack's own Postgres container (`db`), not Supabase: schema changes reach it only through `npm run migrate` above. To roll back, copy the `.env.bak-pre-<sha>` file back to `.env` and run the `up -d` line again.
+
+## Deploy log
+
+- **20 Nov 2026, `d935faa`:** QA review fixes (see the root README update log). Migration added `content_items.creative_started_at` and `creative_error`. Pre-migration dump: `private/backups/pre-d935faa-app.dump`. Previous image: `studio2:20261120-e6b7b39-isolated`.
+  - **Open issue:** `studio2-backup.service` has failed since 19 Nov because Postiz's `temporal-postgresql` service is not running. There has been no full recovery backup since `recovery-20261118T210756Z`.

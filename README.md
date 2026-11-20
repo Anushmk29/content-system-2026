@@ -121,5 +121,39 @@ The Docker setup (`infra/app`) already runs the pipeline hourly. An external sch
 these with the `x-content-secret: $CONTENT_CRON_SECRET` header instead. A module that is already
 running is skipped, never run twice. See `docs/operations/DEPLOY.md`.
 
+## Update log
+
+### 20 Nov 2026: QA review fixes (commit `d935faa`, live on studio2)
+Fixes for the 20 Nov hands-on review (score 64/100). Blog generation was removed earlier the same day.
+- **Scheduling failures:** Today's blocked cards show each post's real Postiz error and a fix hint. A post counts as
+  "ready to schedule" only when Postiz has a channel connected for its platform.
+- **Competitor scans:**
+  - A job that is already running is shown with a **⏸ stop** button.
+  - A scan that collected posts but failed during analysis says so, with a Resume hint.
+  - The format-sorting step's `maxTokens` was raised from 2000 to 8000, so the reply is no longer cut off.
+- **Results:** a banner appears when the last refresh failed or is still running. Missing metrics show `—`, not 0.
+- **Transcription:** a GPU/CUDA crash retries once on the CPU, and the error shown is one short line.
+- **CTA appearing twice:** the drafting prompt says not to repeat the CTA in the body, and `dropRepeatedCta` strips it
+  when it slips through.
+- **Handles:** `bareHandle` (core) turns pasted X/Instagram profile URLs into `@handle` when you save and when they're shown.
+- **Instagram feedback:** the hashtag-wall check only fires at 6 or more hashtags, and its advice no longer mentions LinkedIn.
+- **Carousels:** `carouselSlides` (core) splits slides on `---`, then on "Slide N" / "1." markers, then on paragraphs.
+  The Design page warns when fewer images were made than there are slides.
+- **Visual generation status:** the start time and any error are stored on the post, so leaving the page and coming
+  back still shows "Creating…" or the error.
+- **Keys & settings:** each integration has a **Test connection** button (`POST /content/api/settings/test`).
+  The OpenRouter check now confirms the key is accepted (`GET /api/v1/key`).
+- **Small UI fixes:**
+  - Ideas: the button reads "Select idea", and the how-to and tour text are corrected.
+  - All posts: the count reads ideas and platform versions, and Blog is gone from the platform filter.
+  - Empty hooks and bodies can't be saved.
+  - The empty Opening lines page links to Competitors.
+- **Database:** `content.content_items` gains `creative_started_at timestamptz` and `creative_error text`
+  (in `db/schema.sql`; apply with `npm run migrate`).
+- **Not done yet:**
+  - Checking slide text against the approved copy (needs a vision-model call per slide).
+  - The new input fields the review suggested.
+  - Removing blog rows and the blog option from the database.
+
 See **`docs/operations/GO-LIVE.md`** (setup + testing), **`docs/development/BUILD-SPEC.md`** (technical),
 and **`docs/operations/STRATEGY-PLAYBOOK.md`** (operator).
