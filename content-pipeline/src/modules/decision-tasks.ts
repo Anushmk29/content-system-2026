@@ -50,7 +50,7 @@ export const topicQuestions = (): Record<string, JevQuestion> => ({
   reach: scale('Is there real demand for this topic, and is it not already flooded with near-identical takes? Use the MARKET CHECK evidence when present.', 'no demand or saturated', 'strong demand, few good takes'),
   brandFit: scale('Does it fit our brand voice and our audience?', 'off-brand or hype', 'exactly on-brand'),
   proof: scale('Do we have a real edge (first-hand data or experience, a contrarian-but-correct view, or making something complex plain) and real proof? "More complete than others" is not an edge; facts found on the web are not our proof. If not, it is low.', 'no edge or no provable example', 'clear edge and real proof'),
-  repurpose: scale('Can it become a LinkedIn post + blog + X thread + Instagram carousel + Facebook post?', 'one format only', 'works in every format'),
+  repurpose: scale('Can it become a LinkedIn post + X thread + Instagram carousel + Facebook post?', 'one format only', 'works in every format'),
   pillar: {
     type: 'choice',
     instructions: 'Which content pillar does this topic belong to?',

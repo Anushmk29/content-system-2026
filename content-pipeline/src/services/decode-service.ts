@@ -146,7 +146,13 @@ export async function getDecodeView(ctx: ModuleContext, runId?: string) {
   ]);
   const id = runId ?? runs[0]?.id;
   const current = id ? await getDecodeRun(ctx, id, 0) : null;
-  return { competitors, runs, run: current?.run ?? null, formats: current?.formats ?? [], posts: current?.posts ?? [] };
+  // Another run holding the one-at-a-time lock (e.g. a results refresh, or one orphaned by a restart),
+  // so the page can show it and offer Stop instead of only refusing a new scan.
+  const busy = (await ctx.db.query<DecodeRunRow & { self: boolean }>(
+    `select ${RUN_COLS}, not (${NOT_SELF_RUN}) as self from content.decode_runs
+     where status = 'running' and started_at > now() - interval '6 hours' and id is distinct from $1
+     order by started_at desc limit 1`, [current?.run.id ?? null])).rows[0] ?? null;
+  return { competitors, runs, run: current?.run ?? null, formats: current?.formats ?? [], posts: current?.posts ?? [], busy };
 }
 export type DecodeView = Awaited<ReturnType<typeof getDecodeView>>;
 
@@ -440,7 +446,7 @@ async function sortFormats(ctx: ModuleContext, runId: string): Promise<void> {
     `select distinct f.name from content.decode_formats f where f.run_id = (
        select r.id from content.decode_runs r where r.id <> $1 and exists (select 1 from content.decode_formats x where x.run_id = r.id)
         order by r.started_at desc limit 1)`, [runId])).rows.map((r) => r.name);
-  const raw = await ctx.adapters.claude.complete(buildFormatsPrompt(sample, ours, known), { system: decodeSystem(), maxTokens: 2000 });
+  const raw = await ctx.adapters.claude.complete(buildFormatsPrompt(sample, ours, known), { system: decodeSystem(), maxTokens: 8000 });
   const formats = parseFormats(raw);
   if (!formats.length) throw new Error('LLM returned no formats');
   await ctx.db.tx(async (db) => {

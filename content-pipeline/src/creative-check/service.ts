@@ -15,7 +15,7 @@ import { readImage, readVideo, MAX_FRAMES } from './media.ts';
 import { attentionSegments, measureFacts, validateReport, hookText, type CreativeCheckReport, type Mode, type Segment, type AttentionSegment } from './report.ts';
 import { buildCheckPrompt, CHECK_SYSTEM, PROMPT_VERSION, BODY_CAP } from './prompt.ts';
 
-export const CHECK_PLATFORMS = ['instagram', 'linkedin', 'x', 'facebook', 'youtube', 'reddit', 'blog', 'email'] as const;
+export const CHECK_PLATFORMS = ['instagram', 'linkedin', 'x', 'facebook', 'youtube', 'reddit', 'email'] as const;
 export const FUNNEL_STAGES = ['awareness', 'consideration', 'conversion', 'retention'] as const;
 export const VERDICTS = ['useful', 'not_useful', 'incorrect', 'not_relevant', 'skipped'] as const;
 const MAX_IMAGES = 10;

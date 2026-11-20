@@ -49,7 +49,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
   return (
     <>
       <PageHead title="All posts"
-        sub={`${ideas.length} idea${ideas.length === 1 ? '' : 's'}${filtered ? ' match the filter' : ''}, each in the column of its step.`}>
+        sub={`${ideas.length} idea${ideas.length === 1 ? '' : 's'} · ${ideas.reduce((s, i) => s + i.pieces.length, 0)} platform versions${filtered ? ' match the filter' : ''}. Each idea sits in the column of its earliest step; counts below are ideas.`}>
         <nav className="seg" aria-label="View">
           <Link href={withParams('/content/board', sp, { view: null, item: null })} aria-current={view === 'board' ? 'page' : undefined}>board</Link>
           <Link href={withParams('/content/board', sp, { view: 'list', item: null })} aria-current={view === 'list' ? 'page' : undefined}>list</Link>
@@ -57,7 +57,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
       </PageHead>
 
       <KpiStrip items={[
-        { label: 'In flight', value: n('idea', 'draft', 'qc_passed', 'needs_approval', 'approved', 'queued'), sub: 'not yet live' },
+        { label: 'Ideas in flight', value: n('idea', 'draft', 'qc_passed', 'needs_approval', 'approved', 'queued'), sub: 'not yet live' },
         { label: 'Drafts', value: n('draft'), href: '/content/board?stage=draft' },
         { label: 'Checked', value: n('qc_passed'), href: '/content/board?stage=qc_passed' },
         { label: 'Awaiting you', value: n('needs_approval'), href: '/content/approvals' },
@@ -69,7 +69,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Search
         <input className="input" name="q" defaultValue={sp.q ?? ''} placeholder="Search titles…" aria-label="Search" style={{ width: 240 }} />
         <select className="input" name="platform" defaultValue={sp.platform ?? ''} aria-label="Platform" style={{ width: 150 }}>
           <option value="">All platforms</option>
-          {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM[p]?.label ?? p}</option>)}
+          {PLATFORMS.filter((p) => p !== 'blog').map((p) => <option key={p} value={p}>{PLATFORM[p]?.label ?? p}</option>)}
         </select>
         <select className="input" name="pillar" defaultValue={sp.pillar ?? ''} aria-label="Theme" style={{ width: 210 }}>
           <option value="">All themes</option>

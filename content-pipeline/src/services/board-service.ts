@@ -100,6 +100,12 @@ export async function editItemCopy(
     clean[k] = v;
   }
   if (!Object.keys(clean).length) return { ok: false, message: 'Nothing to save.' };
+  if (clean.body !== undefined && !clean.body.trim()) return { ok: false, message: 'The body can’t be empty.' };
+  // Blank stays allowed only where a post never had a hook (e.g. some X posts).
+  if (clean.hook !== undefined && !clean.hook.trim()) {
+    const cur = await ctx.db.query<{ hook: string | null }>(`select hook from content.content_items where id = $1`, [id]);
+    if (cur.rows[0]?.hook?.trim()) return { ok: false, message: 'The hook can’t be empty.' };
+  }
   const row = await createRepo(ctx.db).updateItemCopy(id, clean, expected);
   return row ? { ok: true, message: 'Saved' } : { ok: false, message: expected ? 'The post changed or was approved. Reload it before rewriting.' : 'Copy is locked once approved (or item not found).' };
 }

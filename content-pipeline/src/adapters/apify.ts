@@ -10,6 +10,7 @@ import { fetchJson, type Adapter } from './adapter.ts';
 import type { HealthReport } from '../health.ts';
 import { report } from '../health.ts';
 import type { OnCost } from '../cost-ledger.ts';
+import { bareHandle } from '../../core/src/handles.ts';
 
 const API = 'https://api.apify.com/v2';
 
@@ -123,11 +124,7 @@ export function runCostUsd(run: ApifyRun, items: number): number {
   return Math.max(Number(run.usageTotalUsd ?? 0), events + perResult);
 }
 
-/** "@acme", "acme" or a profile URL → the bare handle. */
-export function bareHandle(h: string): string {
-  const s = h.trim().replace(/\/+$/, '');
-  return (/^https?:\/\//.test(s) ? s.split('/').pop()! : s).replace(/^@/, '');
-}
+export { bareHandle };
 
 function pageUrl(platform: 'linkedin' | 'facebook', h: string): string {
   if (/^https?:\/\//.test(h.trim())) return h.trim();

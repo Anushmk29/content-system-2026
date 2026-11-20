@@ -14,7 +14,7 @@ ${brandBrief(b)}
 - proof: do we have a real edge — first-hand data or experience, a contrarian-but-correct
   view, or making something complex plain? "More complete than others" is not an edge.
   No edge or no real example/metric to back it: score LOW.
-- repurpose: can it become a LinkedIn post + blog + X thread + Instagram carousel + Facebook post?
+- repurpose: can it become a LinkedIn post + X thread + Instagram carousel + Facebook post?
 The honest-numbers rule: a topic we can't prove must score low on proof.
 When a MARKET CHECK is given, base reach on its DEMAND and ALREADY SAID evidence.
 Facts found on the web are not OUR proof — they never lift the proof score.`;
@@ -125,8 +125,8 @@ export function buildSeedQcPrompt(n: number): string {
 carry one or more signals; across the set, cover every signal at least once, including subtle
 cases. Mix platforms. Bodies 40-150 words. Label each draft's signals honestly.
 Respond with ONLY JSON:
-{ "examples": [ { "platform": "linkedin" | "blog" | "x" | "instagram" | "facebook",
-                  "format": "founder_post" | "article" | "thread" | "carousel",
+{ "examples": [ { "platform": "linkedin" | "x" | "instagram" | "facebook",
+                  "format": "founder_post" | "thread" | "carousel",
                   "title": string, "body": string,
                   "signals": { "hasClientClaim": bool, "hasMetric": bool, "isControversialOpinion": bool,
                                "isCaseStudy": bool, "isCompetitorComparison": bool,

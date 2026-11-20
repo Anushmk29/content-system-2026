@@ -43,3 +43,10 @@ test('Creative Check: Instagram caption cut-off and hashtag cap', () => {
   assert.equal(facts.find((f) => f.key === 'hashtags')!.value, '8');
   assert.ok(!measureFacts({ platform: 'linkedin', hook: 'h', body: 'b', cta: 'c' }).some((f) => f.key === 'hashtags'));
 });
+
+test('hashtag wall: 5 tags (what the IG prompt asks for) pass, 6 flag, and the fix never names LinkedIn', () => {
+  const wall = igSlop().structures.find((s) => s.id === 'hashtag-wall')!;
+  assert.equal(new RegExp(wall.re.source, wall.re.flags).test('#a #b #c #d #e'), false);
+  assert.equal(new RegExp(wall.re.source, wall.re.flags).test('#a #b #c #d #e #f'), true);
+  assert.doesNotMatch(wall.fix, /linkedin/i);
+});

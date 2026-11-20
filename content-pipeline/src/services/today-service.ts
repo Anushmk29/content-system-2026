@@ -6,6 +6,7 @@ import { createRepo, type ActivityRow } from '../db/repo.ts';
 import { groupIdeas } from './board-service.ts';
 import { brand, pillarSlugs } from '../brand.ts';
 import { getOwnResults, type OwnResults } from './analytics-service.ts';
+import { connectedPlatforms } from './calendar-sync-service.ts';
 import { CONTENT_STATUSES, WEEKLY_POST_TARGET } from '../../core/src/index.ts';
 import { isManual, MANUAL_PLATFORMS, SCRIPT_FORMATS } from '../prompts/platform-playbooks.ts';
 
@@ -94,6 +95,14 @@ const FIX_HINT: Record<string, string> = {
   database: 'Check CONTENT_DATABASE_URL.',
 };
 
+/** A Postiz error turned into what to do about it. */
+export function scheduleFix(error: string, platform: string): string {
+  if (/no .*channel|none of the chosen/i.test(error)) return `${error}. Connect a ${platform} channel in Postiz, then retry.`;
+  if (/Postiz S+ 40[13]/.test(error)) return `${error}. Check CONTENT_POSTIZ_API_KEY on Keys & settings.`;
+  if (/Postiz S+ 404/.test(error)) return `${error}. Check CONTENT_POSTIZ_API_URL (self-hosted Postiz usually serves it under /api).`;
+  return error;
+}
+
 /** Connections that are fine to leave unset: not a "fix" on Today. */
 const OPTIONAL = ['jev', 'apify', 'youtube', 'transcriber'];
 
@@ -140,15 +149,25 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
   const readyIds = new Set(ready.map((r) => r.id));
   const publisher = health.modules.find((m) => m.id === 'publisher');
   const publisherBroken = publisher?.lastStatus === 'error' || publisher?.lastStatus === 'degraded';
+  // The last scheduling run keeps each post's own failure; show that, not the "0 scheduled, 1 failed" summary.
+  const lastFail = new Map<string, string>();
+  const meta = await ctx.db.query<{ meta: { failures?: unknown[] } | null }>(
+    `select meta from content.module_runs where module_id = 'publisher' order by started_at desc limit 1`).then((r) => r.rows[0]?.meta);
+  for (const f of meta?.failures ?? []) if (f && typeof f === 'object') { const x = f as { id: string; error: string }; lastFail.set(x.id, x.error); }
+  const channels = await connectedPlatforms(ctx);
+  const noChannel = (platform: string) => channels !== null && !channels.includes(platform);
   let blocked = 0;
   // A YouTube Short is filmed by hand, never scheduled: it has its own prompts below.
   for (const it of items.filter((i) => i.status === 'approved' && !i.postiz_id && !isManual(i))) {
     if (!readyIds.has(it.id)) {
       blocked++;
       actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · approved but a claim has no proof: add a proof link or edit the claim out`, itemId: it.id });
-    } else if (publisherBroken) {
+    } else if (noChannel(it.platform)) {
       blocked++;
-      actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · approved but scheduling failed: ${publisher?.message ?? 'see Postiz Scheduler'}`, itemId: it.id, moduleId: 'publisher' });
+      actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · approved, but no ${it.platform} channel is connected in Postiz. Connect it in Postiz, then retry.`, itemId: it.id, moduleId: 'publisher' });
+    } else if (lastFail.has(it.id) || publisherBroken) {
+      blocked++;
+      actions.push({ kind: 'blocked', tone: 'danger', title: it.title, detail: `${it.platform} · scheduling failed: ${scheduleFix(lastFail.get(it.id) ?? publisher?.message ?? 'see Postiz Scheduler', it.platform)}`, itemId: it.id, moduleId: 'publisher' });
     }
   }
 
@@ -201,7 +220,7 @@ export async function getToday(ctx: ModuleContext, health: SystemHealth, now = n
       publishedThisWeek: published,
       weeklyTarget: WEEKLY_POST_TARGET,
       runwayDays: runwayDays(runwayCount, WEEKLY_POST_TARGET),
-      readyToSchedule: items.filter((i) => !isManual(i) && i.status === 'approved' && !i.postiz_id && readyIds.has(i.id)).length,
+      readyToSchedule: items.filter((i) => !isManual(i) && i.status === 'approved' && !i.postiz_id && readyIds.has(i.id) && !noChannel(i.platform)).length,
       scheduled7d: upNext.filter((i) => i.status === 'queued' && i.at && new Date(i.at).getTime() >= now.getTime()).length,
       blocked,
       oldestWaitingHours: oldest ? Math.round((now.getTime() - new Date(oldest.updated_at ?? oldest.created_at).getTime()) / 3_600_000) : null,

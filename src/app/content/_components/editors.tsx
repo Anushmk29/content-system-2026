@@ -1,7 +1,8 @@
 'use client';
 // Interactive pieces of the item drawer / approvals / ideas pages. Each one is a
 // thin form over an API route via useAction (refresh + feedback + login redirect handled there).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAction } from './actions';
 import { ExamplePicker, firstFor, type ExampleOpt } from './ExamplePicker';
 
@@ -46,6 +47,7 @@ export function CopyEditor({ itemId, hook, body, cta }: { itemId: string; hook: 
   const a = useAction({ reload: true });
   const [v, setV] = useState({ hook, body, cta });
   const dirty = v.hook !== hook || v.body !== body || v.cta !== cta;
+  const blankHook = hook.trim() !== '' && v.hook.trim() === '';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <label className="faint" style={{ fontSize: 12 }}>Hook
@@ -58,10 +60,11 @@ export function CopyEditor({ itemId, hook, body, cta }: { itemId: string; hook: 
         <input className="input" value={v.cta} onChange={(e) => setV({ ...v, cta: e.target.value })} />
       </label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button type="button" className="btn btn-brand" disabled={!dirty || a.pending} onClick={() => a.call('save', 'PATCH', `/content/api/items/${itemId}`, v)}>
+        <button type="button" className="btn btn-brand" disabled={!dirty || blankHook || a.pending} onClick={() => a.call('save', 'PATCH', `/content/api/items/${itemId}`, v)}>
           {a.busy ? 'Saving…' : 'Save copy'}
         </button>
         {dirty && <button type="button" className="btn" onClick={() => setV({ hook, body, cta })}>Revert</button>}
+        {blankHook && <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>The hook can’t be empty.</span>}
         <span className="faint" style={{ fontSize: 12 }}>{v.body.length} chars</span>
         {a.feedback}
       </div>
@@ -246,7 +249,7 @@ export function MakeAll({ itemIds, styles }: { itemIds: string[]; styles: Exampl
     <div className="next-step">
       <div>
         <b>Create {itemIds.length} visuals</b>
-        <p>Each post uses this example with its own words. Allow about a minute per post.</p>
+        <p>Each post uses this example with its own words. Allow 2–4 minutes per carousel.</p>
       </div>
       <div className="cr-row">
         <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} disabled={done !== null || a.pending} />
@@ -260,8 +263,10 @@ export function MakeAll({ itemIds, styles }: { itemIds: string[]; styles: Exampl
 }
 
 // ---- creative on a post: recreate an example with this post's words, attach own media, remove ----
-export function CreativePanel({ itemId, platform, assets, styles, editable, bare, want }: {
+export function CreativePanel({ itemId, platform, assets, styles, editable, bare, want, job }: {
   itemId: string; platform: string; editable: boolean;
+  /** The saved state of the last "make": still running (started) or why it failed. */
+  job?: { startedAt: string | null; error: string | null };
   /** The caller shows its own empty preview (Design cards), so skip the "No creative yet" line. */
   bare?: boolean;
   assets: Array<{ idx: number; mime: string; source: string; created_at: string }>;
@@ -289,7 +294,17 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
     setWarnings([]);
     await a.call('up', 'POST', url, form);
   };
-  const busy = a.pending;
+  // A make started earlier (maybe before the page was left) is still running on the server: show it and
+  // re-check until it lands. Past 10 minutes the server request is gone (restart/timeout): offer to retry.
+  const router = useRouter();
+  const runningFor = job?.startedAt ? Math.round((Date.now() - new Date(job.startedAt).getTime()) / 60_000) : null;
+  const elsewhere = runningFor !== null && runningFor < 10 && a.busy !== 'make';
+  useEffect(() => {
+    if (!elsewhere) return;
+    const t = setInterval(() => router.refresh(), 10_000);
+    return () => clearInterval(t);
+  }, [elsewhere, router]);
+  const busy = a.pending || elsewhere;
   const extra = <>
     <label className="btn btn-sm cr-upload" aria-disabled={busy}>{a.busy === 'up' ? 'Uploading…' : bare ? 'Upload media' : 'Use my own image or video'}
       <input type="file" aria-label="Upload your own images or video" accept="image/png,image/jpeg,image/webp,video/mp4" multiple disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} /></label>
@@ -323,11 +338,16 @@ export function CreativePanel({ itemId, platform, assets, styles, editable, bare
               {bare && <span className="cr-example-label">Design example</span>}
               <ExamplePicker examples={styles} value={styleId} onChange={setStyleId} want={want} disabled={busy} />
               <button type="button" className={bare && !assets.length ? 'btn btn-primary' : bare ? 'btn' : 'btn btn-ink'} disabled={busy || !styleId} onClick={make}>
-                {a.busy === 'make' ? 'Creating… (about a minute)' : bare ? (assets.length ? 'Regenerate visual' : 'Create visual') : assets.length ? 'Make again' : 'Make creative'}
+                {a.busy === 'make' ? 'Creating… (2–4 min for a carousel)' : elsewhere ? `Creating… started ${runningFor || '<1'} min ago` : bare ? (assets.length ? 'Regenerate visual' : 'Create visual') : assets.length ? 'Make again' : 'Make creative'}
               </button>
             </div>
           ) : <p className="cr-meta">No examples saved yet. <a href="/content/styles">Add one on Design examples</a> to make creatives here.</p>}
           <div className="cr-row">{extra}{a.feedback}</div>
+          {!busy && (job?.error || (runningFor !== null && runningFor >= 10)) && (
+            <p className="cr-meta" role="alert" style={{ color: 'var(--danger)' }}>
+              Last attempt {job?.error ? `failed: ${job.error}` : 'never finished (the server stopped mid-way)'}. Press {assets.length ? 'regenerate' : 'create'} to try again.
+            </p>
+          )}
           {warnings.length > 0 && <ul className="cr-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
         </div>
       )}

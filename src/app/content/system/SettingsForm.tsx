@@ -55,6 +55,7 @@ function SettingsGroup({ group, initial, ready }: { group: string; initial: Sett
           <span className="bk-note" id={`${id}-hint`}>{f.hint}</span>
           <div className="bk-line">
             <span className="bk-note">{reset ? 'Will use server value after saving' : f.source === 'saved' ? 'Saved in app' : f.source === 'server' ? 'Using server value' : 'Using built-in default'}{f.secret && !reset ? f.configured ? ' · Key configured' : ' · No key' : ''}</span>
+            {f.testable && f.configured && !reset && <TestButton name={f.name} />}
             {f.source === 'saved' && <label className="bk-note"><input type="checkbox" checked={reset} onChange={(e) => setDrafts((d) => {
               const next = { ...d };
               if (e.target.checked) next[f.name] = null;
@@ -67,4 +68,14 @@ function SettingsGroup({ group, initial, ready }: { group: string; initial: Sett
       <div className="bk-save"><button type="submit" className="btn btn-primary" disabled={!changed || !ready || a.pending}>{a.busy ? 'Saving…' : `Save ${group.toLowerCase()}`}</button>{a.feedback}</div>
     </fieldset>
   </form>;
+}
+
+/** "Key configured" only means a value is saved; this calls the service with it. */
+function TestButton({ name }: { name: string }) {
+  const a = useAction();
+  return <span className="bk-note">
+    <button type="button" className="btn btn-sm" disabled={a.pending} onClick={() => a.call('test', 'POST', '/content/api/settings/test', { name })}>
+      {a.busy ? 'Testing…' : 'Test connection'}
+    </button> {a.feedback}
+  </span>;
 }

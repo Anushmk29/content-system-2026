@@ -42,7 +42,7 @@ export const GUIDE: Record<string, PageGuide> = {
       { at: '#capture textarea[aria-label="Signal"], #capture', text: 'Write anything worth posting about: a customer question, a win, some news.' },
       { at: '#capture button[type="submit"]', text: 'Save it. It joins the list below.' },
       { at: '.page-next .btn-primary', text: 'This button is always the next thing to do here: make posts, score, or draft.' },
-      { at: '.idea-grid > .idea:first-child .idea-foot .btn-primary, .idea-grid > .idea:first-child, #topics ~ p.empty', text: 'On an idea you like, press "Write this". The AI drafts a version for each platform.' },
+      { at: '.idea-grid > .idea:first-child .idea-foot .btn-primary, .idea-grid > .idea:first-child, #topics ~ p.empty', text: 'On an idea you like, press "Select idea". Then "Draft them now" has the AI write a version for each platform.' },
     ],
     next: '/content/design',
   },

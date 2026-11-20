@@ -18,7 +18,7 @@ const DEFAULT_FUNNEL: FunnelStage = 'awareness';
 export function parseExtractedTopic(raw: string): ExtractedTopic {
   const o = parseJsonObject(raw);
   const title = typeof o.title === 'string' ? o.title.trim() : '';
-  if (title.length === 0) throw new Error('extracted topic has no title');
+  if (title.length === 0) throw new Error(`extracted topic has no title. The model replied: ${raw.trim().slice(0, 200)}`);
 
   const pillars = pillarSlugs();
   const pillar = typeof o.pillar === 'string' && pillars.includes(o.pillar) ? o.pillar : pillars[0]!;

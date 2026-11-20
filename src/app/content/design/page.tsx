@@ -9,7 +9,8 @@ import { CreativePanel, MakeAll } from '@/app/content/_components/editors';
 import type { ExampleOpt } from '@/app/content/_components/ExamplePicker';
 import { ItemDrawer } from '@/app/content/_components/ItemDrawer';
 import { RunModuleButton } from '@/app/content/_components/actions';
-import { ago, shortDate, withParams, splitPosts } from '@/app/content/_lib/format';
+import { ago, shortDate, withParams } from '@/app/content/_lib/format';
+import { carouselSlides } from '@pratapai/content-pipeline/core';
 
 const STAGES: { key: DesignStage; label: string; title: string; description: string; empty: string }[] = [
   { key: 'needs', label: 'Create', title: 'Create your visuals', description: 'Choose a design example for each post, or upload your own media.', empty: 'Every post in your design queue has a visual.' },
@@ -92,7 +93,9 @@ function ApproveNext({ rows }: { rows: DesignRow[] }) {
  *  the slide text folded away, then the make/upload tools pinned to the bottom so cards line up. */
 function DesignCard({ r, styles, href }: { r: DesignRow; styles: ExampleOpt[]; href: string }) {
   const image = r.format === 'quote_card';
-  const slides = image ? [] : splitPosts(r.body ?? '');
+  const slides = image ? [] : carouselSlides(r.body ?? '', r.format === 'carousel');
+  // Fewer images than slides = an incomplete carousel (max 10 images per post).
+  const short = !image && r.assets.length > 0 && r.assets.length < Math.min(slides.length, 10);
   const first = image ? r.hook : slides[0];
   return (
     <article className="dz-card">
@@ -100,6 +103,7 @@ function DesignCard({ r, styles, href }: { r: DesignRow; styles: ExampleOpt[]; h
         <div className="dz-meta">
           <Plat p={r.platform} />
           <span>{image ? 'Image' : `Carousel · ${slides.length} slide${slides.length === 1 ? '' : 's'}`}</span>
+          {short && <span className="dz-status" data-stage="needs" title="Make the visual again to get every slide">Only {r.assets.length} of {Math.min(slides.length, 10)} slides made</span>}
           <span className="dz-status" data-stage={r.stage}>{r.stage === 'needs' ? 'Needs visual' : r.stage === 'locked' ? 'Approved' : r.status === 'needs_approval' ? 'Ready to approve' : 'Needs quality check'}</span>
         </div>
         <h3 className="dz-title" title={`${r.title}: edit the copy`}><Link href={href} scroll={false}>{r.title}</Link></h3>
@@ -117,7 +121,7 @@ function DesignCard({ r, styles, href }: { r: DesignRow; styles: ExampleOpt[]; h
         </details>
       )}
       <div className="dz-foot">
-        <CreativePanel itemId={r.id} platform={r.platform} assets={r.assets} styles={styles} editable={r.stage !== 'locked'} bare want={image ? 'image' : 'carousel'} />
+        <CreativePanel itemId={r.id} platform={r.platform} assets={r.assets} styles={styles} editable={r.stage !== 'locked'} job={{ startedAt: r.creative_started_at, error: r.creative_error }} bare want={image ? 'image' : 'carousel'} />
         {r.stage === 'made' && <Link href={href} scroll={false} className="btn btn-primary">{r.status === 'needs_approval' ? 'Review and approve' : 'Review copy and visual'}</Link>}
         {r.stage === 'locked' && <Link href={`/content/calendar?item=${r.id}`} className="btn btn-primary">Open in calendar</Link>}
       </div>

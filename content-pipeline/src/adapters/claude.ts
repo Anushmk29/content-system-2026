@@ -146,8 +146,14 @@ export function createClaude(c: LlmConfig = {}): ClaudeAdapter {
 
     async healthCheck(): Promise<HealthReport> {
       if (!configured) return report('claude', 'unconfigured', 'no LLM key (CONTENT_OPENROUTER_API_KEY)');
-      // Presence-only: don't burn tokens on every health poll.
-      return report('claude', 'ok', 'openrouter key present', { provider: 'openrouter', model });
+      // /key costs no tokens: it proves the key is accepted, not just present.
+      const res = await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { authorization: `Bearer ${c.openrouterApiKey}` }, signal: AbortSignal.timeout(4000),
+      }).catch((e: Error) => e);
+      if (res instanceof Error) return report('claude', 'degraded', `OpenRouter unreachable: ${res.message}`);
+      if (res.status === 401 || res.status === 403) return report('claude', 'error', 'OpenRouter rejected the key (CONTENT_OPENROUTER_API_KEY)');
+      if (!res.ok) return report('claude', 'degraded', `OpenRouter /key ${res.status}`);
+      return report('claude', 'ok', 'OpenRouter key accepted', { provider: 'openrouter', model });
     },
   };
 }

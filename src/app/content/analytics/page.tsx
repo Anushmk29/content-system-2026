@@ -10,7 +10,7 @@ import { ApiButton } from '@/app/content/_components/actions';
 import { compact, prettyPillar, withParams, ago, when, times, PLATFORM, TONE } from '@/app/content/_lib/format';
 
 const SIGNAL: Record<string, { label: string; color: string; tip: string }> = {
-  repurpose: { label: 'Repurpose', color: TONE.ok, tip: 'Many people saw it and engaged → turn it into a carousel, blog or email' },
+  repurpose: { label: 'Repurpose', color: TONE.ok, tip: 'Many people saw it and engaged → turn it into a carousel or email' },
   improve_hook: { label: 'Improve hook', color: TONE.warn, tip: 'Beat your usual on a small audience → new hook or format, then repost' },
   awareness_only: { label: 'Awareness', color: TONE.info, tip: 'Seen, but below your usual → make fewer posts like this' },
   archive: { label: 'Archive', color: TONE.faint, tip: 'Low reach and low engagement → let it go' },
@@ -38,16 +38,26 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   const itemHref = (id: string) => withParams('/content/analytics', sp, { item: id });
   const hasNumbers = (p: Analytics['posts'][number]) => p.impressions != null || p.reach != null || p.engagement != null;
   const noMetrics = a.posts.filter((p) => !hasNumbers(p));
+  // No post measured yet = unknown, not zero.
+  const measured = a.posts.some(hasNumbers);
+  const lastRun = a.own.lastRun;
   const label = (at: string) => new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const span: [string, string] | undefined = a.series.length ? [label(a.series[0]!.at), label(a.series[a.series.length - 1]!.at)] : undefined;
 
   return (
     <>
       {head}
+      {lastRun && (lastRun.status === 'error' || lastRun.status === 'running' || (lastRun.status === 'stopped' && lastRun.message)) && (
+        <p className="card" role="status" style={{ padding: '10px 14px', borderColor: lastRun.status === 'running' ? 'var(--info)' : 'var(--danger)', marginBottom: 12 }}>
+          {lastRun.status === 'running'
+            ? <>Refreshing your results… started {ago(lastRun.started_at)}. The numbers below are from the last refresh.</>
+            : <><b>Last refresh {lastRun.status === 'error' ? 'failed' : 'stopped'}</b> {ago(lastRun.started_at)}{lastRun.message ? `: ${lastRun.message}` : ''}. The numbers below are from earlier refreshes. Press Refresh my results to try again.</>}
+        </p>
+      )}
       <KpiStrip items={[
         { label: 'Published', value: t.published, sub: `in the last ${range} days` },
-        { label: 'Reach', value: compact(t.reach), sub: `${compact(t.clicks)} clicks` },
-        { label: 'Engagement', value: compact(t.engagement), sub: `likes, comments & shares · ${t.engagementPerPost ?? '—'} per post` },
+        { label: 'Reach', value: measured ? compact(t.reach) : '—', sub: a.posts.some((p) => p.clicks != null) ? `${compact(t.clicks)} clicks` : 'clicks not measured' },
+        { label: 'Engagement', value: measured ? compact(t.engagement) : '—', sub: `likes, comments & shares · ${t.engagementPerPost ?? '—'} per post` },
         { label: 'Vs your usual', value: times(t.vsUsual), sub: t.vsUsual != null ? 'the median post, against your own median'
           : a.own.baseline.length ? 'no results on these posts yet' : 'connect your accounts to compare' },
       ]} />

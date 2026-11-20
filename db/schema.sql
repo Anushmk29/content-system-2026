@@ -298,6 +298,8 @@ alter table content.decisions enable row level security;
 -- Analytics freezes the reach×intent signal (Table 30) on the item; autopilot-picked
 -- topics are flagged so the dataset never mistakes them for the operator's own choice.
 alter table content.content_items add column if not exists performance_signal text;
+alter table content.content_items add column if not exists creative_started_at timestamptz; -- a visual being made (survives leaving the page)
+alter table content.content_items add column if not exists creative_error text;              -- why the last attempt failed
 alter table content.topics add column if not exists auto_selected boolean not null default false;
 -- Live web check (Perplexity via OpenRouter) captured by Research; fed to scoring + drafting.
 alter table content.topics add column if not exists market_context text;

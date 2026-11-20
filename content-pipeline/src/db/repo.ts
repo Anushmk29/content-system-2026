@@ -8,6 +8,8 @@ export interface ContentItemRow {
   id: string;
   anchor_id: string | null;
   offer_idx?: number | null;
+  creative_started_at?: string | null;
+  creative_error?: string | null;
   hook_ref?: string | null;
   topic_id?: string | null;
   title: string;

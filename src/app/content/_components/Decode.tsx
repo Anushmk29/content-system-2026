@@ -26,7 +26,7 @@ const DRIP = 120; // ms between cards of one poll's batch
 const THIN = 2;   // groups with fewer posts are faded and never recommended
 const NETS = ['x', 'instagram', 'linkedin', 'facebook', 'youtube'] as const;
 const STAGE: Record<string, string> = {
-  scraping: 'collecting posts', transcribing: 'transcribing videos', judging: 'judging fit for you', sorting: 'sorting into formats',
+  scraping: 'collecting posts', transcribing: 'transcribing videos', judging: 'judging fit for you', sorting: 'sorting into formats', decoding: 'reading posts',
 };
 
 const byVs = (a: DecodedPostRow, b: DecodedPostRow) => (b.hunt_score ?? -1) - (a.hunt_score ?? -1)
@@ -645,7 +645,7 @@ export function Recreate({ post, styles }: { post: DecodedPostRow; styles: Style
 }
 
 // ---- make my version: their structure, our post --------------------------------------
-const TARGETS = [['linkedin', 'LinkedIn'], ['x', 'X'], ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['blog', 'Blog'], ['youtube', 'YouTube Short']] as const;
+const TARGETS = [['linkedin', 'LinkedIn'], ['x', 'X'], ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['youtube', 'YouTube Short']] as const;
 
 export function MakeMine({ target, platform, styles }: { target: { postId?: string; formatId?: string }; platform?: string; styles: StyleOpt[] }) {
   const a = useAction();

@@ -62,7 +62,7 @@ export const publisherModule: Module = {
     }
 
     let published = 0;
-    const failures: string[] = [];
+    const failures: { id: string; platform: string; error: string }[] = [];
     const last = await repo.lastScheduledByPlatform();
     const now = new Date();
     for (const item of ready) {
@@ -76,7 +76,7 @@ export const publisherModule: Module = {
         if (!prev || slot > prev) last.set(item.platform, slot);
         published++;
       } catch (e) {
-        failures.push(`${item.id}: ${(e as Error).message}`);
+        failures.push({ id: item.id, platform: item.platform, error: (e as Error).message });
       }
     }
 

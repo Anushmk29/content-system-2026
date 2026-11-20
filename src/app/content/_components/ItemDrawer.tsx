@@ -2,7 +2,7 @@
 // before approval, claims, approve/changes/reject, posting time, metrics and history.
 import Link from 'next/link';
 import { getContext, getItemDetail, platformChannels, loadBrand, listItemAssets, listStyles, listHooks, CHANGE_REASONS, humanScore, HUMAN_MIN } from '@pratapai/content-pipeline';
-import { LIVE_STATUSES, EDITABLE_STATUSES } from '@pratapai/content-pipeline/core';
+import { LIVE_STATUSES, EDITABLE_STATUSES, bareHandle } from '@pratapai/content-pipeline/core';
 import { Plat, StatusChip, Chip } from './viz';
 import { ApprovalActions, ChannelPicker, CopyEditor, CreativePanel, HookPicker, MetricsForm, PlanTime } from './editors';
 import { ClaimEditor } from './ClaimEditor';
@@ -80,6 +80,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
             <CreativePanel key={item.id} itemId={item.id} platform={item.platform} editable={editable}
               assets={assets.map((x) => ({ idx: x.idx, mime: x.mime, source: x.source, created_at: String(x.created_at) }))}
               styles={styles.map(({ id, name, kind, pages, has_person }) => ({ id, name, kind, pages, has_person }))}
+              job={{ startedAt: item.creative_started_at ? new Date(item.creative_started_at).toISOString() : null, error: item.creative_error ?? null }}
               want={item.format === 'quote_card' ? 'image' : item.format === 'carousel' ? 'carousel' : undefined} />
           </section>
         )}
@@ -88,7 +89,7 @@ export async function ItemDrawer({ id, closeHref, linkFor }: { id: string; close
           <h3>Preview · {p?.label ?? item.platform}</h3>
           <div className="preview" data-p={item.platform}>
             {item.platform !== 'blog' && (
-              <div className="who"><span className="av" /><div><b>{brand.name}</b><div style={{ fontSize: 12, opacity: 0.6 }}>{item.platform === 'x' && brand.ownHandles.x ? `@${brand.ownHandles.x.replace(/^@/, '')}` : brand.tagline} · now</div></div></div>
+              <div className="who"><span className="av" /><div><b>{brand.name}</b><div style={{ fontSize: 12, opacity: 0.6 }}>{item.platform === 'x' && brand.ownHandles.x ? `@${bareHandle(brand.ownHandles.x)}` : brand.tagline} · now</div></div></div>
             )}
             {item.platform === 'blog' && <h3 style={{ color: 'var(--ink)', fontSize: 20, textTransform: 'none', letterSpacing: 0, margin: '0 0 8px' }}>{item.title}</h3>}
             {item.hook && <p style={{ margin: '0 0 8px', fontWeight: 600 }}>{item.hook}</p>}

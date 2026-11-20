@@ -67,7 +67,7 @@ export default async function IdeasPage() {
           <>Write down anything worth posting about under <b>Capture a signal</b> (a question a customer asked, a news item, a win).</>,
           <>Click <b>Make posts</b> on one to turn it into an idea, or <b>Turn them all into topics</b> for the whole list.</>,
           <>Click <b>Score</b> when asked: each idea gets a mark out of 25, best first.</>,
-          <>On the ideas you like, tick the platforms and click <b>Draft this idea</b>. Drop the rest.</>,
+          <>On the ideas you like, tick the platforms and click <b>Select idea</b>, then <b>Draft them now</b> to write a version for each platform. Drop the rest.</>,
           <>Click <b>Draft them now</b>. Posts pass a quality check and appear in <b>Approvals</b>. Posts needing evidence stay in <b>All posts</b>, where you can resolve their claims.</>,
         ]} />
       <KpiStrip items={[
@@ -220,7 +220,7 @@ function TopicCard({ t, pillars, on }: { t: TopicRow; pillars: string[]; on: str
         <Picker t={t} on={on} />
       </details>
       <footer className="idea-foot">
-        <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'selected' }} label="Write this" className="btn btn-primary" />
+        <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'selected' }} label="Select idea" className="btn btn-primary" />
         <ApiButton path={`/content/api/topics/${t.id}`} method="PATCH" body={{ decision: 'dropped' }} label="Drop" className="btn" />
         {t.created_at && <span className="faint">{t.source ?? 'research'} · {ago(t.created_at)}</span>}
       </footer>

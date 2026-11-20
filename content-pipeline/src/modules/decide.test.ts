@@ -209,7 +209,7 @@ test("platform fit: Jev also picks each platform's format and framework; the dra
   });
   assert.deepEqual(fit.picks?.linkedin, { format: 'carousel', framework: 'pas' });
   assert.deepEqual(fit.picks?.x, { format: 'thread', framework: 'thread_numbered' });       // unknown → default
-  assert.equal(fit.picks?.blog, undefined);                                                 // nothing to choose
+  assert.equal(fit.picks?.youtube, undefined);                                                 // nothing to choose
   assert.deepEqual(PLATFORM_FIT.parse('{"x": 0.7, "picks": {"x": {"format": "image", "framework": "single_insight"}}}').picks?.x,
     { format: 'image', framework: 'single_insight' });
 
@@ -265,9 +265,9 @@ test('Jev decides scoring + platform plan at any confidence; QC still needs a co
   const yes = (p: number): JevAnswer => ({ type: 'noul', noul: p });
   const ch = (choice: string, p: number): JevAnswer => ({ type: 'choice', choice, probabilities: { [choice]: p } });
   const fit = PLATFORM_FIT.fromJev({
-    linkedin: yes(0.65), blog: yes(0.84), x: yes(0.72), instagram: yes(0.6), facebook: yes(0.51), reddit: yes(0.66), youtube: yes(0.56),
+    linkedin: yes(0.65), x: yes(0.72), instagram: yes(0.6), facebook: yes(0.51), reddit: yes(0.66), youtube: yes(0.56),
     linkedin_format: ch('carousel', 0.97), linkedin_framework: ch('pas', 0.3),
   });
-  assert.deepEqual(suggestedPlatforms(fit), ['linkedin', 'blog', 'x', 'reddit']);
+  assert.deepEqual(suggestedPlatforms(fit), ['linkedin', 'x', 'instagram', 'reddit']);
   assert.deepEqual(fit.picks?.linkedin, { format: 'carousel', framework: 'hook_story_lesson' }); // unsure structure → default
 });

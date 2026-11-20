@@ -50,7 +50,7 @@ export default async function HooksPage() {
       <div style={{ height: 16 }} />
       {hooks.length
         ? <Hooks hooks={hooks} styles={styles} />
-        : <p className="empty">No opening lines yet. Scan your competitors on Competitors and their opening lines land here.</p>}
+        : <p className="empty">No opening lines yet. Add competitors and run a scan on <Link href="/content/decode">Competitors</Link>; their best opening lines land here.</p>}
     </>
   );
 }

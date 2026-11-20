@@ -4,6 +4,7 @@
 import sharp from 'sharp';
 import type { ModuleContext } from '../modules/module.ts';
 import { DECODE_PLATFORMS, type DecodePlatform } from '../adapters/apify.ts';
+import { bareHandle } from '../../core/src/handles.ts';
 import { DEFAULT_BRAND, brand, setBrand, slugify, type Brand, type BrandOffer, type BrandPillar, type LogoCorner } from '../brand.ts';
 import { fetchGoogleFont, fontInfo, registerFonts } from '../fonts.ts';
 import { isRasterImage, type Look } from '../creative.ts';
@@ -60,6 +61,9 @@ export interface BrandPatch {
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /** Clean every field at the trust boundary; throws a plain-English error on bad input. */
+/** X and Instagram are posted to as @handle: keep the handle, not a pasted profile link. LinkedIn/Facebook stay links. */
+const handleFor = (k: string, v: string) => (v && (k === 'x' || k === 'instagram') ? bareHandle(v) : v);
+
 export function cleanPatch(p: BrandPatch): BrandPatch {
   const out: BrandPatch = {};
   if (p.name !== undefined) { out.name = text(p.name, 80); if (!out.name) throw new Error('Brand name can’t be empty.'); }
@@ -96,7 +100,7 @@ export function cleanPatch(p: BrandPatch): BrandPatch {
   }
   if (p.ownHandles !== undefined) {
     out.ownHandles = Object.fromEntries(DECODE_PLATFORMS
-      .map((k) => [k, text((p.ownHandles ?? {})[k], 200)] as const).filter(([, v]) => v)) as Partial<Record<DecodePlatform, string>>;
+      .map((k) => [k, handleFor(k, text((p.ownHandles ?? {})[k], 200))] as const).filter(([, v]) => v)) as Partial<Record<DecodePlatform, string>>;
   }
   if (p.onboarded !== undefined) out.onboarded = !!p.onboarded;
   return out;

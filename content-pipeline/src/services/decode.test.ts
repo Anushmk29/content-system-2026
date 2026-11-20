@@ -36,6 +36,9 @@ test('normalise: X and Instagram actor shapes', () => {
   assert.equal(normalise('instagram', { url: '--batch-file=/etc/hosts', type: 'Video' }), null, 'never an option for yt-dlp');
   assert.equal(bareHandle('https://www.instagram.com/acme/'), 'acme');
   assert.equal(bareHandle('@acme'), 'acme');
+  assert.equal(bareHandle('https://x.com/SymthexStudio'), 'SymthexStudio');
+  assert.equal(bareHandle('x.com/acme?s=21'), 'acme');
+  assert.equal(bareHandle('https://www.linkedin.com/in/foo/?isSelfProfile=true'), 'foo');
 });
 
 test('parseBreakdowns: clamps format numbers and normalises tags', () => {

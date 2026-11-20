@@ -2,6 +2,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { loadEnv } from '../env.ts';
 import type { Db } from '../db/client.ts';
+import type { ModuleContext } from '../modules/module.ts';
 
 interface Setting {
   name: string; label: string; group: string; hint: string;
@@ -18,7 +19,7 @@ export const SETTINGS: Setting[] = [
   { name: 'CONTENT_X_BEARER_TOKEN', label: 'X bearer token', group: 'Connections', hint: 'Official X search API.', secret: true },
   ...[
     ['CONTENT_LLM_MODEL', 'Writing model', 'OpenRouter model ID. Leave empty for the built-in default.'],
-    ['CONTENT_IMAGE_MODEL', 'Image model', 'OpenRouter image model ID.'],
+    ['CONTENT_IMAGE_MODEL', 'Image model', 'An OpenRouter image model, such as qwen/qwen-image-3. A text model here breaks Create visual.'],
     ['CONTENT_RESEARCH_MODEL', 'Research model', 'OpenRouter model ID, tinyfish, or off.'],
     ['CONTENT_CHEAP_MODEL', 'Quick task model', 'OpenRouter model ID, or off to use the writing model.'],
     ['CONTENT_JEV_MODEL', 'Jev model', 'OpenRouter decision model ID.'],
@@ -83,13 +84,13 @@ export async function readSettings(db: Db): Promise<{ values: Record<string, str
   }
 }
 
-export interface SettingView extends Setting { value?: string; configured: boolean; source: 'saved' | 'server' | 'default' }
+export interface SettingView extends Setting { value?: string; configured: boolean; source: 'saved' | 'server' | 'default'; testable?: boolean }
 export async function settingsView(db: Db): Promise<{ fields: SettingView[]; ready: boolean }> {
   const { values, ready } = await readSettings(db);
   return { ready, fields: SETTINGS.map((s) => {
     let value = values[s.name] ?? process.env[s.name]?.trim() ?? '';
     if (value && s.options?.includes('0')) value = /^(1|true|on|yes)$/i.test(value) ? '1' : '0';
-    return { ...s, ...(!s.secret ? { value } : {}), configured: !!value,
+    return { ...s, ...(!s.secret ? { value } : {}), configured: !!value, testable: !!s.secret && s.name in TESTABLE,
       source: s.name in values ? 'saved' : process.env[s.name]?.trim() ? 'server' : 'default' };
   }) };
 }
@@ -134,4 +135,19 @@ export async function saveSettings(db: Db, input: unknown): Promise<void> {
         on conflict (name) do update set value = excluded.value, updated_at = now()`, [name, value]);
     }
   });
+}
+
+/** Which connection a key belongs to; only these get a Test button (X has no adapter to probe). */
+const TESTABLE: Record<string, 'claude' | 'postiz' | 'apify' | 'tinyfish' | 'youtube'> = {
+  CONTENT_OPENROUTER_API_KEY: 'claude', CONTENT_POSTIZ_API_URL: 'postiz', CONTENT_POSTIZ_API_KEY: 'postiz',
+  CONTENT_APIFY_TOKEN: 'apify', CONTENT_TINYFISH_API_KEY: 'tinyfish', CONTENT_YOUTUBE_API_KEY: 'youtube',
+};
+export const testableSettings = Object.keys(TESTABLE);
+
+/** "Configured" only means a value is saved; this makes a real call with it. */
+export async function testConnection(ctx: ModuleContext, name: string): Promise<{ ok: boolean; message: string }> {
+  const adapter = TESTABLE[name] ? ctx.adapters[TESTABLE[name]] : undefined;
+  if (!adapter) return { ok: false, message: 'This setting has no connection test.' };
+  const r = await adapter.healthCheck();
+  return { ok: r.state === 'ok', message: r.message };
 }

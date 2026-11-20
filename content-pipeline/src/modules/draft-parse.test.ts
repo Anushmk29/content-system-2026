@@ -72,3 +72,11 @@ test('rejects a missing required field', () => {
 test('throws clearly when there is no JSON at all', () => {
   assert.throws(() => parseDraftResponse('I cannot help with that.'), /no JSON object/);
 });
+
+test('dropRepeatedCta removes a body ending that repeats the CTA', async () => {
+  const { dropRepeatedCta } = await import('./draft-parse.ts');
+  assert.equal(dropRepeatedCta('Point one.\n\nWhat would you change first?', 'What would you change first?'), 'Point one.');
+  assert.equal(dropRepeatedCta('Tweet 1\n---\nWhat would you change first?', 'what would you change first'), 'Tweet 1');
+  assert.equal(dropRepeatedCta('Point one.\n\nA different close.', 'What would you change first?'), 'Point one.\n\nA different close.');
+  assert.equal(dropRepeatedCta('Only line', 'Only line'), 'Only line');
+});

@@ -93,6 +93,7 @@ Respond with ONLY a JSON object (no markdown fences, no prose) of this exact sha
 ${all.map((p) => `  ${`"${p}":`.padEnd(12)} { "title": string, "hook": string, "body": string, "cta": string, "hookPattern": string${input.hooks ? ', "hookFrom": number | null' : ''}, "hookOptions": [{ "hook": string, "pattern": string, "contrast": number, "pattern_strength": number, "platform_fit": number }] },`).join('\n')}
   "claims":   string[]
 }
+"cta" is the closing line and is shown right after "body": do not also end "body" with it (or with the same question).
 "claims" lists every specific factual/metric/result claim across all the drafts that
 would need external proof. Use [] if there are none. Do not invent claims.
 "hookPattern" names the kind of opening each piece uses, one of: ${HOOK_PATTERN_KEYS.join(', ')}.

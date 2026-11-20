@@ -15,7 +15,7 @@ export interface FormatStat { name: string; posts: number; vsUsual: number | nul
 export interface OwnResults {
   /** Brand Kit has own accounts to scrape */
   ready: boolean;
-  lastRun: { id: string; status: string; stage: string; started_at: string; finished_at: string | null; total: number; cost: number } | null;
+  lastRun: { id: string; status: string; stage: string; started_at: string; finished_at: string | null; total: number; cost: number; message: string | null } | null;
   baseline: { platform: string; median_reactions: number; posts: number }[];
 }
 
@@ -52,7 +52,7 @@ export async function getOwnResults(ctx: ModuleContext): Promise<OwnResults> {
   const [self, run, baseline] = await Promise.all([
     ctx.db.query<{ n: number }>(`select count(*)::int as n from content.competitors where is_self and handles <> '{}'::jsonb`),
     ctx.db.query<NonNullable<OwnResults['lastRun']>>(
-      `select r.id, r.status, r.stage, r.started_at::text, r.finished_at::text, r.total, (r.cost_ai_usd + r.cost_apify_usd)::float8 as cost
+      `select r.id, r.status, r.stage, r.started_at::text, r.finished_at::text, r.total, (r.cost_ai_usd + r.cost_apify_usd)::float8 as cost, r.message
        from content.decode_runs r where exists (select 1 from content.competitors s where s.is_self and s.id = any(r.competitor_ids))
        order by r.started_at desc limit 1`),
     ctx.db.query<OwnResults['baseline'][number]>(`select platform, median_reactions, posts from content.v_own_baseline order by platform`),

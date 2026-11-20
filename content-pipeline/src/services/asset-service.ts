@@ -6,8 +6,7 @@ import type { ModuleContext } from '../modules/module.ts';
 import type { ContentItemRow } from '../db/repo.ts';
 import { generateCreative, type GenerateResult } from './style-service.ts';
 import { isPlacement, isRasterImage } from '../creative.ts';
-import { EDITABLE_STATUSES } from '../../core/src/index.ts';
-import { splitSlides } from '../slides.ts';
+import { EDITABLE_STATUSES, carouselSlides } from '../../core/src/index.ts';
 import { VISUAL_FORMATS } from '../prompts/platform-playbooks.ts';
 
 type AssetMime = 'image/png' | 'image/jpeg' | 'video/mp4';
@@ -24,7 +23,7 @@ const MAX_IMAGES = 10;
 export function creativeText(item: Pick<ContentItemRow, 'platform' | 'title' | 'hook' | 'body'> & { format?: string | null }): string {
   // Single image: its headline, then the caption for the design's other text blocks.
   if (item.format === 'quote_card') return [(item.hook || item.title).trim(), item.body?.trim()].filter(Boolean).join('\n\n');
-  const slides = splitSlides(item.body ?? '');
+  const slides = carouselSlides(item.body ?? '', item.format === 'carousel');
   if (item.platform !== 'x' && slides.length > 1) return slides.join('\n---\n');
   if (item.platform === 'instagram' && slides.length === 1) return slides[0]!;
   return (item.hook || item.title).trim();
@@ -57,9 +56,19 @@ export async function saveItemCreative(ctx: ModuleContext, itemId: string, input
   if (!placement) throw new Error('Blog posts don’t carry a creative.');
   // The creative's button: the post's CTA when it's button-sized, else none (the caption carries the link).
   const cta = item.cta && item.cta.length <= 28 ? item.cta : undefined;
-  const r = await generateCreative(ctx, { styleId: input.styleId, refs: input.refs, placement, text: creativeText(item), cta, brief: item.title });
-  await replace(ctx, itemId, r.images.map((buf) => ({ buf, mime: 'image/png' as const })), 'generated', input.styleId ?? null);
-  return r;
+  // Recorded on the post so a page opened later still shows "creating…" or why it failed.
+  const mark = (started: boolean, error: string | null) => ctx.db.query(
+    `update content.content_items set creative_started_at = ${started ? 'now()' : 'null'}, creative_error = $2 where id = $1`, [itemId, error]);
+  await mark(true, null);
+  try {
+    const r = await generateCreative(ctx, { styleId: input.styleId, refs: input.refs, placement, text: creativeText(item), cta, brief: item.title });
+    await replace(ctx, itemId, r.images.map((buf) => ({ buf, mime: 'image/png' as const })), 'generated', input.styleId ?? null);
+    await mark(false, null);
+    return r;
+  } catch (e) {
+    await mark(false, (e as Error).message.slice(0, 500)).catch(() => {});
+    throw e;
+  }
 }
 
 // MP4: an `ftyp` box whose major brand is a real MP4 one, not just any 4 bytes after it.
@@ -109,12 +118,13 @@ export type DesignStage = 'needs' | 'made' | 'locked';
 export interface DesignRow {
   id: string; platform: string; format: string; title: string; hook: string | null; body: string | null;
   status: string; scheduled_at: string | null; created_at: string; stage: DesignStage;
+  creative_started_at: string | null; creative_error: string | null;
   assets: { idx: number; mime: string; source: string; created_at: string }[];
 }
 export async function listDesignQueue(ctx: ModuleContext): Promise<DesignRow[]> {
   return (await ctx.db.query<DesignRow>(
     `select ci.id, ci.platform::text, ci.format::text, ci.title, ci.hook, ci.body, ci.status::text,
-       ci.scheduled_at::text, ci.created_at::text,
+       ci.scheduled_at::text, ci.created_at::text, ci.creative_started_at::text, ci.creative_error,
        coalesce((select json_agg(json_build_object('idx', a.idx, 'mime', a.mime, 'source', a.source, 'created_at', a.created_at) order by a.idx)
                  from content.content_assets a where a.item_id = ci.id), '[]'::json) as assets,
        case when ci.status::text <> all($2) then 'locked'

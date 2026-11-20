@@ -1,7 +1,7 @@
 // Draft Generator (Bible §9, §8.2) — the "intelligence" the custom build exists for.
 // Anchor-first: for each topic the operator marks 'selected' (ideas come mostly from X
 // and Reddit via Market Signals), Claude writes ONE LinkedIn anchor post, then repurposes
-// it into a blog article, an X thread, an Instagram carousel and a Facebook post. Every specific/metric claim is stored UNPROVEN, so the honest-numbers
+// it into an X thread, an Instagram carousel and a Facebook post. Every specific/metric claim is stored UNPROVEN, so the honest-numbers
 // rule (QC gate + v_publish_ready) blocks publish until a human attaches proof.
 import type { Module, ModuleContext, ModuleResult } from './module.ts';
 import { ok, degraded } from './module.ts';
@@ -23,7 +23,7 @@ import type { ModuleContext as Ctx } from './module.ts';
 export const draftGeneratorModule: Module = {
   id: 'draft_generator',
   title: 'Draft Generator',
-  description: 'Turns each selected topic into a LinkedIn anchor + blog + X thread + Instagram carousel + Facebook post via Claude (Bible §9).',
+  description: 'Turns each selected topic into a LinkedIn anchor + X thread + Instagram carousel + Facebook post via Claude (Bible §9).',
 
   async run(ctx: ModuleContext): Promise<ModuleResult> {
     if (!ctx.adapters.claude.configured) {

@@ -27,6 +27,10 @@ except RuntimeError:  # a GPU without its CUDA libraries (cuBLAS/cuDNN): CPU ins
 print(json.dumps({"text": " ".join(x["text"] for x in out), "segments": out, "lang": info.language, "duration": info.duration}))
 `;
 
+const GPU_ERROR = /cuda|cudnn|cublas|cudart|gpu/i;
+/** The last non-empty line of a crash: where Python puts the actual error. */
+const lastLine = (m: string) => m.split('\n').map((l) => l.trim()).filter(Boolean).pop()?.slice(0, 200) ?? m;
+
 export interface Transcript { text: string; segments: { start: number; end: number; text: string }[]; lang: string | null; durationS: number | null }
 
 export interface TranscriberConfig { ytdlp?: string; python?: string; model?: string; cap?: number }
@@ -59,7 +63,12 @@ export function createTranscriber(cfg: TranscriberConfig = {}): TranscriberAdapt
         await run(ytdlp, ['-f', 'bestaudio/best', '--no-playlist', '--max-filesize', '300M', '-o', join(dir, 'a.%(ext)s'), '--', url], { timeout: 300_000 });
         const file = (await readdir(dir)).find((f) => f.startsWith('a.'));
         if (!file) throw new Error('yt-dlp downloaded nothing');
-        const { stdout } = await run(python, ['-c', WHISPER_PY, join(dir, file), model], { timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
+        const whisper = (device: string) => run(python, ['-c', WHISPER_PY, join(dir, file), model, device], { timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
+        // A broken CUDA install can crash the process outright, past the Python RuntimeError fallback: retry on CPU.
+        const { stdout } = await whisper('auto').catch(async (e: Error) => {
+          if (!GPU_ERROR.test(e.message)) throw e;
+          return whisper('cpu').catch((e2: Error) => { throw new Error(`Transcription failed: the GPU is unavailable and the CPU retry failed (${lastLine(e2.message)})`); });
+        });
         const j = JSON.parse(stdout.trim().split('\n').pop()!) as { text: string; segments: Transcript['segments']; lang?: string; duration?: number };
         return { text: j.text.trim(), segments: j.segments, lang: j.lang ?? null, durationS: j.duration != null ? Math.round(j.duration) : null };
       } finally {

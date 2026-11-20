@@ -48,12 +48,17 @@ ${h.rules.map((r) => `- ${r}`).join('\n')}`;
 });
 
 interface Slop { words: { find: string }[]; phrases: { find: string }[]; structures: { id: string; regex: string; name: string; fix: string }[] }
+/** Local fixes to the vendored lexicon (kept untouched). Its hashtag-wall tell fired on the 5 hashtags our own
+ *  Instagram prompt asks for, and its fix text talked about LinkedIn on every platform. */
+const SLOP_OVERRIDES: Record<string, { regex: string; name: string; fix: string }> = {
+  'hashtag-wall': { regex: '(?:#\\w+[ \\t]*){6,}', name: 'Hashtag wall (6+)', fix: 'Keep to 3–5 specific hashtags; a long wall reads as spam.' },
+};
 /** ig-human/slop.json: its stock words and phrases, and its structural tells as JS regexes. */
 export const igSlop = memo(() => {
   const s = JSON.parse(read('ig-human/slop.json')) as Slop;
   return {
     terms: [...s.words, ...s.phrases].map((w) => w.find.toLowerCase()),
-    structures: s.structures.map((x) => {
+    structures: s.structures.map((y) => ({ ...y, ...SLOP_OVERRIDES[y.id] })).map((x) => {
       // Python syntax → JS: leading (?im) flags, \U0001F680 escapes.
       const flags = x.regex.match(/^\(\?([a-z]+)\)/)?.[1] ?? '';
       const src = x.regex.replace(/^\(\?[a-z]+\)/, '').replace(/\\U([0-9A-Fa-f]{8})/g, (_, h: string) => `\\u{${parseInt(h, 16).toString(16)}}`);

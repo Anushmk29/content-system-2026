@@ -24,9 +24,8 @@ export interface DraftPiece {
 export interface DraftSet {
   pillar: string;
   funnelStage: FunnelStage;
-  // Only the platforms that were asked for are present (all five by default).
+  // Only the platforms that were asked for are present (all four by default).
   linkedin?: DraftPiece;   // the anchor when present
-  blog?: DraftPiece;
   x?: DraftPiece;          // body = thread, tweets separated by "---" lines
   instagram?: DraftPiece;  // body = carousel slides separated by "---" lines
   facebook?: DraftPiece;
@@ -35,6 +34,19 @@ export interface DraftSet {
   claims: string[];
   /** index into the brand's offers, when the model picked one */
   offer?: number;
+}
+
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** The CTA is shown (and posted) after the body: a body that already ends on it would say it twice. */
+export function dropRepeatedCta(body: string, cta: string): string {
+  if (!norm(cta)) return body;
+  const lines = body.trimEnd().split('\n');
+  const last = lines[lines.length - 1] ?? '';
+  if (norm(last) !== norm(cta) && !(norm(cta).length > 15 && norm(last).endsWith(norm(cta)))) return body;
+  lines.pop();
+  while (lines.length && /^\s*(---)?\s*$/.test(lines[lines.length - 1]!)) lines.pop(); // the gap or slide divider before it
+  return lines.length ? lines.join('\n') : body;
 }
 
 function piece(v: unknown, where: string): DraftPiece {
@@ -46,11 +58,12 @@ function piece(v: unknown, where: string): DraftPiece {
     return s.trim();
   };
   // hook/cta are useful but non-fatal if blank; title/body are required.
+  const cta = typeof o.cta === 'string' ? o.cta.trim() : '';
   return {
     title: str('title'),
-    body: str('body'),
+    body: dropRepeatedCta(str('body'), cta),
     hook: typeof o.hook === 'string' ? o.hook.trim() : '',
-    cta: typeof o.cta === 'string' ? o.cta.trim() : '',
+    cta,
     ...(Number.isInteger(o.hookFrom) ? { hookFrom: o.hookFrom as number } : {}),
     ...(isHookPattern(o.hookPattern) ? { hookPattern: o.hookPattern } : {}),
     ...(Array.isArray(o.hookOptions) ? { hookOptions: o.hookOptions } : {}),

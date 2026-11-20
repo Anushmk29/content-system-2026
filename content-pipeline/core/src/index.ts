@@ -6,3 +6,5 @@ export * from './approvals.ts';
 export * from './lifecycle.ts';
 export * from './performance.ts';
 export * from './utm.ts';
+export * from './handles.ts';
+export * from './carousel.ts';

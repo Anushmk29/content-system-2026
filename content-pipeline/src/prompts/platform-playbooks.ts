@@ -5,9 +5,9 @@
 // youtube = a 45-second Short filming card (a script to record, never auto-posted) and reddit =
 // a value-first post the founder posts by hand (subreddit rules differ); both opt-in, so they are
 // not in the default set every selected topic gets.
-export const DRAFT_PLATFORMS = ['linkedin', 'blog', 'x', 'instagram', 'facebook', 'reddit', 'youtube'] as const;
+export const DRAFT_PLATFORMS = ['linkedin', 'x', 'instagram', 'facebook', 'reddit', 'youtube'] as const;
 export type DraftPlatform = (typeof DRAFT_PLATFORMS)[number];
-export const DEFAULT_DRAFT_PLATFORMS: readonly DraftPlatform[] = ['linkedin', 'blog', 'x', 'instagram', 'facebook'];
+export const DEFAULT_DRAFT_PLATFORMS: readonly DraftPlatform[] = ['linkedin', 'x', 'instagram', 'facebook'];
 /** Drafted here, posted by a person: the publisher skips them. */
 export const MANUAL_PLATFORMS: readonly string[] = ['youtube', 'reddit'];
 /** Video scripts on any platform are filmed by a person too. */
@@ -17,7 +17,7 @@ export const isManual = (i: { platform: string; format?: string | null }) =>
   MANUAL_PLATFORMS.includes(i.platform) || SCRIPT_FORMATS.includes(i.format ?? '');
 
 export const PIECE_NAME: Record<DraftPlatform, string> = {
-  linkedin: 'LinkedIn post', blog: 'blog article', x: 'X thread', instagram: 'Instagram carousel', facebook: 'Facebook post',
+  linkedin: 'LinkedIn post', x: 'X thread', instagram: 'Instagram carousel', facebook: 'Facebook post',
   reddit: 'Reddit post', youtube: 'YouTube Short script',
 };
 
@@ -34,7 +34,6 @@ export const POST_FORMATS: Record<DraftPlatform, PostFormat[]> = {
   instagram: [{ id: 'carousel', label: 'Carousel', db: 'carousel', visual: 'carousel' }, IMAGE],
   facebook: [{ id: 'post', label: 'Text post', db: 'founder_post', ...TEXT }, IMAGE],
   x: [{ id: 'thread', label: 'Thread', db: 'thread', ...TEXT }, IMAGE],
-  blog: [{ id: 'article', label: 'Article', db: 'article', ...TEXT }],
   reddit: [{ id: 'post', label: 'Post', db: 'reddit_answer', ...TEXT }],
   youtube: [{ id: 'short', label: 'Short (you film)', db: 'short_script', ...TEXT }],
 };
@@ -68,8 +67,6 @@ export const PLATFORM_SHAPE = `PER-PLATFORM SHAPE (Bible §11.2) — never the s
 - linkedin: the ANCHOR. One founder-led post, 150-300 words. A strong first line (no
   link in body — LinkedIn suppresses outbound links). Optimize for comments. End with
   a soft CTA. This is the source the others repurpose from.
-- blog: a full SEO article expanding the anchor. Clear title, strong intro, concrete
-  examples, a short FAQ, and a CTA.
 - x: a thread of 5-7 tweets, each under 270 characters. Concise, native, end with a
   question. Separate each tweet with a line containing only "---".
 - instagram: a 6-10 slide carousel that earns saves (ig-carousel). Slide 1 is the cover:
@@ -125,10 +122,6 @@ export const PLATFORM_FRAMEWORKS: Record<DraftPlatform, readonly Framework[]> = 
       steps: 'One line of context about who you are, no pitch. The detailed answer or how-to, with specifics. What did not work and why. "TL;DR:" and one line at the end.' },
     { id: 'lessons_learned', name: 'Lessons learned',
       steps: 'What you tried and the situation. 3-5 lessons, each with the concrete detail that taught it. What you would do differently. "TL;DR:" and one line at the end.' },
-  ],
-  blog: [
-    { id: 'seo_howto', name: 'SEO how-to',
-      steps: 'A title with the search phrase. An intro that answers the question in 2-3 sentences. One H2 section per step, each with an example. A short FAQ. A CTA.' },
   ],
   youtube: [
     { id: 'hook_beats_cta', name: 'Hook → Beats → CTA',
